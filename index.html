@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Core Memory — Nuclear Flashcards</title>
+<style>
+  :root{
+    --bg:#0A0E14; --panel:#121822; --panel2:#161D29; --border:#232C39;
+    --amber:#FFB300; --amber-dim:#8A6A1F; --green:#35D0A0; --red:#FF5A52;
+    --text:#E7ECF2; --text-dim:#8B96A5;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--text); font-family:var(--sans); -webkit-tap-highlight-color:transparent; height:100%; }
+  body{ padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
+  .wrap{ max-width:560px; margin:0 auto; padding:20px 16px 40px; }
+  header{ margin-bottom:16px; }
+  header h1{ margin:0; font-size:20px; font-weight:700; }
+  header p{ margin:2px 0 0; font-size:12.5px; color:var(--text-dim); font-family:var(--mono); }
+  .controls{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .chip{ background:var(--panel); border:1px solid var(--border); color:var(--text-dim); padding:7px 13px; border-radius:20px; font-size:13px; font-family:var(--mono); cursor:pointer; user-select:none; }
+  .chip.active{ background:rgba(255,179,0,0.12); border-color:var(--amber-dim); color:var(--amber); }
+  .chip:active{ transform:scale(0.96); }
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px 14px; margin-bottom:16px; font-family:var(--mono); font-size:12.5px; color:var(--text-dim); }
+  .toolbar b{ color:var(--text); font-weight:600; }
+  .toolbar .btnrow{ display:flex; gap:8px; }
+  .toolbar button{ background:none; border:1px solid var(--border); color:var(--text-dim); padding:5px 10px; border-radius:8px; font-family:var(--mono); font-size:12px; cursor:pointer; }
+  .qcounter{ font-family:var(--mono); font-size:12.5px; color:var(--text-dim); margin-bottom:8px; }
+  .qmod{ color:var(--amber); }
+  .stage{ perspective:1400px; margin-bottom:16px; }
+  .card{
+    position:relative; min-height:230px; border-radius:16px; cursor:pointer;
+    transform-style:preserve-3d; transition:transform .45s cubic-bezier(.4,.2,.2,1);
+  }
+  .card.flipped{ transform:rotateY(180deg); }
+  .face{
+    position:absolute; inset:0; backface-visibility:hidden; border-radius:16px;
+    border:1px solid var(--border); padding:24px 20px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:10px;
+  }
+  .face.front{ background:var(--panel); }
+  .face.back{ background:var(--panel2); transform:rotateY(180deg); }
+  .eyebrow{ font-family:var(--mono); font-size:11px; color:var(--text-dim); letter-spacing:0.04em; }
+  .term{ font-size:19px; font-weight:700; line-height:1.35; }
+  .def{ font-size:15px; line-height:1.5; color:var(--text); }
+  .taphint{ font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:4px; }
+  .actionrow{ display:flex; gap:10px; }
+  .actionrow button{
+    flex:1; padding:14px; border-radius:11px; font-weight:700; font-size:14.5px; border:none; cursor:pointer; font-family:var(--sans);
+  }
+  .learning-btn{ background:var(--panel2); border:1px solid var(--red); color:var(--red); }
+  .gotit-btn{ background:var(--green); color:#04241A; }
+  .empty{ text-align:center; padding:40px 20px; color:var(--text-dim); }
+  .empty h2{ color:var(--text); font-size:18px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Core Memory</h1>
+    <p>Active-recall flashcards — companion to Reactor Watch</p>
+  </header>
+
+  <div class="controls" id="filterChips"></div>
+
+  <div class="toolbar">
+    <span>THIS SESSION <b id="scoreText">0 got it / 0 seen</b></span>
+    <div class="btnrow">
+      <button id="hideBtn">Hide mastered</button>
+      <button id="resetBtn">Reset</button>
+    </div>
+  </div>
+
+  <div class="qcounter" id="qCounter"></div>
+  <div id="stageArea"></div>
+</div>
+
+<script>
+const CARDS = [
+// WEEK 7
+{m:1,t:"Fissile",d:"A nuclide that fissions readily on capturing a slow (thermal) neutron — U-235 is the standard example."},
+{m:1,t:"Fertile",d:"A nuclide that doesn't fission itself but absorbs a neutron and transmutes into a fissile nuclide — U-238 into Pu-239."},
+{m:1,t:"Fissionable",d:"The broader category: any nuclide that can fission, including ones that need a fast rather than thermal neutron."},
+{m:1,t:"LEU vs HEU boundary",d:"LEU is under 20% U-235. HEU is 20% or above. Power reactor fuel sits at 3–5%."},
+{m:1,t:"Natural uranium composition",d:"99.3% U-238, 0.7% U-235."},
+{m:1,t:"HALEU",d:"High-assay LEU — enrichment just under the 20% LEU/HEU boundary, technically still LEU."},
+{m:1,t:"Energy per fission",d:"About 200 MeV, split between fragment kinetic energy, neutrons, and gamma/beta emissions."},
+{m:1,t:"Fission neutron birth energy",d:"About 2 MeV on average — fast, and needs a moderator to slow to thermal energies for U-235 to fission efficiently."},
+{m:1,t:"Delayed neutron fraction (β-eff)",d:"About 0.65% for U-235 — small, but it lengthens neutron generation time enough to make the reactor controllable."},
+{m:1,t:"Why delayed neutrons matter",d:"They stretch average generation time from under 0.1 ms to over 10 seconds, giving control rods and operators time to respond to power changes."},
+{m:1,t:"keff = 1",d:"Critical — the neutron population is steady. Says nothing about the power level itself."},
+{m:1,t:"keff > 1",d:"Supercritical — each generation produces more neutrons than the last, so power is rising."},
+{m:1,t:"Negative temperature coefficient",d:"As temperature rises, reactivity is automatically driven negative, capping power rise without operator action — a required safety feature."},
+{m:1,t:"PWR primary circuit conditions",d:"About 300°C and 150 atm (15 MPa) — pressurised specifically to keep the hot water liquid."},
+{m:1,t:"Decay heat at shutdown",d:"About 6.5% of full power immediately at shutdown, falling to ~1% at 1 hour, ~0.5% at 24 hours, ~0.1% at 1 year."},
+{m:1,t:"Why cooling continues after shutdown",d:"Decay heat, not ongoing fission, threatens the fuel if cooling is lost — the chain reaction has stopped but fission products keep decaying."},
+{m:1,t:"Three fission-product barriers",d:"Fuel cladding, primary coolant piping, and the containment building."},
+{m:1,t:"Slagging",d:"Build-up of fission-product poisons in the fuel that absorb neutrons parasitically, adding negative reactivity and reducing fuel utilisation over an operating cycle."},
+{m:1,t:"Burnup rule of thumb",d:"About 1 gram of U-235 is consumed per MW-day of thermal output."},
+{m:1,t:"Naval vs civilian reactor fuel",d:"Naval: ~300 MWth, very high enrichment (HEU), plate-type dispersion fuel. Civilian PWR: ~3,000 MWth, 3–5% enrichment, ceramic UO2 pellets."},
+{m:1,t:"Australia's nuclear ban scope",d:"EPBC Act blocks power stations, enrichment plants, fuel fabrication plants, and reprocessing facilities — not research reactors, which is why OPAL operates legally."},
+
+// WEEK 8
+{m:2,t:"Absorbed dose (D)",d:"Energy deposited per unit mass. Unit: gray (Gy), 1 J/kg. Says nothing yet about biological harm."},
+{m:2,t:"Equivalent dose (H)",d:"H = D × ω (radiation weighting factor). Unit: sievert (Sv). Corrects absorbed dose for how biologically damaging the radiation type actually is."},
+{m:2,t:"Weighting factor (ω) values",d:"Gamma/beta = 1, thermal neutron = 2.5, alpha = 20."},
+{m:2,t:"Gy to rad / Sv to rem",d:"1 Gy = 100 rad. 1 Sv = 100 rem — the same conversion factor for both."},
+{m:2,t:"Alpha particle",d:"Helium-4 nucleus, charge +2, stopped by paper or a short air gap. Internal hazard only (inhalation/ingestion) — weighting factor 20."},
+{m:2,t:"Beta particle",d:"An electron, charge −1, stopped by a few mm of aluminium or perspex. External hazard to skin and eyes only."},
+{m:2,t:"Gamma ray",d:"Uncharged, highly penetrating, attenuated exponentially by material thickness. Usually the main external hazard at a reactor because contamination is well controlled."},
+{m:2,t:"Neutron radiation shielding",d:"Never fully stopped, only attenuated — hydrogen-rich (hydrogenous) materials like water or polyethylene are the effective choice, not density alone."},
+{m:2,t:"Average Australian annual dose",d:"About 2–3 mSv per year from all sources."},
+{m:2,t:"TLD",d:"Thermoluminescent dosimeter — passive, the legal dose of record, read out after a monitoring period."},
+{m:2,t:"PED",d:"Personal electronic dosimeter — active, gives real-time dose and dose-rate feedback."},
+{m:2,t:"Deterministic effect",d:"Has a threshold dose, worsens with higher dose, appears within days to weeks — e.g. acute radiation sickness."},
+{m:2,t:"Stochastic effect",d:"No assumed threshold; probability (not severity) of occurrence scales with dose — e.g. cancer."},
+{m:2,t:"LD50/30 (this course)",d:"4.5 Sv — the dose expected to kill 50% of an exposed population within 30 days without treatment."},
+{m:2,t:"Dose-risk factor",d:"About 0.05 per Sv — estimates additional fatal cancer risk from low-dose exposure. Applies to stochastic effects only, as an additional risk on top of baseline rates."},
+{m:2,t:"Detriment",d:"Weights risk by which organ was exposed and its cancer latency — basis for tissue weighting factors. Bone marrow carries higher detriment than skin for the same dose."},
+{m:2,t:"LNT model",d:"Linear No-Threshold — cancer risk assumed to scale linearly with dose down to zero. A conservative regulatory default, contested by some below ~100 mSv."},
+{m:2,t:"Three principles of radiological protection",d:"Justification (net benefit before acting), optimisation (ALARA — keep doses as low as reasonably achievable), limitation (hard numerical dose caps)."},
+{m:2,t:"ALARA",d:"As Low As Reasonably Achievable — doses kept well under the limit, with societal and economic reasonableness explicitly factored in."},
+{m:2,t:"Occupational dose limit",d:"20 mSv/year standing limit, with an absolute cap of 50 mSv in any single year."},
+{m:2,t:"Public dose limit",d:"1 mSv/year, averaged over five years."},
+{m:2,t:"Declared pregnancy dose limit",d:"About 1 mSv to the embryo/foetus for the remainder of the pregnancy."},
+{m:2,t:"Inverse square law",d:"Dose rate falls with the square of distance from a point source — doubling distance quarters dose rate."},
+{m:2,t:"Tenth thickness",d:"Thickness of a material that reduces gamma dose rate by 90%. For ~2 MeV gammas: lead 5 cm, steel 10 cm, concrete 30 cm, water 60 cm."},
+{m:2,t:"SI Ci-m-rem rule",d:"About 3 MBq gives about 1 µSv/h at 1 metre unshielded (equivalently 3 GBq ≈ 1 mSv/h), based on Co-60's gamma output."},
+{m:2,t:"Biological shield",d:"Attenuates neutron and gamma radiation from the core/primary system to protect personnel — typical dose reduction on the order of 10⁸."},
+{m:2,t:"Why a shutdown reactor is still hazardous",d:"Non-routine maintenance during outages risks breaching contaminated piping — most of a worker's annual dose is typically accrued during these brief periods, not from decay heat alone."},
+{m:2,t:"N-16",d:"O-16(n,p)N-16 in coolant — 7-second half-life, 6 MeV gamma. Significant mainly near the primary loop during operation, given its short half-life."},
+{m:2,t:"Ar-41",d:"Ar-40(n,γ)Ar-41 from air activation — 1.8-hour half-life, 1.3 MeV gamma."},
+{m:2,t:"Co-60",d:"Main CRUD contaminant — strong gamma emitter (2.5 MeV total), 5.2-year half-life, so it persists as a hazard well after shutdown."},
+{m:2,t:"HLW definition",d:"Spent fuel and reprocessing waste — generates significant decay heat and requires shielding, unlike LLW/ILW."},
+{m:2,t:"Waste volume split",d:"About 95% LLW, 4% ILW, 1% HLW by volume worldwide — though HLW carries the bulk of total activity."},
+
+// WEEK 9
+{m:3,t:"AUKUS Pillar I",d:"The nuclear-powered, conventionally-armed submarine pathway for Australia."},
+{m:3,t:"AUKUS three phases",d:"Plan and Upgrade (increased rotational presence via HMAS Stirling), Recruit and Train (Virginia-class purchase + workforce), Design and Build (SSN-AUKUS)."},
+{m:3,t:"SSN-AUKUS",d:"Jointly designed successor to the UK's Astute class, built in the UK and South Australia, first Australian boats not expected before the mid-2050s."},
+{m:3,t:"Why nuclear subs don't need AIP",d:"AIP extends submerged endurance for conventional diesel-electric boats. A reactor doesn't consume air, so it never has that limitation."},
+{m:3,t:"IFEP",d:"Integrated Full Electric Propulsion — the prime mover drives generators feeding an electric propulsion motor, rather than a direct mechanical shaft link."},
+{m:3,t:"Submarine reactor type",d:"Nearly all UK and US submarine reactors are Pressurised Water Reactors."},
+{m:3,t:"SMR definition",d:"Generally under 300 MWe (~1,000 MWth), factory-built and shipped to site as modules."},
+{m:3,t:"Inherent safety",d:"Comes from the physics itself, with no equipment involved — a negative temperature coefficient of reactivity is the standard example."},
+{m:3,t:"Passive safety",d:"Doesn't require external power or active initiation, but still involves physical components — gravity-fed cooling is the standard example."},
+{m:3,t:"Engineered (active) safety",d:"Requires power and activation to function — diesel generators, motor-driven pumps."},
+{m:3,t:"Kimba facility and HLW",d:"Designed for LLW/ILW only — disposition of AUKUS submarine spent fuel (HLW) remains an open question."},
+
+// BOARD REVIEW
+{m:4,t:"Molten coolant fast reactor — the four board points",d:"Na-24 (sodium activation product), 100–850°C operating range, exposure to water/air as a hazard, corrosion as a hazard."},
+{m:4,t:"Na-24 (board item)",d:"Formed by neutron capture on ordinary sodium (Na-23) — same activation-hazard category as N-16, Ar-41, and Co-60."},
+{m:4,t:"100–850°C range (board item)",d:"Shows the coolant stays liquid at high temperature near atmospheric pressure — no PWR-level pressure needed, and higher temperature improves thermal efficiency."},
+{m:4,t:"Dose rate × time = dose",d:"In a constant field, total dose is proportional to time spent in it — halving time halves dose."},
+{m:4,t:"1/R² (board item)",d:"Doubling distance from a point source quarters the dose rate."},
+];
+
+let currentFilter = 'all';
+let hideMastered = false;
+let queue = [];
+let idx = 0;
+let flipped = false;
+let sessionSeen = 0;
+let sessionGot = 0;
+let mastered = load('cm_mastered', []);
+
+function load(key, fb){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fb; }catch(e){ return fb; } }
+function save(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function buildQueue(){
+  let pool = CARDS.map((c,i)=>({...c, idx:i}));
+  if(currentFilter !== 'all') pool = pool.filter(c=>c.m===currentFilter);
+  if(hideMastered) pool = pool.filter(c=>!mastered.includes(c.idx));
+  queue = shuffle(pool);
+  idx = 0;
+  flipped = false;
+}
+
+function renderChips(){
+  const wraps = [
+    {id:'all', label:'All ('+CARDS.length+')'},
+    {id:1, label:'Wk 7'}, {id:2, label:'Wk 8'}, {id:3, label:'Wk 9'}, {id:4, label:'Board review'},
+  ];
+  const el = document.getElementById('filterChips');
+  el.innerHTML = '';
+  wraps.forEach(w=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (currentFilter===w.id ? ' active':'');
+    chip.textContent = w.label;
+    chip.onclick = ()=>{ currentFilter=w.id; buildQueue(); renderChips(); renderCard(); };
+    el.appendChild(chip);
+  });
+  const shuffleChip = document.createElement('div');
+  shuffleChip.className='chip'; shuffleChip.textContent='\u27f3 New shuffle';
+  shuffleChip.onclick = ()=>{ buildQueue(); renderCard(); };
+  el.appendChild(shuffleChip);
+}
+
+function updateScore(){
+  document.getElementById('scoreText').textContent = sessionGot + ' got it / ' + sessionSeen + ' seen';
+}
+
+function renderCard(){
+  const area = document.getElementById('stageArea');
+  const counter = document.getElementById('qCounter');
+  if(queue.length===0){
+    counter.textContent='';
+    area.innerHTML = '<div class="card empty" style="min-height:auto;"><h2>Nothing here</h2><p>' + (hideMastered ? 'Everything in this set is marked mastered — toggle "Hide mastered" off to see it again.' : 'Try a different filter.') + '</p></div>';
+    return;
+  }
+  if(idx>=queue.length){
+    counter.textContent='';
+    area.innerHTML = '<div class="card empty" style="min-height:auto;"><h2>Deck complete</h2><p>Shuffle or pick a new filter to keep going.</p></div>';
+    return;
+  }
+  const item = queue[idx];
+  const modLabel = item.m===1?'WEEK 7':item.m===2?'WEEK 8':item.m===3?'WEEK 9':'BOARD REVIEW';
+  counter.innerHTML = 'CARD ' + (idx+1) + ' OF ' + queue.length + ' &nbsp;\u00b7&nbsp; <span class="qmod">' + modLabel + '</span>' + (mastered.includes(item.idx) ? ' &nbsp;\u00b7&nbsp; <span style="color:var(--green)">mastered</span>' : '');
+  flipped = false;
+  area.innerHTML =
+    '<div class="stage"><div class="card" id="cardEl">' +
+      '<div class="face front"><span class="eyebrow">TERM</span><span class="term">'+item.t+'</span><span class="taphint">Tap to reveal</span></div>' +
+      '<div class="face back"><span class="eyebrow">DEFINITION</span><span class="def">'+item.d+'</span></div>' +
+    '</div></div>' +
+    '<div class="actionrow">' +
+      '<button class="learning-btn" id="learningBtn">Still learning</button>' +
+      '<button class="gotit-btn" id="gotitBtn">Got it</button>' +
+    '</div>';
+  const cardEl = document.getElementById('cardEl');
+  cardEl.onclick = ()=>{ flipped=!flipped; cardEl.classList.toggle('flipped', flipped); };
+  document.getElementById('learningBtn').onclick = (e)=>{
+    e.stopPropagation();
+    sessionSeen++;
+    mastered = mastered.filter(m=>m!==item.idx);
+    save('cm_mastered', mastered);
+    updateScore();
+    idx++; renderCard();
+  };
+  document.getElementById('gotitBtn').onclick = (e)=>{
+    e.stopPropagation();
+    sessionSeen++; sessionGot++;
+    if(!mastered.includes(item.idx)) mastered.push(item.idx);
+    save('cm_mastered', mastered);
+    updateScore();
+    idx++; renderCard();
+  };
+}
+
+document.getElementById('hideBtn').onclick = ()=>{
+  hideMastered = !hideMastered;
+  document.getElementById('hideBtn').style.color = hideMastered ? 'var(--amber)' : 'var(--text-dim)';
+  document.getElementById('hideBtn').style.borderColor = hideMastered ? 'var(--amber-dim)' : 'var(--border)';
+  buildQueue(); renderCard();
+};
+document.getElementById('resetBtn').onclick = ()=>{
+  if(confirm('Clear all mastered-card history on this device?')){
+    mastered = []; save('cm_mastered', mastered);
+    sessionSeen=0; sessionGot=0;
+    hideMastered=false;
+    document.getElementById('hideBtn').style.color='var(--text-dim)';
+    document.getElementById('hideBtn').style.borderColor='var(--border)';
+    buildQueue(); updateScore(); renderCard();
+  }
+};
+
+buildQueue();
+renderChips();
+updateScore();
+renderCard();
+</script>
+</body>
+</html>
