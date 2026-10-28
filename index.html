@@ -276,6 +276,17 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .ratings3 .best{box-shadow:inset 0 0 0 1.5px var(--accent)}
 .row.con .stack{gap:1px}.row.con .end{gap:6px}
 .row.con .tag.warn{padding:2px 6px;border-radius:5px;background:rgba(245,158,11,.14)}
+
+/* v0.7.2 pitch report, forecast, sessions */
+.pitch-rep{display:flex;gap:12px;align-items:flex-start;margin-top:10px;padding:10px;border-radius:10px;background:var(--s2)}
+.pitch-svg{width:34px;height:108px;flex:none}
+.pgr{display:grid;grid-template-columns:112px 1fr 18px;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:5px}
+.pgr b{color:var(--text);text-align:right}
+.pgr .cells{display:grid;grid-template-columns:repeat(10,1fr);gap:2px}.pgr .cells i{height:7px;border-radius:2px;background:var(--s3)}.pgr .cells i.on{background:var(--accent)}
+.fc-row{display:grid;gap:6px;margin-top:8px}
+.fc{background:var(--s2);border-radius:9px;padding:6px 4px;text-align:center;min-width:0}.fc svg{width:24px;height:24px;display:block;margin:3px auto}
+.fc .s{font-size:12px;font-weight:700}.fc.wet{box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
+.cnote.brk{font-style:normal;font-weight:800;color:var(--text);background:var(--s2);letter-spacing:.01em}
 </style>
 </head>
 <body>
@@ -326,7 +337,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.1', title: 'International fixes', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.2', title: 'Sessions & Pitch Report', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1149,7 +1160,8 @@ function endOver(M, inn) {
   inn.overNo++; inn.overBalls = 0; inn.overConceded = 0;
   inn.lastBowler = id; inn.curBowler = null;
   swapStrike(inn);
-  if (M.pendingBrief && inn.overNo % drinksEvery(M.fmt) === 0) applyPendingBrief(M, 'Drinks');
+  if (M.fmt === 'FC') checkBreaks(M, inn);
+  else if (M.pendingBrief && inn.overNo % drinksEvery(M.fmt) === 0) applyPendingBrief(M, 'Drinks');
   if (M.fmt === 'FC' && !inn.closed && shouldDeclare(M, inn)) { inn.declared = true; inn.closed = true; }
 }
 
@@ -1221,8 +1233,11 @@ function simBall(M) {
   const overEnded = inn.overBalls >= 6;
   if (overEnded) { inn.lastOver = { syms: inn.thisOver, runs: inn.overTally || 0, bowler: bowler.id, no: inn.overNo + 1 }; inn.thisOver = []; }
   checkInningsEnd(M, inn);
+  const logBefore = M.live ? M.log.length : 0;
   if (overEnded) endOver(M, inn);
   if (M.live) {
+    // Break and drinks notes written by endOver belong after the ball that ended the over.
+    const breakNotes = M.log.splice(0, M.log.length - logBefore);
     ev.text = commentary(M, inn, ev, bowler, batter, sc);
     ev.short = shortComm(M, inn, ev, bowler, batter, sc);
     ev.inn = M.innings.length; ev.score = `${inn.runs}/${inn.wkts}`; ev.bn = bowler.last;
@@ -1230,6 +1245,7 @@ function simBall(M) {
     M.log.unshift(ev);
     if (overEnded && !inn.closed) M.log.unshift({ cls:'sys', text: overSummary(M, inn) });
     if (inn.closed) M.log.unshift({ cls:'sys', text: inningsClosedText(M, inn) });
+    if (breakNotes.length) M.log.unshift(...breakNotes);
     if (M.log.length > 80) M.log.length = 80;
   }
   return ev;
@@ -1482,7 +1498,17 @@ function rollSky(day, v) {
   if (v.id === 'VIC' && !summer) { w.overcast += 1; w.showers += 0.4; }
   return weightedPick(Object.keys(w), k => w[k]);
 }
+// Overs scheduled per day: Tests 90, Shield 96. Matches created before v0.7.2 have no
+// cond.opd and keep the old 96 so an in-progress match is not disturbed.
+function oversPerDayFor(comp) { return comp === 'TEST' ? 90 : FORMATS.FC.oversPerDay; }
+function dayOpd(M) { return (M.cond && M.cond.opd) || FORMATS.FC.oversPerDay; }
 function previewConditions(fx) {
+  // Upgrade a forecast rolled before v0.7.2 (no opd) for a match not yet started.
+  if (fx.pre && fx.pre.cond && COMPS[fx.comp].fmt === 'FC' && !fx.pre.cond.opd && !fx.result) {
+    const opd = oversPerDayFor(fx.comp), c = fx.pre.cond;
+    c.opd = opd; c.days.forEach(d => d.lost = Math.min(d.lost, opd));
+    fx.pre.maxBalls = c.days.reduce((a, d) => a + (opd - d.lost), 0) * 6;
+  }
   if (!fx.pre) {
     const T = { fmt: COMPS[fx.comp].fmt, venue: fx.venue || fx.home, notes: [], comp: fx.comp };
     rollConditions(T, fx);
@@ -1500,12 +1526,13 @@ function rollConditions(M, fx) {
   const v = teamDef(M.venue), F = FORMATS[M.fmt];
   const c = { pitch: rollPitch(M.fmt, v), days: [] };
   if (M.fmt === 'FC') {
-    const nd = M.comp === 'TEST' ? 5 : 4;
+    const nd = M.comp === 'TEST' ? 5 : 4, opd = oversPerDayFor(M.comp);
+    c.opd = opd;
     for (let d = 0; d < nd; d++) {
       const sky = rollSky(fx.day + d, v), r = SKIES[sky].rain;
-      c.days.push({ sky, lost: r ? Math.round(rand() * r * F.oversPerDay) : 0 });
+      c.days.push({ sky, lost: r ? Math.round(rand() * r * opd) : 0 });
     }
-    M.maxBalls = c.days.reduce((a, d) => a + (F.oversPerDay - d.lost), 0) * 6;
+    M.maxBalls = c.days.reduce((a, d) => a + (opd - d.lost), 0) * 6;
     const lost = c.days.reduce((a, d) => a + d.lost, 0);
     if (lost) M.notes.push(`Weather: about ${lost} overs are expected to be lost to rain across the match.`);
   } else {
@@ -1524,10 +1551,50 @@ function rollConditions(M, fx) {
 }
 function matchDayIndex(M) {
   if (M.fmt !== 'FC' || !M.cond) return 0;
-  const per = FORMATS.FC.oversPerDay;
+  const per = dayOpd(M);
   let cum = 0;
   for (let d = 0; d < M.cond.days.length; d++) { cum += (per - M.cond.days[d].lost) * 6; if (M.balls < cum) return d; }
   return M.cond.days.length - 1;
+}
+// ---- Sessions (multi-day cricket) ----
+// Each day has three sessions split by lunch, tea and stumps, with drinks midway through each
+// session. Rain-lost overs shorten the day, and the sessions shrink to match.
+const SESSION_NAMES = ['Morning session', 'Afternoon session', 'Evening session'];
+function fcBreaks(M) {
+  if (M.breaks) return M.breaks;
+  const opd = dayOpd(M), out = [];
+  let start = 0;
+  M.cond.days.forEach((d, i) => {
+    const avail = Math.max(6, opd - d.lost);
+    [1, 2, 3].forEach(k => {
+      out.push({ ov: start + Math.max(1, Math.round(avail * (2 * k - 1) / 6)), type: 'drinks', day: i });
+      out.push({ ov: start + Math.round(avail * k / 3), type: k === 1 ? 'lunch' : k === 2 ? 'tea' : 'stumps', day: i });
+    });
+    start += avail;
+  });
+  M.breaks = out;
+  M.breakIdx = out.findIndex(b => b.ov * 6 > M.balls); if (M.breakIdx < 0) M.breakIdx = out.length;
+  return out;
+}
+// Called at the end of every over in multi-day cricket: takes any break the over has reached.
+function checkBreaks(M, inn) {
+  const br = fcBreaks(M);
+  while (M.breakIdx < br.length && M.balls >= br[M.breakIdx].ov * 6) {
+    const b = br[M.breakIdx++];
+    M.breakSeq = (M.breakSeq || 0) + 1; M.lastBreak = b.type;
+    const label = { drinks: 'Drinks', lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[b.type];
+    if (M.pendingBrief) applyPendingBrief(M, label);
+    if (M.live && b.type !== 'drinks' && !M.done) {
+      const last = b.day === M.cond.days.length - 1 && b.type === 'stumps';
+      M.log.unshift({ cls: 'brk', text: `${last ? 'Close of play' : label}, day ${b.day + 1}: ${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts} (${oversStr(inn.balls)} ov)` });
+    }
+  }
+}
+function sessionOf(M) {
+  if (M.fmt !== 'FC' || !M.cond) return null;
+  const br = fcBreaks(M), nxt = br.slice(M.breakIdx).find(b => b.type !== 'drinks');
+  if (!nxt) return { day: M.cond.days.length, name: 'Final session' };
+  return { day: nxt.day + 1, name: SESSION_NAMES[{ lunch: 0, tea: 1, stumps: 2 }[nxt.type]] };
 }
 function skyOf(M) { return M.cond ? SKIES[M.cond.days[matchDayIndex(M)].sky] : SKIES.sunny; }
 // Combined venue x pitch x sky factor for 'pace', 'spin' or 'bat'.
@@ -2126,7 +2193,7 @@ function gateTakings(M) {
   const cap = (12 + (facLevel('stadium') - 1) * 6) * 1000;
   const base = { T20: 0.45, OD: 0.2, FC: 0.08 }[M.fmt];
   const price = { T20: 32, OD: 24, FC: 14 }[M.fmt] * TICKET[f.ticket].price;
-  const days = M.fmt === 'FC' ? Math.max(1, Math.ceil(M.balls / (FORMATS.FC.oversPerDay * 6))) : 1;
+  const days = M.fmt === 'FC' ? Math.max(1, Math.ceil(M.balls / (dayOpd(M) * 6))) : 1;
   const opp = 0.9 + (teamStrength(M.away) - 65 - RATING_SHIFT) / 60;
   const rain = M.abandoned ? 0.1 : M.cond && M.cond.days.some(d => d.sky === 'rain') ? 0.7 : 1;
   const big = M.stage !== 'league' ? 1.5 : 1;
@@ -3998,8 +4065,9 @@ function renderMatchday() {
   return `${pageTitle('Match day', `${COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
     ${panel('', `<div class="hero"><span onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div><span onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
-      <table class="tbl clean" style="margin-top:10px"><tbody><tr><td class="l muted">Pitch</td><td class="l" style="white-space:normal"><b>${pt.label}</b>. ${pt.note}</td></tr>
-        <tr><td class="l muted">Forecast</td><td class="l" style="white-space:normal">${pre.cond.days.map((d, i) => `${fmt === 'FC' ? 'Day ' + (i + 1) + ': ' : ''}${SKIES[d.sky].label}${d.lost ? ` (about ${d.lost} overs lost)` : ''}`).join(fmt === 'FC' ? '<br>' : '')}</td></tr>
+      ${pitchReport(pre, v, fmt)}
+      ${forecastRow(pre, fmt, fx)}
+      <table class="tbl clean" style="margin-top:6px"><tbody>
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       ${gamePlanRow(fmt, hc)}
@@ -4007,6 +4075,53 @@ function renderMatchday() {
       <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Watch live ▸</button>`}</div>`)}
     <div class="grid" style="grid-template-columns:1fr 1fr">${panel(`${teamDef(me).short || me} · ${avgO(mine)}`, xi(mine), { flush: true })}${panel(`${teamDef(opp).short || opp} · ${avgO(theirs)}`, xi(theirs), { flush: true, end: scouted ? chip('good', 'Scouted') : `<button class="link" onclick="scoutOpposition('${fx.id}','${opp}')">Scout</button>` })}</div>
   </div>`;
+}
+// ---- Pitch report and forecast ----
+// Grades run 1-10 from the combined venue and pitch factors the engine uses.
+function pitchGrade(f) { return clamp(Math.round(5.5 + (f - 1) * 45), 1, 10); }
+const PITCH_OUTLOOK = {
+  standard: 'Wears gradually. Spin comes in from day 3.',
+  green: 'Seam fades after the first day. Batting gets easier.',
+  flat: 'Stays good for batting. Spin late in the match at best.',
+  dry: 'Turns from day 2 and keeps turning more.',
+  cracked: 'Uneven bounce now and worse every day. Spinners will dominate late.'
+};
+const PITCH_LOOK = {
+  standard: { fill: '#a99a5e', stripe: '#b5a66a' }, green: { fill: '#5f8a45', stripe: '#6d9a50' },
+  flat: { fill: '#cdb987', stripe: '#d8c595' }, dry: { fill: '#c4a161', stripe: '#cfad6d' }, cracked: { fill: '#b18a4e', stripe: '#bc965a' }
+};
+function pitchSvg(key) {
+  const L = PITCH_LOOK[key] || PITCH_LOOK.standard;
+  const stripes = [0, 1, 2, 3, 4, 5].map(i => `<rect x="4" y="${10 + i * 20}" width="36" height="10" fill="${L.stripe}"/>`).join('');
+  const cracks = key === 'cracked' ? '<path d="M14 40 l5 6 -3 6 6 5M28 70 l-4 5 5 5 -3 6M17 92 l6 4 -2 6" stroke="#6b4f26" stroke-width="1.2" fill="none"/>' : key === 'dry' ? '<path d="M15 55 l4 4M27 82 l-3 4" stroke="#8a6a35" stroke-width="1" fill="none"/>' : '';
+  const grass = key === 'green' ? [12, 30, 22, 34, 15, 26].map((x, i) => `<circle cx="${x}" cy="${22 + i * 17}" r="1.3" fill="#3f6b2c"/>`).join('') : '';
+  return `<svg class="pitch-svg" viewBox="0 0 44 140" aria-hidden="true"><rect x="4" y="4" width="36" height="132" rx="3" fill="${L.fill}"/>${stripes}${grass}${cracks}
+    <path d="M4 24 H40 M4 116 H40" stroke="#f3f0e6" stroke-width="1.4"/><path d="M10 14 V30 M34 14 V30 M10 110 V126 M34 110 V126" stroke="#f3f0e6" stroke-width="1"/>
+    <g fill="#f3f0e6"><rect x="19" y="18" width="1.6" height="5"/><rect x="21.2" y="18" width="1.6" height="5"/><rect x="23.4" y="18" width="1.6" height="5"/><rect x="19" y="117" width="1.6" height="5"/><rect x="21.2" y="117" width="1.6" height="5"/><rect x="23.4" y="117" width="1.6" height="5"/></g></svg>`;
+}
+function pitchReport(pre, v, fmt) {
+  const key = pre.cond.pitch, pt = PITCHES[key];
+  const g = { pace: pitchGrade(v.pace * pt.pace), spin: pitchGrade(v.spin * pt.spin), bat: pitchGrade(v.bat * pt.bat) };
+  const top = Math.max(g.pace, g.spin);
+  const verdict = top >= 8 ? (g.spin > g.pace ? 'Helps the spinners' : 'Helps the seamers') : g.bat >= 8 ? 'Batting surface' : top <= 6 && g.bat <= 6 ? 'Slow and low' : 'Even contest';
+  const bar = (l, n) => `<div class="pgr"><span>${l}</span><span class="cells">${[...Array(10)].map((_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span><b>${n}</b></div>`;
+  return `<div class="pitch-rep">${pitchSvg(key)}<div class="grow">
+    <div class="flex" style="gap:6px;align-items:baseline"><b>${pt.label}</b><span class="xs muted">· ${verdict}</span></div>
+    ${bar('Pace and bounce', g.pace)}${bar('Spin', g.spin)}${bar('Batting', g.bat)}
+    <div class="xs muted" style="margin-top:4px">${fmt === 'FC' ? PITCH_OUTLOOK[key] : esc(pt.note)}</div></div></div>`;
+}
+const SKY_ICON = {
+  sunny: '<circle cx="12" cy="12" r="4.2" fill="#fbbf24"/><g stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g>',
+  hot: '<circle cx="12" cy="12" r="4.6" fill="#fb923c"/><g stroke="#fb923c" stroke-width="1.8" stroke-linecap="round"><path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g>',
+  overcast: '<path d="M7 18h10a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.4A3.4 3.4 0 0 0 7 18z" fill="#94a3b8"/>',
+  showers: '<circle cx="16.5" cy="7" r="3" fill="#fbbf24"/><path d="M6.5 15h9a3.5 3.5 0 0 0 .3-7 5 5 0 0 0-9.6 1.3A2.9 2.9 0 0 0 6.5 15z" fill="#94a3b8"/><path d="M9 17.5l-1 2.5M13 17.5l-1 2.5" stroke="#38bdf8" stroke-width="1.6" stroke-linecap="round"/>',
+  rain: '<path d="M6.5 14h10a4 4 0 0 0 .3-8 5.5 5.5 0 0 0-10.5 1.3A3.3 3.3 0 0 0 6.5 14z" fill="#64748b"/><path d="M8 16.5l-1.2 3M12 16.5l-1.2 3M16 16.5l-1.2 3" stroke="#38bdf8" stroke-width="1.7" stroke-linecap="round"/>'
+};
+const SKY_SHORT = { sunny: 'Sunny', hot: 'Hot', overcast: 'Cloudy', showers: 'Showers', rain: 'Rain' };
+function forecastRow(pre, fmt, fx) {
+  const days = pre.cond.days;
+  return `<div class="fc-row" style="grid-template-columns:repeat(${days.length},minmax(0,1fr))">${days.map((d, i) => `<div class="fc ${d.sky === 'rain' || d.sky === 'showers' ? 'wet' : ''}"><div class="xs muted">${fmt === 'FC' ? 'Day ' + (i + 1) : 'Forecast'}</div><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[d.sky]}</svg><div class="s">${SKY_SHORT[d.sky]}</div>${d.lost ? `<div class="xs draw">−${d.lost} ov</div>` : ''}</div>`).join('')}</div>
+    ${fmt === 'FC' ? `<div class="xs dim" style="margin-top:4px">${pre.cond.opd || FORMATS.FC.oversPerDay} overs a day in three sessions, with lunch and tea.</div>` : ''}`;
 }
 function analystSheet() {
   const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt, me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home;
@@ -4051,6 +4166,7 @@ function liveStep(mode) {
   if (curInn(M).closed && mode !== 'match') return;
   let guard = 0, legal = 0;
   const target = { over: 6, five: 30, session: 180 }[mode] || 1e9;
+  const seq0 = M.breakSeq || 0;
   while (!M.done && guard++ < 8000) {
     const inn0 = curInn(M);
     if (inn0.closed && mode !== 'match') break;
@@ -4060,6 +4176,7 @@ function liveStep(mode) {
     const inn = curInn(M);
     if (inn.closed && mode !== 'match') break;
     if (mode === 'wicket' && ev.wkt) break;
+    if ((mode === 'break' || mode === 'stumps') && (M.breakSeq || 0) > seq0 && (mode === 'stumps' ? M.lastBreak === 'stumps' : M.lastBreak !== 'drinks')) break;
     if ((mode === 'over' || mode === 'five' || mode === 'session') && inn.overBalls === 0 && legal >= target) break;
   }
   ui.liveInn = null;
@@ -4109,7 +4226,7 @@ function briefSheet(atBreak) {
   const pl = planFor(M, inn, striker.id);
   const hc = staffIn(me, 'head');
   const every = drinksEvery(M.fmt);
-  const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'Set the brief for this innings.' : `Your message reaches the dressing room at the next drinks break (every ${every} overs).`}</div>
+  const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'Set the brief for this innings.' : M.fmt === 'FC' ? 'Your message reaches the dressing room at the next break: drinks, lunch, tea or stumps.' : `Your message reaches the dressing room at the next drinks break (every ${every} overs).`}</div>
     <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
     <div class="panel" style="margin-top:10px"><div class="rows">
       <div class="kv"><span>${batting ? 'Opposition plan to ' : 'Analyst plan for '}${esc(striker.last)}</span><span class="s">${esc(planLabel(pl))}</span></div>
@@ -4135,7 +4252,7 @@ function renderLive() {
   // Situation sentence
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
-  if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); sit = `Day ${fcDay(M)} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
+  if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
   const prev = M.innings.slice(0, -1).map(i => `${teamDef(i.bat).short || i.bat} ${inningsLine(i, M.fmt)}`).join(', ');
   const crease = M.done || inn.closed ? '' : `<table class="tbl clean" style="margin-top:10px"><thead><tr><th>Batting</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>
       ${[[sc, true], [ns, false]].map(([c, on]) => c ? `<tr class="tap" onclick="showPlayer('${c.id}')"><td class="l">${esc(P(c.id).last)}${on ? ' *' : ''}</td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td></tr>` : '').join('')}</tbody></table>
@@ -4151,12 +4268,12 @@ function renderLive() {
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
   else bar = `<button class="btn" onclick="briefSheet(false)">Message</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
-    <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option><option value="${M.fmt === 'FC' ? 'session' : 'five'}">${M.fmt === 'FC' ? '30 overs' : '5 overs'}</option><option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
+    <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   return `<div class="grid">
     <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
       <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
         <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
-        ${!M.done && !inn.closed ? `<div class="xs dim" style="margin-top:6px">Game plan: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ' · <span class="draw">message waiting for drinks</span>' : ''}</div>` : ''}</div>
+        ${!M.done && !inn.closed ? `<div class="xs dim" style="margin-top:6px">Game plan: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ` · <span class="draw">message waiting for the next ${M.fmt === 'FC' ? 'break' : 'drinks break'}</span>` : ''}</div>` : ''}</div>
       ${crease}${stateBox}<div style="height:12px"></div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
@@ -4183,7 +4300,7 @@ function commentaryHtml(M) {
   const all = !!ui.commAll;
   const html = groups.slice(0, 24).map(g => {
     // Result notes are skipped: the result banner above the tabs already shows them.
-    if (g.note) { if (/^End of over/.test(g.note.text) || g.note.cls === 's') return ''; return `<div class="cnote">${esc(g.note.text)}</div>`; }
+    if (g.note) { if (/^End of over/.test(g.note.text) || g.note.cls === 's') return ''; return `<div class="cnote ${g.note.cls === 'brk' ? 'brk' : ''}">${esc(g.note.text)}</div>`; }
     const balls = g.balls.slice().reverse();
     const runs = balls.reduce((a, b) => a + (b.runs || 0), 0);
     const last = g.balls[0];
