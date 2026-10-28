@@ -235,7 +235,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .cball{display:flex;gap:8px;font-size:12.5px;line-height:1.45;margin-top:6px;padding-left:70px;color:#d7e3ec}
 .cball .o{color:var(--dim);font-weight:700;font-size:11px;width:30px;flex:none;margin-left:-38px}
 .cball.w{color:#fecaca;font-weight:700}.cball.b{color:#bbf7d0}
-.cnote{padding:8px 12px;border-top:1px solid var(--line2);font-size:12px;color:var(--muted);font-style:italic}.cnote.res{color:var(--accent);font-style:normal;font-weight:800}
+.cnote{padding:8px 12px;border-top:1px solid var(--line2);font-size:12px;color:var(--muted);font-style:italic}
 .sc-result{padding:10px 12px;border-radius:10px;background:var(--s2);font-weight:800;font-size:13.5px;margin-bottom:10px}
 .sc-result span{display:block;font-weight:600;font-size:12px;color:var(--muted);margin-top:2px}.sc-result.win{color:#bbf7d0}.sc-result.loss{color:#fecaca}
 .sc-head{display:flex;justify-content:space-between;align-items:flex-end;margin:12px 2px 8px}
@@ -326,12 +326,13 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.0', title: 'Styles, Specialists & Scale', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.1', title: 'International fixes', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
 // balance is unchanged while the numbers players see read like a modern sports game.
-const RATING_SHIFT = 6, STAFF_SHIFT = 8, SCALE_VERSION = 2;
+const RATING_SHIFT = 6, STAFF_SHIFT = 8, SCALE_VERSION = 3;
+const INTL_BASE = 81 + RATING_SHIFT; // India's squad generation level (NATION_STRENGTH 82)
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
 const MIN_SALARY = 60000;
@@ -1608,7 +1609,13 @@ function upgradeScale(g) {
     p.pot = clamp(Math.round((p.pot || 0) + RATING_SHIFT), peakOvr(p), 97);
   });
   Object.values(g.staff || {}).forEach(st => { st.rating = clamp(st.rating + STAFF_SHIFT, 40, 97); if (st.mm != null) st.mm = clamp(st.mm + STAFF_SHIFT, 40, 99); });
-  g.scaleV = SCALE_VERSION;
+  g.scaleV = 2;
+}
+// v0.7.1: international squads varied too much and could outclass Australia. Bring each existing
+// squad to its nation's target level so saves match new careers.
+function rebalanceIntl(g) {
+  Object.keys(NATION_STRENGTH).forEach(normaliseIntlSquad);
+  g.scaleV = 3;
 }
 function migrateGame(g) {
   const prev = game; game = g;
@@ -1617,8 +1624,10 @@ function migrateGame(g) {
   if (!g.fin) g.fin = initFinances();
   if (!g.inbox) g.inbox = [];
   Object.values(g.staff).forEach(ensureStaffAttrs);
-  if ((g.scaleV || 1) < SCALE_VERSION) upgradeScale(g);
+  if ((g.scaleV || 1) < 2) upgradeScale(g);
+  if ((g.scaleV || 1) < 3) rebalanceIntl(g);
   applyTeamEdits();
+  ensureNationCoach();
   g.season.windows.forEach(w => { if (!w.fx) w.fx = []; });
   game = prev;
   g.plans = g.plans || {};
@@ -1667,6 +1676,9 @@ function staffMarket() { return Object.values(game.staff || {}).filter(s => !s.t
 function ensureStaff() {
   game.staff = game.staff || {};
   TEAM_DEFS.forEach(t => STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) makeStaff(r, 58 + STAFF_SHIFT + randInt(-8, 10), t.id); }));
+  ensureNationCoach();
+  // National squads do not develop like domestic players, so re-level them once a year.
+  Object.keys(NATION_STRENGTH).forEach(n => { ensureIntlSquad(n); normaliseIntlSquad(n); });
   refreshStaffMarket();
 }
 function refreshStaffMarket() {
@@ -1689,6 +1701,12 @@ function releaseStaff(id) {
   const s = game.staff[id]; if (!s || s.teamId !== U()) return;
   s.teamId = null; logTx(`Released ${s.first} ${s.last} (${STAFF_ROLES[s.role].label.toLowerCase()}).`);
 }
+// Australia's national head coach. Shown on match day and in the brief; his effect is the fixed
+// national staff level in staffRating('AUS', ...).
+function ensureNationCoach() {
+  if (Object.values(game.staff).some(s => s.teamId === 'AUS' && s.role === 'head')) return;
+  const s = makeStaff('head', 82 + STAFF_SHIFT, 'AUS'); s.rating = staffRating('AUS', 'head'); s.salary = 0; s.years = randInt(3, 5);
+}
 function staffOffseason() {
   Object.values(game.staff).forEach(s => {
     s.age++;
@@ -1701,6 +1719,9 @@ function staffOffseason() {
   });
   Object.values(game.staff).filter(s => !s.teamId && s.age >= 68).forEach(s => delete game.staff[s.id]);
   TEAM_DEFS.forEach(t => { if (t.id === U()) return; STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) { const c = staffMarket().filter(s => s.role === r).sort((a, b) => b.rating - a.rating)[randInt(0, 1)]; if (c) { c.teamId = t.id; c.years = randInt(1, 3); } else makeStaff(r, 58 + STAFF_SHIFT, t.id); } }); });
+  ensureNationCoach();
+  // National squads do not develop like domestic players, so re-level them once a year.
+  Object.keys(NATION_STRENGTH).forEach(n => { ensureIntlSquad(n); normaliseIntlSquad(n); });
   refreshStaffMarket();
 }
 function resignStaff(id) { const e = (game.offseason.expiringStaff || []).find(x => x.id === id); if (!e) return; const s = game.staff[id]; s.salary = e.ask; s.years = 2; e.status = 'signed'; }
@@ -1750,16 +1771,36 @@ function ensureIntlSquad(nat) {
   const tid = 'X_' + nat;
   const sq = Object.values(game.players).filter(p => p.teamId === tid && !p.retired);
   if (sq.length >= 16) return;
-  // Test-standard sides: squads average high 80s for the strong nations and low 80s for the weaker ones.
-  const base = 74 + RATING_SHIFT + (NATION_STRENGTH[nat] - 76) * 0.7;
+  // Squad quality follows NATION_STRENGTH, one rating point per strength point. With Australia's
+  // best XI around 87-88, India's XI lands about level, New Zealand about five below and the
+  // weakest nations about ten below.
+  const base = INTL_BASE + (NATION_STRENGTH[nat] - 82);
   const need = ['OPEN','OPEN','TOP','MID','MID','WK','BAR','BWAR','PACE','PACE','PACE','SEAM','OFF','SPIN2','TOP','BAR'];
   const counts = {}; sq.forEach(p => counts[p.role] = (counts[p.role] || 0) + 1);
   need.forEach(r => {
     const role = r === 'SPIN2' ? 'LEG' : r;
     if ((counts[role] || 0) > 0) { counts[role]--; return; }
     if (Object.values(game.players).filter(p => p.teamId === tid && !p.retired).length >= 16) return;
-    const p = makePlayer({ role: r, q: base + randn() * 4 + (rand() < 0.15 ? 7 : 0), age: clamp(Math.round(27 + randn() * 3.5), 20, 36), nat, teamId: tid });
+    const p = makePlayer({ role: r, q: base + randn() * 3 + (rand() < 0.12 ? 6 : 0), age: clamp(Math.round(27 + randn() * 3.5), 20, 36), nat, teamId: tid });
     p.contract = null; seedCareer(p);
+  });
+  if (!sq.length) normaliseIntlSquad(nat);
+}
+// Target XI level for a nation, averaged over the three formats.
+function intlTarget(nat) { return INTL_BASE + 1 + (NATION_STRENGTH[nat] - 82); }
+// Shifts a national squad's skills so its best XI averages close to the nation's target.
+// Keeps the players and their relative order; only the overall level moves (by at most 8).
+function normaliseIntlSquad(nat) {
+  const tid = 'X_' + nat, sq = Object.values(game.players).filter(p => p.teamId === tid && !p.retired);
+  if (sq.length < 11) return;
+  const lvl = mean(FMT_LIST.map(f => mean(autoXI(tid, f, sq).order.map(id => overall(P(id), f)))));
+  const d = clamp(Math.round(intlTarget(nat) + randn() * 0.8 - lvl), -8, 8);
+  if (!d) return;
+  sq.forEach(p => {
+    ['tech','temp','power','rot','field'].forEach(k => p.sk[k] = clamp(Math.round(p.sk[k] + d), 15, 99));
+    if (canBowl(p) && p.sk.bowl > 35) ['bowl','acc','vari','death'].forEach(k => p.sk[k] = clamp(Math.round(p.sk[k] + d), 15, 99));
+    if (p.sk.keep > 40) p.sk.keep = clamp(Math.round(p.sk.keep + d), 15, 99);
+    p.pot = Math.max(peakOvr(p), p.pot + d);
   });
 }
 function initRankings() {
@@ -2363,7 +2404,8 @@ function createGame(gmName, teamId, year, nationGm) {
   const osNats = Object.keys(NATIONS).filter(n => n !== 'AUS');
   for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 82) + RATING_SHIFT, age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
   game.captain = squadOf(teamId).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0].id;
-  ensureStaff();
+  balanceLeague();
+  ensureStaff(); ensureNationCoach();
   game.season = buildSeason(year);
   game.board.objectives = makeObjectives(teamId);
   addNews('Club', `${gmName} appointed GM of ${teamName(teamId)}`, `The board has handed you control of the ${teamDef(teamId).nick} for the ${game.season.label} season. Objectives are waiting in the Office.`);
@@ -2960,6 +3002,22 @@ function acceptJob(teamId) {
   addNews('Club', `${game.gm.name} joins ${teamName(teamId)}`, 'A fresh start, with a new board and a new squad.');
 }
 
+// Random squads can come out batting-heavy or bowling-heavy, which skews a whole career's scoring.
+// After generation, nudge batting and bowling skills league-wide so the gap between each side's top
+// seven batters and top five bowlers sits at the level the engine is calibrated for.
+const LEAGUE_BAT_BOWL_GAP = -0.45; // median of freshly generated worlds
+function balanceLeague() {
+  const gap = mean(FMT_LIST.map(f => mean(TEAM_DEFS.map(t => {
+    const xi = autoXI(t.id, f).order.map(P);
+    return mean(xi.slice(0, 7).map(p => batRating(p, f))) - mean(xi.filter(canBowl).map(p => bowlRating(p, f)).sort((a, b) => b - a).slice(0, 5));
+  }))));
+  const d = clamp(gap - LEAGUE_BAT_BOWL_GAP, -6, 6) / 2;
+  if (Math.abs(d) < 0.25) return;
+  Object.values(game.players).filter(p => TEAM_DEFS.some(t => t.id === p.teamId) || (!p.teamId && !p.prospect)).forEach(p => {
+    ['tech','temp','power','rot'].forEach(k => p.sk[k] = clamp(p.sk[k] - d, 15, 99));
+    if (canBowl(p) && p.sk.bowl > 35) ['bowl','acc','vari','death'].forEach(k => p.sk[k] = clamp(p.sk[k] + d, 15, 99));
+  });
+}
 function developPlayer(p) {
   const cur = peakOvr(p), head = p.pot - cur;
   let g;
@@ -3459,7 +3517,8 @@ function renderHome() {
   const vacant = STAFF_ORDER.filter(r => !staffIn(U(), r));
   if (vacant.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='staff';go('office')">${vacant.length} staff vacanc${vacant.length > 1 ? 'ies' : 'y'} ▸</span>`);
   if (sq.length < SQUAD_MIN) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='fa';go('office')">Squad short: ${sq.length}/${SQUAD_MIN} ▸</span>`);
-  const hc = ui.homeComp || (fx ? fx.comp : 'SHIELD');
+  // The home ladder only shows domestic competitions; an international fixture next falls back to the Shield.
+  const hc = COMP_ORDER.includes(ui.homeComp) ? ui.homeComp : fx && COMP_ORDER.includes(fx.comp) ? fx.comp : 'SHIELD';
   return `<div class="grid">
     ${panel(`${me.nick} · ${game.season.label}`, hero, { end: form ? `<span class="flex" style="gap:3px">${form}</span>` : '' })}
     ${kpis}
@@ -3935,7 +3994,7 @@ function renderMatchday() {
   const avgO = s => Math.round(mean(s.order.map(id => overall(P(id), fmt))));
   const scouted = game.scoutedFx[fx.id];
   const wx = pre.cond.days.map((d, i) => chip(d.sky === 'rain' || d.sky === 'showers' ? 'warn' : d.sky === 'overcast' ? 'info' : '', `${fmt === 'FC' ? 'D' + (i + 1) + ' ' : ''}${SKIES[d.sky].label}${d.lost ? ' −' + d.lost : ''}`)).join(' ');
-  const hc = me === 'AUS' ? null : staffIn(me, 'head');
+  const hc = staffIn(me, 'head');
   return `${pageTitle('Match day', `${COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
     ${panel('', `<div class="hero"><span onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div><span onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
@@ -4003,7 +4062,6 @@ function liveStep(mode) {
     if (mode === 'wicket' && ev.wkt) break;
     if ((mode === 'over' || mode === 'five' || mode === 'session') && inn.overBalls === 0 && legal >= target) break;
   }
-  if (M.done && !M.log.some(e => e.cls === 's')) M.log.unshift({ cls:'s', text: `RESULT: ${M.result.text}.` + (M.potm ? ` Player of the match: ${pname(P(M.potm))}.` : '') });
   ui.liveInn = null;
   autosave(); render();
 }
@@ -4012,7 +4070,7 @@ function startNextInnings() {
   const M = game.live; if (!M || M.done) return;
   const before = M.innings.length;
   nextInnings(M);
-  if (M.done) { M.log.unshift({ cls:'s', text: `RESULT: ${M.result.text}.` + (M.potm ? ` Player of the match: ${pname(P(M.potm))}.` : '') }); }
+  if (M.done) { /* the result banner above the tabs shows the result */ }
   else if (M.innings.length > before) { const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) }); M.log.unshift({ cls:'sys', text: `Game plan: ${briefSummary(M.brief[me] || game.tactics[M.fmt])}.` }); }
   autosave(); render();
 }
@@ -4049,7 +4107,7 @@ function briefSheet(atBreak) {
   const opt = (key, label) => `<div><label class="lbl">${label}</label>${sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), cur[key], `window._brief.${key}=this.value`, 'full')}</div>`;
   const striker = P(inn.card[inn.striker].id);
   const pl = planFor(M, inn, striker.id);
-  const hc = me === 'AUS' ? null : staffIn(me, 'head');
+  const hc = staffIn(me, 'head');
   const every = drinksEvery(M.fmt);
   const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'Set the brief for this innings.' : `Your message reaches the dressing room at the next drinks break (every ${every} overs).`}</div>
     <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
@@ -4124,7 +4182,8 @@ function commentaryHtml(M) {
   });
   const all = !!ui.commAll;
   const html = groups.slice(0, 24).map(g => {
-    if (g.note) { if (/^End of over/.test(g.note.text)) return ''; return `<div class="cnote ${g.note.cls === 's' ? 'res' : ''}">${esc(g.note.text)}</div>`; }
+    // Result notes are skipped: the result banner above the tabs already shows them.
+    if (g.note) { if (/^End of over/.test(g.note.text) || g.note.cls === 's') return ''; return `<div class="cnote">${esc(g.note.text)}</div>`; }
     const balls = g.balls.slice().reverse();
     const runs = balls.reduce((a, b) => a + (b.runs || 0), 0);
     const last = g.balls[0];
