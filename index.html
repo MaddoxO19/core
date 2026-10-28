@@ -246,7 +246,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.3.0', title: 'Compact UI', engine: 'C2.1 Ball-by-Ball' };
+const BUILD = { version: 'v0.5.0', title: 'Dressing Room & World', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_';
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
@@ -266,7 +266,11 @@ const TEAM_DEFS = [
 const COMPS = {
   SHIELD: { id:'SHIELD', name:'Sheffield Shield', short:'Shield',  fmt:'FC',  win:6, draw:1, tie:3 },
   ODC:    { id:'ODC',    name:'One-Day Cup',      short:'One-Day', fmt:'OD',  win:4, draw:2, tie:2 },
-  T20C:   { id:'T20C',   name:'T20 Championship', short:'T20',     fmt:'T20', win:4, draw:2, tie:2 }
+  T20C:   { id:'T20C',   name:'T20 Championship', short:'T20',     fmt:'T20', win:4, draw:2, tie:2 },
+  TEST:   { id:'TEST', name:'Test series', short:'Test', fmt:'FC', intl:true, win:0, draw:0, tie:0 },
+  ODI:    { id:'ODI',  name:'ODI series',  short:'ODI',  fmt:'OD', intl:true, win:0, draw:0, tie:0 },
+  T20I:   { id:'T20I', name:'T20I series', short:'T20I', fmt:'T20', intl:true, win:0, draw:0, tie:0 },
+  WC:     { id:'WC', name:'T20 World Cup', short:'World Cup', fmt:'T20', intl:true, win:0, draw:0, tie:0 }
 };
 const COMP_ORDER = ['SHIELD','ODC','T20C'];
 const FMT_COMP = { FC:'SHIELD', OD:'ODC', T20:'T20C' };
@@ -306,9 +310,9 @@ const SQUAD_TEMPLATE = ['OPEN','OPEN','TOP','TOP','MID','MID','MID','WK','WK','B
 const IDEAL_GROUPS = { BAT:7, WK:2, AR:4, PACE:5, SPIN:2 };
 
 const TACTICS = {
-  bat:   { defensive:{label:'Defensive', intent:-0.45}, balanced:{label:'Balanced', intent:0}, aggressive:{label:'Aggressive', intent:0.45} },
-  field: { defensive:{label:'Defensive', wkt:0.88, bnd:0.82, single:1.12}, balanced:{label:'Balanced', wkt:1, bnd:1, single:1}, attacking:{label:'Attacking', wkt:1.13, bnd:1.13, single:0.9} },
-  bowl:  { pace:{label:'Pace-first', pace:6, spin:0}, balanced:{label:'Balanced', pace:0, spin:0}, spin:{label:'Spin-first', pace:0, spin:6} }
+  bat:   { defensive:{label:'Bat time', intent:-0.45}, balanced:{label:'Balanced', intent:0}, aggressive:{label:'Take it on', intent:0.45} },
+  field: { defensive:{label:'Contain', wkt:0.88, bnd:0.82, single:1.12}, balanced:{label:'Balanced', wkt:1, bnd:1, single:1}, attacking:{label:'Attack', wkt:1.13, bnd:1.13, single:0.9} },
+  bowl:  { pace:{label:'Lean on pace', pace:6, spin:0}, balanced:{label:'Coach decides', pace:0, spin:0}, spin:{label:'Lean on spin', pace:0, spin:6} }
 };
 const TRAINING = {
   balanced: { label:'Balanced',     desc:'Even development across every skill.' },
@@ -415,7 +419,8 @@ function overall(p, fmt) {
 }
 function peakOvr(p) { return Math.max(overall(p, 'FC'), overall(p, 'OD'), overall(p, 'T20')); }
 function potGrade(p) {
-  const v = p.pot;
+  let v = p.pot;
+  if (typeof game !== 'undefined' && game && p.teamId !== U() && game.staff) v = Math.round(v + (hash01(p.id) - 0.5) * 2 * (100 - staffRating(U(), 'scout')) / 6);
   return v >= 90 ? 'A+' : v >= 85 ? 'A' : v >= 80 ? 'B+' : v >= 75 ? 'B' : v >= 70 ? 'C+' : v >= 65 ? 'C' : 'D';
 }
 function ratingClass(v) { return v >= 82 ? 'elite' : v >= 74 ? 'good' : ''; }
@@ -507,6 +512,7 @@ function tradeValue(p) {
   let v = playerValueScore(p) * 100;
   if (p.contract) v -= (p.contract.salary - askingSalary(p)) / 15000;
   if (p.injury) v *= 0.75;
+  if (p.wantsOut) v *= 0.85;
   return Math.max(0.5, v);
 }
 
@@ -596,7 +602,14 @@ function buildSeason(year) {
   const standings = {};
   COMP_ORDER.forEach(c => { standings[c] = {}; ids.forEach(id => standings[c][id] = blankStanding()); });
   const opps = shuffle(Object.keys(NATION_STRENGTH));
-  const windows = CAL.WINDOWS.map((w, i) => Object.assign({}, w, { opp: opps[i], squad: [], result: null }));
+  const windows = CAL.WINDOWS.map((w, i) => Object.assign({}, w, { opp: opps[i], squad: [], result: null, fx: [] }));
+  windows.forEach(w => {
+    const venues = shuffle(ids);
+    const plan = w.id === 'TEST' ? [[52,'TEST'],[62,'TEST'],[72,'TEST'],[82,'TEST'],[93,'TEST']] : [[121,'ODI'],[125,'ODI'],[129,'ODI'],[134,'T20I'],[137,'T20I'],[140,'T20I']];
+    plan.forEach(([d, c], i) => { const id = year + '-i' + (n++); w.fx.push(id); fixtures.push({ id, comp: c, round: `${COMPS[c].short} ${plan.filter((x, j) => j <= i && x[1] === c).length}`, day: d, home: 'AUS', away: 'X_' + w.opp, venue: venues[i % venues.length], stage: 'intl', win: w.id, result: null }); });
+  });
+  addWorldFixtures(year, fixtures, windows, () => n++);
+  fixtures.sort((a, b) => a.day - b.day);
   return { year, label: year + '–' + String(year + 1).slice(2), fixtures, standings, windows, champions: {}, userWins: 0, userLosses: 0 };
 }
 function seasonEndDay() { return Math.max(...game.season.fixtures.map(f => f.day)) + 4; }
@@ -614,6 +627,7 @@ function ladderPos(comp, teamId) { return sortedLadder(comp).findIndex(r => r.id
 
 // §6 STATS HELPERS -----------------------------------------------------------
 function addStat(p, fmt, fn) { fn(p.stats.season[fmt]); fn(p.stats.career[fmt]); }
+function addIntlStat(p, fmt, fn) { p.stats.intl = p.stats.intl || blankStats3(); fn(p.stats.intl[fmt]); }
 function batAvgOf(s) { const d = s.inn - s.no; return d > 0 ? s.r / d : (s.r ? s.r : 0); }
 function srOf(s) { return s.b ? s.r / s.b * 100 : 0; }
 function bowlAvgOf(s) { return s.w ? s.rc / s.w : 0; }
@@ -623,11 +637,14 @@ function hsStr(s) { return s.inn ? s.hs + (s.hsNo ? '*' : '') : '–'; }
 function bbStr(s) { return s.bbw ? s.bbw + '/' + s.bbr : '–'; }
 // §7 TEAM SELECTION ----------------------------------------------------------
 function U() { return game.gm.teamId; }
-function teamDef(id) { return TEAM_DEFS.find(t => t.id === id); }
+function teamDef(id) { return TEAM_DEFS.find(t => t.id === id) || intlDef(id); }
 function teamName(id) { const t = teamDef(id); return t ? t.name : (id || 'TBC'); }
-function squadOf(teamId) { return Object.values(game.players).filter(p => p.teamId === teamId && !p.retired); }
+function squadOf(teamId) {
+  if (teamId === 'AUS') { const w = activeWindow(); return w ? w.squad.map(P).filter(p => p && !p.retired) : []; }
+  return Object.values(game.players).filter(p => p.teamId === teamId && !p.retired);
+}
 function isAvailable(p) { return !p.injury && !p.natDuty && !p.retired; }
-function availablePlayers(teamId) { return squadOf(teamId).filter(isAvailable); }
+function availablePlayers(teamId) { return teamId === 'AUS' ? squadOf('AUS').filter(p => !p.injury) : squadOf(teamId).filter(isAvailable); }
 
 function fitAdj(p) { return (p.fitness < 82 ? -(82 - p.fitness) * 0.45 : 0) + formMod(p) * 0.6; }
 
@@ -636,8 +653,9 @@ function fitAdj(p) { return (p.fitness < 82 ? -(82 - p.fitness) * 0.45 : 0) + fo
 function autoXI(teamId, fmt, poolIn) {
   let pool = (poolIn || availablePlayers(teamId)).slice();
   const xi = [];
-  const osCount = () => xi.filter(p => p.nat !== 'AUS').length;
-  const ok = p => p.nat === 'AUS' || osCount() < OVERSEAS_MAX;
+  const nat = teamNat(teamId);
+  const osCount = () => xi.filter(p => p.nat !== nat).length;
+  const ok = p => p.nat === nat || osCount() < OVERSEAS_MAX;
   const take = p => { if (p) { xi.push(p); pool = pool.filter(x => x !== p); } };
   const best = (filter, score) => pool.filter(p => ok(p) && filter(p)).sort((a, b) => score(b) - score(a))[0];
   const bowlS = p => bowlRating(p, fmt) + fitAdj(p) - (isPace(p) && p.fitness < 75 ? 8 : 0);
@@ -708,13 +726,14 @@ function selectXI(teamId, fmt) {
 
 // §8 MATCH ENGINE -------------------------------------------------------------
 // A match object (M) is plain data so it can live in the save while in progress.
-function tacticsFor(teamId, fmt) {
-  if (teamId === U()) return game.tactics[fmt];
-  return { bat: 'balanced', field: 'balanced', bowl: 'balanced' };
+function tacticsFor(M, teamId) {
+  if (M.brief && M.brief[teamId]) return M.brief[teamId];
+  if (isUserTeam(teamId)) return game.tactics[M.fmt];
+  return aiBrief(teamId);
 }
 function createMatch(fx) {
   const fmt = COMPS[fx.comp].fmt;
-  const M = { fxId: fx.id, comp: fx.comp, fmt, stage: fx.stage, home: fx.home, away: fx.away, venue: fx.home,
+  const M = { fxId: fx.id, comp: fx.comp, fmt, stage: fx.stage, home: fx.home, away: fx.away, venue: fx.venue || fx.home, brief: {},
     xi: {}, keeper: {}, captain: {}, fieldAvg: {}, bowlRank: {}, innings: [], balls: 0, toss: null,
     done: false, result: null, potm: null, log: [], live: false, timeUp: false, inningsWin: null, notes: [] };
   [fx.home, fx.away].forEach(t => {
@@ -724,6 +743,7 @@ function createMatch(fx) {
     M.bowlRank[t] = s.order.slice().sort((a, b) => bowlRating(P(b), fmt) - bowlRating(P(a), fmt)).slice(0, 2);
     if (t === U() && s.replaced && s.replaced.length) M.notes.push(s.replaced.map(([o, n]) => `${pname(o)} unavailable, ${pname(n)} comes in`).join('; '));
   });
+  [fx.home, fx.away].forEach(t => { if (isUserTeam(t)) M.brief[t] = Object.assign({}, game.tactics[fmt]); });
   rollConditions(M, fx);
   return M;
 }
@@ -747,8 +767,15 @@ function startInnings(M, bat, bowl, opts) {
     target: opts.target || null, followOn: !!opts.followOn, declared: false, closed: false, allOut: false, startBall: M.balls };
   inn.card[0].in = true; inn.card[1].in = true;
   M.innings.push(inn);
+  if (M.pendingBrief) applyPendingBrief(M, 'Innings break');
   return inn;
 }
+function applyPendingBrief(M, when) {
+  const pb = M.pendingBrief; if (!pb) return;
+  M.brief[pb.team] = Object.assign({}, pb.brief); M.pendingBrief = null;
+  if (M.live) M.log.unshift({ cls:'sys', text: `${when}: the coach passes on the GM's message. ${briefText(pb.brief)}.` });
+}
+function briefText(b) { return `Batting: ${TACTICS.bat[b.bat].label} · Bowling: ${TACTICS.field[b.field].label} · Attack: ${TACTICS.bowl[b.bowl].label}`; }
 function curInn(M) { return M.innings[M.innings.length - 1]; }
 function teamRuns(M, teamId) { return M.innings.filter(i => i.bat === teamId).reduce((a, i) => a + i.runs, 0); }
 function bowlerFig(inn, id) { return inn.bw[id] || (inn.bw[id] = { balls:0, r:0, w:0, m:0 }); }
@@ -783,7 +810,7 @@ function bowlerEffective(M, inn, bowler) {
 
 function battingIntent(M, inn) {
   const F = FORMATS[M.fmt];
-  let i = TACTICS.bat[tacticsFor(inn.bat, M.fmt).bat].intent;
+  let i = TACTICS.bat[tacticsFor(M, inn.bat).bat].intent;
   const ph = phaseOf(M.fmt, inn.overNo, mOvers(M));
   if (M.fmt === 'T20') i += ph === 'pp' ? 0.15 : ph === 'death' ? 0.6 : 0.05;
   else if (M.fmt === 'OD') i += ph === 'pp' ? 0.05 : ph === 'death' ? 0.6 : (inn.overNo >= 30 ? 0.15 : -0.05);
@@ -820,7 +847,7 @@ function ballContext(M, inn, batter, bowler, sc) {
   const home = inn.bat === M.home ? 0.7 : -0.7;
   const d = clamp((bR - wR + 6 + home) / 15, -2.5, 2.5);
   const intent = battingIntent(M, inn);
-  const fld = TACTICS.field[tacticsFor(inn.bowl, M.fmt).field];
+  const fld = TACTICS.field[tacticsFor(M, inn.bowl).field];
   const fieldQ = 1 + ((M.fieldAvg[inn.bowl] || 60) - 62) / 300;
   const pW = B.wkt * Math.exp(-0.42 * d) * (1 + 0.5 * intent) * fld.wkt * fieldQ * pe.wkt;
   const pow = (batter.sk.power - 60) / 40;
@@ -850,7 +877,7 @@ function sampleRuns(w) {
 function chooseBowler(M, inn) {
   const F = FORMATS[M.fmt], fmt = M.fmt;
   const ids = M.xi[inn.bowl];
-  const tac = TACTICS.bowl[tacticsFor(inn.bowl, fmt).bowl];
+  const tac = TACTICS.bowl[tacticsFor(M, inn.bowl).bowl];
   const ph = phaseOf(fmt, inn.overNo, mOvers(M));
   const quota = mQuota(M);
   const keeper = M.keeper[inn.bowl];
@@ -941,7 +968,8 @@ function endOver(M, inn) {
   inn.overNo++; inn.overBalls = 0; inn.overConceded = 0;
   inn.lastBowler = id; inn.curBowler = null;
   swapStrike(inn);
-  if (M.fmt === 'FC' && !inn.closed && !(M.live && inn.bat === U() && !M.autoPilot) && shouldDeclare(M, inn)) { inn.declared = true; inn.closed = true; }
+  if (M.pendingBrief && inn.overNo % drinksEvery(M.fmt) === 0) applyPendingBrief(M, 'Drinks');
+  if (M.fmt === 'FC' && !inn.closed && shouldDeclare(M, inn)) { inn.declared = true; inn.closed = true; }
 }
 
 function checkInningsEnd(M, inn) {
@@ -1134,7 +1162,7 @@ function commentary(M, inn, ev, bowler, batter, sc) {
 function overSummary(M, inn) {
   const last = inn.overRuns[inn.overRuns.length - 1] || 0;
   const bw = P(inn.lastBowler), f = inn.bw[inn.lastBowler];
-  let t = `End of over ${inn.overNo}: ${last} run${last === 1 ? '' : 's'}. ${teamDef(inn.bat).id} ${inn.runs}/${inn.wkts}.`;
+  let t = `End of over ${inn.overNo}: ${last} run${last === 1 ? '' : 's'}. ${teamDef(inn.bat).short || teamDef(inn.bat).id} ${inn.runs}/${inn.wkts}.`;
   if (f) t += ` ${bw.last} ${oversStr(f.balls)}-${f.m}-${f.r}-${f.w}.`;
   if (inn.target && M.fmt !== 'FC') { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; if (need > 0) t += ` Need ${need} from ${bl}.`; }
 
@@ -1245,7 +1273,7 @@ function rollSky(day, v) {
 }
 function previewConditions(fx) {
   if (!fx.pre) {
-    const T = { fmt: COMPS[fx.comp].fmt, venue: fx.home, notes: [] };
+    const T = { fmt: COMPS[fx.comp].fmt, venue: fx.venue || fx.home, notes: [], comp: fx.comp };
     rollConditions(T, fx);
     fx.pre = { cond: T.cond, overs: T.overs || null, maxBalls: T.maxBalls || null, abandoned: !!T.abandoned, notes: T.notes };
   }
@@ -1261,7 +1289,8 @@ function rollConditions(M, fx) {
   const v = teamDef(M.venue), F = FORMATS[M.fmt];
   const c = { pitch: rollPitch(M.fmt, v), days: [] };
   if (M.fmt === 'FC') {
-    for (let d = 0; d < 4; d++) {
+    const nd = M.comp === 'TEST' ? 5 : 4;
+    for (let d = 0; d < nd; d++) {
       const sky = rollSky(fx.day + d, v), r = SKIES[sky].rain;
       c.days.push({ sky, lost: r ? Math.round(rand() * r * F.oversPerDay) : 0 });
     }
@@ -1307,29 +1336,19 @@ function condSummary(M) {
 }
 
 // ---- Bowling plans ----
+// Plans are built by each side's analyst (see analystPlan in the GM layer).
 function planFor(M, inn, batterId) {
-  if (inn.bowl === U()) return (game.plans && game.plans[batterId]) || (game.defaultPlan && game.defaultPlan[M.fmt]) || DEFAULT_PLAN;
   M.aiPlans = M.aiPlans || {};
-  const key = inn.bowl + ':' + batterId + ':' + (phaseOf(M.fmt, inn.overNo, mOvers(M)) === 'death' ? 'd' : 'n');
-  if (!M.aiPlans[key]) {
-    const tr = ensureTraits(P(batterId));
-    let plan = Object.assign({}, DEFAULT_PLAN);
-    // AI analysts know roughly 60% of batters' weak spots.
-    if (rand() < 0.6) {
-      const line = ['off','stumps','body'].sort((a, b) => tr[a] - tr[b])[0];
-      const len = ['good','full','short','yorker'].sort((a, b) => tr[a] - tr[b])[0];
-      if (tr[line] < 0) plan.line = line;
-      if (tr[len] < 0) plan.len = len;
-    }
-    if (M.fmt !== 'FC' && key.endsWith(':d') && rand() < 0.6) plan.len = 'yorker';
-    M.aiPlans[key] = plan;
-  }
+  const death = phaseOf(M.fmt, inn.overNo, mOvers(M)) === 'death';
+  const key = inn.bowl + ':' + batterId + ':' + (death ? 'd' : 'n');
+  if (!M.aiPlans[key]) M.aiPlans[key] = analystPlan(M.fmt, inn.bowl, batterId, death, M.fxId + inn.bowl);
   return M.aiPlans[key];
 }
 function planEffect(M, inn, bowler, batter, sc) {
   const plan = planFor(M, inn, batter.id);
   const L = PLAN_LINES[plan.line] || PLAN_LINES.off, N = PLAN_LENGTHS[plan.len] || PLAN_LENGTHS.good;
-  const exec = clamp((bowler.sk.acc * 0.7 + bowler.sk.vari * 0.3) / 100, 0.3, 0.95);
+  const specMul = staffSpec(inn.bowl, 'bowl') ? (staffSpec(inn.bowl, 'bowl') === (isSpin(bowler) ? 'spin' : 'pace') ? 1.3 : 0.7) : 1;
+  const exec = clamp((bowler.sk.acc * 0.7 + bowler.sk.vari * 0.3) / 100 + (staffRating(inn.bowl, 'bowl') - 60) / 400 * specMul, 0.3, 0.97);
   const ph = phaseOf(M.fmt, inn.overNo, mOvers(M));
   let wkt = L.wkt * N.wkt, run = L.run * N.run, wideMul = L.wide || 1;
   const spin = isSpin(bowler);
@@ -1356,13 +1375,20 @@ function planLabel(plan) { return `${(PLAN_LINES[plan.line] || PLAN_LINES.off).l
 
 // Learning: after a match, the user's analysts know more about batters they bowled at.
 function learnFromMatch(M) {
-  if (M.home !== U() && M.away !== U()) return;
   M.innings.forEach(inn => {
-    if (inn.bowl !== U()) return;
-    inn.card.forEach(c => { if (c.b >= 60) raiseScout(c.id, 2); else if (c.b >= 24) raiseScout(c.id, 1); });
+    if (!isUserTeam(inn.bowl)) return;
+    const good = staffRating(U(), 'analyst') >= 75;
+    inn.card.forEach(c => { if (c.b >= (good ? 40 : 60)) raiseScout(c.id, 2); else if (c.b >= (good ? 15 : 24)) raiseScout(c.id, 1); });
   });
 }
 function migrateGame(g) {
+  const prev = game; game = g;
+  if (!g.staff) { g.staff = {}; ensureStaff(); }
+  if (!g.nation) g.nation = { gm: false, conf: 60, rankings: initRankings(), history: [] };
+  Object.values(g.staff).forEach(ensureStaffAttrs);
+  applyTeamEdits();
+  g.season.windows.forEach(w => { if (!w.fx) w.fx = []; });
+  game = prev;
   g.plans = g.plans || {};
   g.defaultPlan = g.defaultPlan || { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) };
   g.scout = g.scout || {};
@@ -1370,11 +1396,421 @@ function migrateGame(g) {
   if (g.season) COMP_ORDER.forEach(c => Object.values(g.season.standings[c]).forEach(s => { if (s.NR == null) s.NR = 0; }));
   return g;
 }
+// §8c GM LAYER: COACHING STAFF, MATCH BRIEF, NATIONAL TEAM -------------------------
+// The GM does not captain. Staff run the match; the GM hires them and sets the brief.
+
+const STAFF_ROLES = {
+  head:    { label:'Head coach',          short:'Head coach', desc:'Runs the match from the dressing room and shapes overall development.' },
+  bat:     { label:'Batting coach',       short:'Batting',    desc:'Speeds up batting development.' },
+  bowl:    { label:'Bowling coach',       short:'Bowling',    desc:'Speeds up bowling development and sharpens plan execution.' },
+  analyst: { label:'Performance analyst', short:'Analyst',    desc:'Builds bowling plans against each batter and learns opposition weaknesses faster.' },
+  physio:  { label:'Physio',              short:'Physio',     desc:'Faster recovery between matches, fewer and shorter injuries.' },
+  scout:   { label:'Talent scout',        short:'Scout',      desc:'More accurate potential grades for prospects and free agents.' }
+};
+const STAFF_ORDER = ['head','bat','bowl','analyst','physio','scout'];
+const COACH_STYLES = { aggressive:'Aggressive', balanced:'Balanced', cautious:'Cautious' };
+const STAFF_BUDGET = 900000;
+
+function makeStaff(role, q, teamId) {
+  const nm = genName('AUS');
+  const rating = clamp(Math.round(q + randn() * 6), 35, 92);
+  const s = { id: 's' + (game.nextSid = (game.nextSid || 1) + 1), role, first: nm[0], last: nm[1], age: randInt(34, 64), rating, mm: role === 'head' ? clamp(Math.round(rating + randn() * 10), 35, 95) : null, spec: role === 'bowl' ? (rand() < 0.65 ? 'pace' : 'spin') : role === 'bat' ? (rand() < 0.5 ? 'technique' : 'power') : null,
+    style: role === 'head' ? pick(Object.keys(COACH_STYLES)) : null, teamId: teamId || null, salary: staffAsk({ role, rating }), years: randInt(1, 3) };
+  game.staff[s.id] = s;
+  return s;
+}
+function staffAsk(s) { const base = s.role === 'head' ? 90000 : 50000; return Math.round((base + Math.pow(clamp((s.rating - 35) / 55, 0, 1), 2) * (s.role === 'head' ? 210000 : 120000)) / 5000) * 5000; }
+function staffOf(teamId) { return Object.values(game.staff || {}).filter(s => s.teamId === teamId); }
+function staffIn(teamId, role) { return staffOf(teamId).find(s => s.role === role) || null; }
+function staffRating(teamId, role) {
+  if (teamId === 'AUS') return 82;
+  if (teamId && teamId.startsWith('X_')) return 70;
+  const s = staffIn(teamId, role); return s ? s.rating : 35;
+}
+function staffPayroll(teamId) { return staffOf(teamId).reduce((a, s) => a + s.salary, 0); }
+function staffMarket() { return Object.values(game.staff || {}).filter(s => !s.teamId); }
+function ensureStaff() {
+  game.staff = game.staff || {};
+  TEAM_DEFS.forEach(t => STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) makeStaff(r, 58 + randInt(-6, 10), t.id); }));
+  refreshStaffMarket();
+}
+function refreshStaffMarket() {
+  const pool = staffMarket();
+  STAFF_ORDER.forEach(r => { const have = pool.filter(s => s.role === r).length; for (let i = have; i < 3; i++) makeStaff(r, 50 + randInt(-8, 30)); });
+}
+function hireStaff(id) {
+  const s = game.staff[id];
+  if (!s || s.teamId) return { ok: false, reason: 'Not available.' };
+  const cur = staffIn(U(), s.role);
+  const pay = staffPayroll(U()) - (cur ? cur.salary : 0) + s.salary;
+  if (pay > STAFF_BUDGET) return { ok: false, reason: `That would take staff spending to ${money(pay)}, over the ${money(STAFF_BUDGET)} budget.` };
+  if (cur) { cur.teamId = null; cur.years = randInt(1, 2); }
+  s.teamId = U(); s.years = Math.max(1, s.years);
+  logTx(`Hired ${s.first} ${s.last} as ${STAFF_ROLES[s.role].label.toLowerCase()} (${money(s.salary)}).`);
+  addNews('Staff', `${s.first} ${s.last} joins as ${STAFF_ROLES[s.role].label.toLowerCase()}`, `Rated ${s.rating}.${cur ? ` ${cur.first} ${cur.last} has left the club.` : ''}`);
+  return { ok: true };
+}
+function releaseStaff(id) {
+  const s = game.staff[id]; if (!s || s.teamId !== U()) return;
+  s.teamId = null; logTx(`Released ${s.first} ${s.last} (${STAFF_ROLES[s.role].label.toLowerCase()}).`);
+}
+function staffOffseason() {
+  Object.values(game.staff).forEach(s => {
+    s.age++;
+    s.rating = clamp(s.rating + (s.age < 50 ? randInt(-1, 3) : randInt(-3, 1)), 35, 92);
+    if (!s.teamId) return;
+    s.years--;
+    if (s.years > 0) return;
+    if (s.teamId === U()) { game.offseason.expiringStaff = game.offseason.expiringStaff || []; game.offseason.expiringStaff.push({ id: s.id, ask: staffAsk(s), status: 'pending' }); return; }
+    if (rand() < 0.75 && s.age < 66) { s.salary = staffAsk(s); s.years = randInt(1, 3); } else s.teamId = null;
+  });
+  Object.values(game.staff).filter(s => !s.teamId && s.age >= 68).forEach(s => delete game.staff[s.id]);
+  TEAM_DEFS.forEach(t => { if (t.id === U()) return; STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) { const c = staffMarket().filter(s => s.role === r).sort((a, b) => b.rating - a.rating)[randInt(0, 1)]; if (c) { c.teamId = t.id; c.years = randInt(1, 3); } else makeStaff(r, 58, t.id); } }); });
+  refreshStaffMarket();
+}
+function resignStaff(id) { const e = (game.offseason.expiringStaff || []).find(x => x.id === id); if (!e) return; const s = game.staff[id]; s.salary = e.ask; s.years = 2; e.status = 'signed'; }
+function finaliseExpiringStaff() { (game.offseason.expiringStaff || []).forEach(e => { if (e.status !== 'signed') { const s = game.staff[e.id]; if (s) s.teamId = null; } }); }
+
+// Stable pseudo-random number per string (so analyst plans can be previewed).
+function hash01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; }
+
+// Analyst-built plan for a batter. Quality depends on the bowling side's analyst and,
+// for the user's side, on how much scouting the club has done.
+function analystPlan(fmt, bowlTeam, batterId, death, key) {
+  const p = P(batterId), tr = ensureTraits(p);
+  let q = 0.2 + staffRating(bowlTeam, 'analyst') / 140;
+  if (bowlTeam === U() || (bowlTeam === 'AUS' && game.nation && game.nation.gm)) { const lvl = scoutLevel(p); q *= lvl === 0 ? 0.45 : lvl === 1 ? 0.8 : 1.05; }
+  const plan = Object.assign({}, DEFAULT_PLAN);
+  if (hash01(key + batterId) < q) {
+    const line = ['off','stumps','body'].sort((a, b) => tr[a] - tr[b])[0];
+    const len = ['good','full','short','yorker'].sort((a, b) => tr[a] - tr[b])[0];
+    if (tr[line] < 0) plan.line = line;
+    if (tr[len] < 0) plan.len = len;
+  }
+  if (death && fmt !== 'FC' && hash01('d' + key + batterId) < 0.4 + staffRating(bowlTeam, 'bowl') / 300) plan.len = 'yorker';
+  return plan;
+}
+
+// ---- Match brief: what the GM tells the dressing room ----
+function isUserTeam(t) { return t === U() || (t === 'AUS' && game.nation && game.nation.gm); }
+function aiBrief(teamId) {
+  const h = staffIn(teamId, 'head');
+  const st = h ? h.style : 'balanced';
+  return { bat: st === 'aggressive' ? 'aggressive' : st === 'cautious' ? 'defensive' : 'balanced', field: st === 'aggressive' ? 'attacking' : 'balanced', bowl: 'balanced' };
+}
+function drinksEvery(fmt) { return fmt === 'FC' ? 30 : fmt === 'OD' ? 10 : 5; }
+
+// ---- National team ----
+const INTL_COLORS = { AUS:'#f4c542', IND:'#3b82f6', ENG:'#e11d48', SA:'#16a34a', NZ:'#94a3b8', PAK:'#15803d', SL:'#1d4ed8', WI:'#9f1239', AFG:'#2563eb' };
+function intlDef(id) {
+  if (!id) return null;
+  const nat = id === 'AUS' ? 'AUS' : id.startsWith('X_') ? id.slice(2) : null;
+  if (!nat || !NATIONS[nat]) return null;
+  const v = INTL_VENUES[nat] || { ground: 'International', pace: 1, spin: 1, bat: 1 };
+  return { id, short: nat, name: NATIONS[nat], nick: NATIONS[nat], ground: v.ground, color: INTL_COLORS[nat] || '#888', pace: v.pace, spin: v.spin, bat: v.bat, pitch: '', intl: true };
+}
+function teamNat(teamId) { return teamId && teamId.startsWith('X_') ? teamId.slice(2) : 'AUS'; }
+function activeWindow() { return game.season.windows.find(w => game.day >= w.start && game.day <= w.end && w.squad.length); }
+function ensureIntlSquad(nat) {
+  const tid = 'X_' + nat;
+  const sq = Object.values(game.players).filter(p => p.teamId === tid && !p.retired);
+  if (sq.length >= 16) return;
+  const base = 73 + (NATION_STRENGTH[nat] - 76) * 0.6;
+  const need = ['OPEN','OPEN','TOP','MID','MID','WK','BAR','BWAR','PACE','PACE','PACE','SEAM','OFF','SPIN2','TOP','BAR'];
+  const counts = {}; sq.forEach(p => counts[p.role] = (counts[p.role] || 0) + 1);
+  need.forEach(r => {
+    const role = r === 'SPIN2' ? 'LEG' : r;
+    if ((counts[role] || 0) > 0) { counts[role]--; return; }
+    if (Object.values(game.players).filter(p => p.teamId === tid && !p.retired).length >= 16) return;
+    const p = makePlayer({ role: r, q: base + randn() * 4 + (rand() < 0.15 ? 7 : 0), age: clamp(Math.round(27 + randn() * 3.5), 20, 36), nat, teamId: tid });
+    p.contract = null; seedCareer(p);
+  });
+}
+function initRankings() {
+  const r = { AUS: 100 };
+  Object.keys(NATION_STRENGTH).forEach(n => r[n] = Math.round(70 + (NATION_STRENGTH[n] - 70) * 3));
+  return r;
+}
+function updateRanking(opp, score) {
+  const R = game.nation.rankings;
+  const exp = 1 / (1 + Math.pow(10, (R[opp] - R.AUS) / 40));
+  const d = Math.round(8 * (score - exp));
+  R.AUS += d; R[opp] -= d;
+}
+function recommendSquad(w) {
+  const pool = Object.values(game.players).filter(p => !p.retired && p.teamId && !p.teamId.startsWith('X_') && p.nat === 'AUS' && !p.injury);
+  const fmt = w.fmt;
+  const sc = p => overall(p, fmt) + formMod(p) * 1.3 + (p.caps[fmt] > 0 ? 1.5 : 0);
+  const chosen = [];
+  const takeN = (n, filter, score) => { pool.filter(p => !chosen.includes(p) && filter(p)).sort((a, b) => score(b) - score(a)).slice(0, n).forEach(p => chosen.push(p)); };
+  takeN(1, p => p.sk.keep >= 55, p => keeperScore(p, fmt) + formMod(p));
+  takeN(6, p => group(p) === 'BAT' || group(p) === 'WK', p => batRating(p, fmt) + formMod(p) * 1.3);
+  takeN(fmt === 'FC' ? 1 : 2, p => group(p) === 'AR', sc);
+  takeN(4, p => isPace(p) && group(p) !== 'BAT', p => bowlRating(p, fmt) + formMod(p) * 1.3);
+  takeN(2, p => isSpin(p) && group(p) !== 'BAT', p => bowlRating(p, fmt) + formMod(p) * 1.3);
+  takeN(w.size - chosen.length, () => true, sc);
+  return chosen.map(p => p.id);
+}
+function nationEligible() { return Object.values(game.players).filter(p => !p.retired && p.teamId && !p.teamId.startsWith('X_') && p.nat === 'AUS'); }
+// §8d SQUAD DYNAMICS, DEVELOPMENT PLANS, WORLD CRICKET, EDITOR -----------------------
+
+// ---- Personalities + morale ----
+const PERSONAS = {
+  professional: { label:'Professional', desc:'Steady and diligent. Develops faster and rarely sulks.', w:3 },
+  leader:       { label:'Leader',       desc:'Lifts the dressing room, especially as captain.', w:1.4 },
+  ambitious:    { label:'Ambitious',    desc:'Wants to play and win. Unhappy on the bench or in a losing side.', w:2 },
+  loyal:        { label:'Loyal',        desc:'Attached to the club. Takes less to re-sign and stays settled.', w:1.6 },
+  volatile:     { label:'Temperamental',desc:'Big form swings and quick to fall out.', w:1.3 },
+  easygoing:    { label:'Easy-going',   desc:'Not bothered by selection or results.', w:1.7 }
+};
+function ensurePersona(p) { if (!p.persona) p.persona = weightedPick(Object.keys(PERSONAS), k => PERSONAS[k].w); if (p.morale == null) p.morale = 68; return p.persona; }
+function moodLabel(m) { return m >= 78 ? 'Delighted' : m >= 62 ? 'Content' : m >= 45 ? 'Unsettled' : m >= 30 ? 'Unhappy' : 'Wants out'; }
+function moodClass(m) { return m >= 62 ? 'good' : m >= 45 ? 'warn' : 'bad'; }
+function expectedStarter(p) {
+  if (!p.teamId || !teamDef(p.teamId) || teamDef(p.teamId).intl) return false;
+  const sq = squadOf(p.teamId).filter(x => !x.injury).sort((a, b) => peakOvr(b) - peakOvr(a));
+  return sq.indexOf(p) > -1 && sq.indexOf(p) < 10;
+}
+// Called from applyMatch for domestic matches: rolling playing-time measure.
+function trackSelection(M) {
+  [M.home, M.away].forEach(t => {
+    if (!teamDef(t) || teamDef(t).intl) return;
+    const xi = M.xi[t];
+    squadOf(t).forEach(p => { if (p.injury || p.natDuty) return; p.played = (p.played == null ? 0.6 : p.played) * 0.8 + (xi.includes(p.id) ? 0.2 : 0); });
+  });
+}
+function weeklyMorale() {
+  const res = {};
+  TEAM_DEFS.forEach(t => {
+    const recent = game.season.fixtures.filter(f => f.result && (f.home === t.id || f.away === t.id) && f.day > game.day - 14 && f.day <= game.day);
+    const w = recent.filter(f => f.result.winner === t.id).length, l = recent.filter(f => f.result.winner && f.result.winner !== t.id).length;
+    const h = staffIn(t.id, 'head'); const mm = h ? (h.mm || 60) : 45;
+    const cap = t.id === U() ? P(game.captain) : null;
+    res[t.id] = { form: (w - l), mm, leader: !!(cap && ensurePersona(cap) === 'leader') };
+  });
+  Object.values(game.players).forEach(p => {
+    if (p.retired || !p.teamId || !res[p.teamId]) return;
+    const per = ensurePersona(p), r = res[p.teamId];
+    let d = 0;
+    if (expectedStarter(p) && !p.injury && !p.natDuty && (p.played == null ? 0.6 : p.played) < 0.4) d -= per === 'ambitious' ? 5 : per === 'easygoing' ? 1 : per === 'volatile' ? 4 : 3;
+    d += clamp(r.form, -3, 3) * (per === 'ambitious' ? 0.8 : per === 'easygoing' ? 0.2 : 0.45);
+    if (p.contract && askingSalary(p) > p.contract.salary * 1.3) d -= per === 'loyal' ? 0.5 : 2;
+    d += (r.mm - 60) / 20;
+    if (r.leader) d += 1;
+    if (p.promise && game.day > p.promise.until) { if ((p.played || 0) < 0.45) { d -= 15; addNews('Dressing room', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
+    if (per === 'volatile') d *= 1.5; if (per === 'professional') d *= 0.7;
+    d += (67 - p.morale) * 0.09;
+    p.morale = clamp(Math.round(p.morale + d + randn() * 1.2), 5, 100);
+    p.form = clamp(Math.round(p.form + (p.morale - 60) / 25), 15, 92);
+    if (p.teamId === U()) {
+      if (p.morale < 30 && !p.wantsOut) { p.wantsOut = game.day; addNews('Dressing room', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
+      if (p.wantsOut && p.morale >= 50) { p.wantsOut = null; addNews('Dressing room', `${pname(p)} withdraws his trade request`, 'He is settled again.'); }
+    } else if (p.morale >= 50) p.wantsOut = null;
+  });
+  // A sulking player unsettles the room.
+  const sulk = squadOf(U()).filter(p => p.wantsOut && game.day - p.wantsOut > 28).length;
+  if (sulk) squadOf(U()).forEach(p => { if (!p.wantsOut) p.morale = clamp(p.morale - Math.min(2, sulk * 0.5), 5, 100); });
+}
+function teamMorale(teamId) { return Math.round(mean(squadOf(teamId).map(p => { ensurePersona(p); return p.morale; }))); }
+// GM conversation. Once a month per player.
+function talkToPlayer(id, kind) {
+  const p = P(id); ensurePersona(p);
+  if (p.lastTalk && game.day - p.lastTalk < 30 && game.phase === 'season') return { ok: false, text: `You spoke to ${p.last} recently. Give it a few weeks.` };
+  p.lastTalk = game.day;
+  const h = staffIn(U(), 'head'); const mm = h ? (h.mm || 60) : 45;
+  let gain = 0, text = '';
+  if (kind === 'reassure') {
+    gain = Math.round(4 + (mm - 60) / 6 + randn() * 3 + (p.persona === 'easygoing' || p.persona === 'professional' ? 3 : 0) - (p.persona === 'ambitious' ? 3 : 0));
+    text = gain > 4 ? `${p.last} appreciated the chat.` : gain > 0 ? `${p.last} listened, but wants actions not words.` : `${p.last} was not convinced.`;
+  } else if (kind === 'promise') {
+    gain = Math.round(10 + randn() * 3); p.promise = { until: game.day + 35 };
+    text = `You promised ${p.last} more cricket over the next five weeks. Break it and he will not forget.`;
+  } else if (kind === 'challenge') {
+    const good = p.persona === 'professional' || p.persona === 'leader' || p.persona === 'ambitious';
+    gain = good ? Math.round(3 + randn() * 2) : Math.round(-6 + randn() * 3);
+    if (good) p.form = clamp(p.form + 6, 15, 92);
+    text = good ? `${p.last} responded well to the challenge.` : `${p.last} took it badly.`;
+  }
+  p.morale = clamp(p.morale + gain, 5, 100);
+  return { ok: true, text, gain };
+}
+
+// ---- Individual development plans ----
+const DEV_FOCUS = {
+  none:      { label:'Balanced',            skills:[] },
+  technique: { label:'Technique & defence', skills:['tech','temp'] },
+  power:     { label:'Power hitting',       skills:['power'] },
+  pace:      { label:'Bowling skill',       skills:['bowl'] },
+  control:   { label:'Control & accuracy',  skills:['acc'] },
+  variation: { label:'Variations',          skills:['vari'] },
+  keeping:   { label:'Wicketkeeping',       skills:['keep'] },
+  fitness:   { label:'Fitness & fielding',  skills:['stamina','field'] },
+  learnbowl: { label:'Develop part-time bowling', skills:['bowl','acc','vari'] }
+};
+function devSlots() { return 2 + Math.round(staffRating(U(), 'head') / 25) + (staffRating(U(), 'bat') + staffRating(U(), 'bowl') >= 150 ? 1 : 0); }
+function devUsed() { return squadOf(U()).filter(p => p.focus && p.focus !== 'none').length; }
+function setFocus(id, f) {
+  const p = P(id);
+  if (f !== 'none' && (!p.focus || p.focus === 'none') && devUsed() >= devSlots()) return { ok: false, reason: `Your coaches can run ${devSlots()} individual programmes. Free one up first.` };
+  if (f === 'learnbowl' && p.bowlType === 'NONE') p.bowlType = pick(['OB','RM','LB']);
+  p.focus = f; return { ok: true };
+}
+// Monthly in-season progress for players on programmes (and a little for young players generally).
+function monthlyDevelopment() {
+  const report = [];
+  Object.values(game.players).forEach(p => {
+    if (p.retired || !p.teamId || teamDef(p.teamId) && teamDef(p.teamId).intl) return;
+    const head = p.pot - peakOvr(p);
+    if (head <= 0 || p.age > 30) return;
+    const ageF = p.age <= 21 ? 1 : p.age <= 24 ? 0.75 : p.age <= 27 ? 0.45 : 0.2;
+    const f = DEV_FOCUS[p.focus || 'none'];
+    const team = p.teamId;
+    const coach = k => ['tech','temp','power','keep'].includes(k) ? staffRating(team, 'bat') : ['bowl','acc','vari'].includes(k) ? staffRating(team, 'bowl') : staffRating(team, 'physio');
+    const prof = ensurePersona(p) === 'professional' ? 1.2 : 1;
+    const before = peakOvr(p);
+    const keys = f.skills.length ? f.skills : [];
+    keys.forEach(k => { const gain = ageF * prof * (0.4 + coach(k) / 100) * (0.6 + rand() * 0.8); p.sk[k] = clamp(p.sk[k] + gain, 15, 99); });
+    if (!keys.length && rand() < ageF * 0.5) { const ks = group(p) === 'PACE' || group(p) === 'SPIN' ? ['bowl','acc','vari'] : ['tech','temp','power']; const k = pick(ks); p.sk[k] = clamp(p.sk[k] + ageF * 0.6, 15, 99); }
+    const d = peakOvr(p) - before;
+    if (p.teamId === U() && d >= 1) report.push(`${pname(p)} +${d}`);
+  });
+  Object.values(game.players).forEach(p => { Object.keys(p.sk).forEach(k => p.sk[k] = Math.round(p.sk[k] * 10) / 10); });
+  if (report.length) addNews('Training', 'Monthly training report', `Improved this month: ${report.join(', ')}.`);
+}
+
+// ---- Staff attributes (lazy, so old saves gain them) ----
+function ensureStaffAttrs(s) {
+  if (s.role === 'head' && s.mm == null) s.mm = clamp(Math.round(s.rating + randn() * 10), 35, 95);
+  if (s.role === 'bowl' && !s.spec) s.spec = rand() < 0.65 ? 'pace' : 'spin';
+  if (s.role === 'bat' && !s.spec) s.spec = rand() < 0.5 ? 'technique' : 'power';
+  return s;
+}
+function staffSpec(teamId, role) { const s = staffIn(teamId, role); return s ? ensureStaffAttrs(s).spec : null; }
+
+// ---- World cricket ----
+const INTL_VENUES = {
+  IND: { ground:'Mumbai', pace:0.94, spin:1.14, bat:1.03 }, ENG: { ground:"Lord's", pace:1.08, spin:0.95, bat:0.97 },
+  SA:  { ground:'Johannesburg', pace:1.09, spin:0.93, bat:1.00 }, NZ: { ground:'Wellington', pace:1.07, spin:0.94, bat:0.98 },
+  PAK: { ground:'Lahore', pace:0.97, spin:1.07, bat:1.05 }, SL: { ground:'Colombo', pace:0.93, spin:1.15, bat:1.01 },
+  WI:  { ground:'Barbados', pace:1.04, spin:0.98, bat:1.01 }, AFG: { ground:'Sharjah', pace:0.95, spin:1.11, bat:1.00 }
+};
+function isWorldCupYear(year) { return year % 2 === 1; }
+// Background series between other nations, plus a T20 World Cup in odd-year seasons.
+function addWorldFixtures(year, fixtures, windows, nextId) {
+  const others = shuffle(Object.keys(NATION_STRENGTH));
+  const pairs = [[others[0], others[1]], [others[2], others[3]], [others[4], others[5]], [others[6], others[7]]];
+  pairs.forEach(([h, a], i) => {
+    const tests = i < 2, days = tests ? [10, 22, 34].map(d => d + i * 2) : [150, 153, 156, 159, 162, 165].map(d => d + (i - 2));
+    days.forEach((d, j) => {
+      const comp = tests ? 'TEST' : j < 3 ? 'ODI' : 'T20I';
+      fixtures.push({ id: year + '-w' + nextId(), comp, round: `${COMPS[comp].short} ${tests ? j + 1 : j % 3 + 1}`, day: d, home: 'X_' + h, away: 'X_' + a, venue: 'X_' + h, stage: 'world', result: null });
+    });
+  });
+  if (isWorldCupYear(year)) {
+    const wb = windows.find(w => w.id === 'WB');
+    wb.id = 'WC'; wb.label = 'T20 World Cup'; wb.fmt = 'T20'; wb.wc = true; wb.opp = 'IND';
+    // Drop Australia's bilateral white-ball fixtures in a World Cup year.
+    for (let i = fixtures.length - 1; i >= 0; i--) if (fixtures[i].win === 'WB') fixtures.splice(i, 1);
+    wb.fx = [];
+  }
+}
+function setupWorldCup(w) {
+  const R = game.nation.rankings;
+  const field = ['AUS', ...Object.keys(NATION_STRENGTH).sort((a, b) => R[b] - R[a]).slice(0, 7)];
+  const seeded = field.slice().sort((a, b) => R[b] - R[a]);
+  const A = [], B = []; seeded.forEach((n, i) => ((i % 4 === 0 || i % 4 === 3) ? A : B).push(n));
+  const tid = n => n === 'AUS' ? 'AUS' : 'X_' + n;
+  w.groups = { A: A.map(tid), B: B.map(tid) };
+  let day = 120, k = 0;
+  const host = pick(TEAM_DEFS).id;
+  ['A','B'].forEach(g => { const t = w.groups[g]; [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach(([x, y], i) => {
+    const id = game.year + '-wc' + (k++);
+    game.season.fixtures.push({ id, comp: 'WC', round: `Group ${g}`, day: 120 + Math.floor(i / 2) * 3 + (g === 'B' ? 1 : 0), home: t[x], away: t[y], venue: shuffle(TEAM_DEFS)[0].id, stage: 'wcgroup', group: g, result: null, win: 'WC' });
+  }); });
+  ['Semi-final 1','Semi-final 2'].forEach((r, i) => game.season.fixtures.push({ id: game.year + '-wcs' + i, comp: 'WC', round: r, day: 136, home: null, away: null, venue: i ? 'NSW' : 'VIC', stage: 'wcsemi' + (i + 1), result: null, win: 'WC' }));
+  game.season.fixtures.push({ id: game.year + '-wcf', comp: 'WC', round: 'Final', day: 140, home: null, away: null, venue: 'VIC', stage: 'wcfinal', result: null, win: 'WC' });
+  game.season.fixtures.sort((a, b) => a.day - b.day);
+  w.fx = game.season.fixtures.filter(f => f.comp === 'WC').map(f => f.id);
+  addNews('World', 'T20 World Cup draw', `Group A: ${w.groups.A.map(t => teamDef(t).name).join(', ')}. Group B: ${w.groups.B.map(t => teamDef(t).name).join(', ')}.`);
+}
+function wcTable(w, g) {
+  const rows = w.groups[g].map(t => ({ t, P:0, W:0, L:0, NR:0, Pts:0, rf:0, bf:0, ra:0, ba:0 }));
+  const by = t => rows.find(r => r.t === t);
+  game.season.fixtures.filter(f => f.stage === 'wcgroup' && f.group === g && f.result).forEach(f => {
+    const h = by(f.home), a = by(f.away); h.P++; a.P++;
+    if (f.result.winner) { by(f.result.winner).W++; by(f.result.winner).Pts += 2; (f.result.winner === f.home ? a : h).L++; } else { h.NR++; a.NR++; h.Pts++; a.Pts++; }
+    (f.result.inns || []).forEach(i => { const bt = by(i.bat), bw = by(i.bowl); if (bt) { bt.rf += i.runs; bt.bf += i.balls; } if (bw) { bw.ra += i.runs; bw.ba += i.balls; } });
+  });
+  return rows.sort((x, y) => y.Pts - x.Pts || nrr(y) - nrr(x));
+}
+function updateWorldCup() {
+  const w = game.season.windows.find(x => x.wc); if (!w || !w.groups) return;
+  const fx = game.season.fixtures.filter(f => f.comp === 'WC');
+  const s1 = fx.find(f => f.stage === 'wcsemi1'), s2 = fx.find(f => f.stage === 'wcsemi2'), fin = fx.find(f => f.stage === 'wcfinal');
+  if (!s1.home && fx.filter(f => f.stage === 'wcgroup').every(f => f.result)) {
+    const A = wcTable(w, 'A'), B = wcTable(w, 'B');
+    s1.home = A[0].t; s1.away = B[1].t; s2.home = B[0].t; s2.away = A[1].t;
+    addNews('World', 'World Cup semi-finals set', `${teamDef(s1.home).name} v ${teamDef(s1.away).name}; ${teamDef(s2.home).name} v ${teamDef(s2.away).name}.`);
+  }
+  if (s1.result && s2.result && !fin.home) { fin.home = s1.result.winner; fin.away = s2.result.winner; addNews('World', 'World Cup final set', `${teamDef(fin.home).name} v ${teamDef(fin.away).name}.`); }
+  if (fin.result && !w.champion) {
+    w.champion = fin.result.winner;
+    game.worldHistory = game.worldHistory || [];
+    game.worldHistory.unshift({ year: game.year, event: 'T20 World Cup', winner: teamNat(w.champion), runnerUp: teamNat(w.champion === fin.home ? fin.away : fin.home) });
+    addNews('World', `${teamDef(w.champion).name} win the T20 World Cup`, fin.result.text + '.');
+  }
+}
+function wcAusFinish(w) {
+  const fx = game.season.fixtures.filter(f => f.comp === 'WC');
+  const fin = fx.find(f => f.stage === 'wcfinal');
+  if (w.champion === 'AUS') return 'Champions';
+  if (fin && (fin.home === 'AUS' || fin.away === 'AUS')) return 'Runners-up';
+  if (fx.some(f => f.stage.startsWith('wcsemi') && (f.home === 'AUS' || f.away === 'AUS'))) return 'Semi-finalists';
+  return 'Group stage';
+}
+function rankPair(a, b, score) {
+  const R = game.nation.rankings, na = teamNat(a), nb = teamNat(b);
+  if (R[na] == null || R[nb] == null) return;
+  const exp = 1 / (1 + Math.pow(10, (R[nb] - R[na]) / 40));
+  const d = Math.round(8 * (score - exp));
+  R[na] += d; R[nb] -= d;
+}
+
+// ---- Editor (commissioner mode) ----
+const TEAM_ORIG = JSON.parse(JSON.stringify(TEAM_DEFS));
+function applyTeamEdits() {
+  TEAM_DEFS.forEach((t, i) => Object.assign(t, TEAM_ORIG[i]));
+  const e = (game && game.teamEdits) || {};
+  TEAM_DEFS.forEach(t => { if (e[t.id]) Object.assign(t, e[t.id]); });
+}
+function editPlayerApply(id, data) {
+  const p = P(id); if (!p) return;
+  ['first','last'].forEach(k => { if (data[k]) p[k] = String(data[k]).slice(0, 24); });
+  ['age','pot','form','fitness','morale'].forEach(k => { if (data[k] != null && !isNaN(data[k])) p[k] = clamp(Math.round(+data[k]), k === 'age' ? 15 : 0, k === 'age' ? 45 : 100); });
+  ['nat','role','hand','bowlType','persona'].forEach(k => { if (data[k]) p[k] = data[k]; });
+  Object.keys(p.sk).forEach(k => { if (data['sk_' + k] != null && !isNaN(data['sk_' + k])) p.sk[k] = clamp(+data['sk_' + k], 15, 99); });
+  if (data.team !== undefined) {
+    const t = data.team || null;
+    if (t !== p.teamId) { p.teamId = t; removeFromUserXI(p.id); if (t && !p.contract) p.contract = { salary: askingSalary(p), years: 2 }; if (!t) p.contract = null; }
+  }
+  if (p.contract && data.salary) p.contract.salary = clamp(Math.round(+data.salary / 5000) * 5000, MIN_SALARY, 2000000);
+  if (p.contract && data.years) p.contract.years = clamp(+data.years, 1, 6);
+  if (data.healInjury) p.injury = null;
+  p.pot = Math.max(p.pot, peakOvr(p));
+  game.edited = true;
+}
+function editorCreatePlayer(teamId) {
+  const p = makePlayer({ role: 'MID', q: 65, age: 24, teamId: teamId || null });
+  if (!teamId) p.contract = null;
+  game.edited = true;
+  return p;
+}
 // §9 NEW GAME + APPLYING RESULTS ---------------------------------------------
 let game = null;
 
-function createGame(gmName, teamId, year) {
+function createGame(gmName, teamId, year, nationGm) {
   const seed = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+  game = null; applyTeamEdits();
   seedRng(seed);
   game = {
     meta: { created: new Date().toISOString(), build: BUILD.version, seed, slot: 1 },
@@ -1387,8 +1823,10 @@ function createGame(gmName, teamId, year) {
     training: 'balanced', deadMoney: 0, plans: {}, scout: {}, scoutedFx: {},
     defaultPlan: { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) },
     board: { confidence: 60, objectives: [] },
-    history: [], live: null, pendingFx: null, offseason: null, rng: 0
+    history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1,
+    nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
+  game.nation.rankings = initRankings();
   // Squads
   TEAM_DEFS.forEach(t => {
     const base = 64 + randInt(0, 5);
@@ -1409,6 +1847,7 @@ function createGame(gmName, teamId, year) {
   const osNats = Object.keys(NATIONS).filter(n => n !== 'AUS');
   for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 80), age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
   game.captain = squadOf(teamId).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0].id;
+  ensureStaff();
   game.season = buildSeason(year);
   game.board.objectives = makeObjectives(teamId);
   addNews('Club', `${gmName} appointed GM of ${teamName(teamId)}`, `The board has handed you control of the ${teamDef(teamId).nick} for the ${game.season.label} season. Objectives are waiting in the Office.`);
@@ -1458,17 +1897,55 @@ const INJURIES = {
 function injure(p) {
   const list = isPace(p) ? INJURIES.pace : INJURIES.other;
   const t = weightedPick(list, x => x[3]);
-  const days = randInt(t[1], t[2]);
+  const days = Math.max(3, Math.round(randInt(t[1], t[2]) * (1.25 - staffRating(p.teamId, 'physio') / 250)));
   p.injury = { type: t[0], until: game.day + days, days };
   if (p.teamId === U()) addNews('Medical', `${pname(p)} injured`, `${t[0]}. Expected to miss about ${Math.ceil(days / 7)} week${days > 7 ? 's' : ''}.`);
 }
 
+function applyIntlMatch(M) {
+  const fx = fixtureById(M.fxId), fmt = M.fmt;
+  const inXI = M.abandoned ? [] : [...M.xi[M.home], ...M.xi[M.away]];
+  inXI.forEach(id => { const p = P(id); addIntlStat(p, fmt, s => s.m++); if ((M.xi[M.home].includes(id) && p.nat === teamNat(M.home)) || (M.xi[M.away].includes(id) && p.nat === teamNat(M.away))) p.caps[fmt]++; });
+  M.innings.forEach(inn => {
+    inn.card.forEach(c => { if (!c.in) return; addIntlStat(P(c.id), fmt, s => { s.inn++; if (!c.out) s.no++; s.r += c.r; s.b += c.b; s.f4 += c.f4; s.f6 += c.f6; if (c.r >= 100) s.c100++; else if (c.r >= 50) s.c50++; if (c.r > s.hs || (c.r === s.hs && !c.out)) { s.hs = c.r; s.hsNo = !c.out; } });
+      if (c.out && c.out.fielder && c.out.how !== 'run out') addIntlStat(P(c.out.fielder), fmt, s => { if (c.out.how === 'stumped') s.st++; else s.ct++; }); });
+    Object.keys(inn.bw).forEach(id => { const b = inn.bw[id]; addIntlStat(P(id), fmt, s => { s.bb += b.balls; s.rc += b.r; s.w += b.w; if (b.w >= 5) s.w5++; if (b.w > s.bbw || (b.w === s.bbw && b.w > 0 && b.r < s.bbr)) { s.bbw = b.w; s.bbr = b.r; } }); });
+  });
+  learnFromMatch(M);
+  matchWear(M, inXI);
+  fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
+  fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
+  if (/^wc(semi|final)/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
+  if (M.home === 'AUS' || M.away === 'AUS' || /^wc(semi|final)/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
+  if (!fx.result.noResult) rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5);
+  if (M.comp === 'WC') updateWorldCup();
+  const potm = M.potm ? P(M.potm) : null;
+  if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
+}
+function matchWear(M, inXI) {
+  const fmt = M.fmt;
+  const cond = game.training === 'fitness';
+  inXI.forEach(id => {
+    const p = P(id);
+    let overs = 0; M.innings.forEach(inn => { if (inn.bw[id]) overs += inn.bw[id].balls / 6; });
+    let load = (fmt === 'FC' ? 6 : fmt === 'OD' ? 3 : 2) * (M.cond && M.cond.days.some(d => d.sky === 'hot') ? 1.25 : 1) * (M.comp === 'TEST' ? 1.2 : 1);
+    load += overs * (isPace(p) ? (fmt === 'FC' ? 0.32 : fmt === 'OD' ? 0.8 : 1.5) : (fmt === 'FC' ? 0.12 : 0.4));
+    p.fitness = clamp(p.fitness - load * (1.15 - p.sk.stamina / 200), 35, 100);
+    let risk = 0.004 + Math.max(0, 78 - p.fitness) * 0.0016 + (isPace(p) ? overs * (fmt === 'FC' ? 0.0005 : 0.0015) : 0);
+    if (cond && p.teamId === U()) risk *= 0.75;
+    risk *= 1.3 - staffRating(p.teamId, 'physio') / 200;
+    if (!p.injury && rand() < risk) injure(p);
+    p.form = clamp(Math.round(p.form * 0.75 + matchPerformance(M, id) * 0.25), 15, 92);
+  });
+}
 function applyMatch(M) {
+  if (COMPS[M.comp].intl) return applyIntlMatch(M);
   const fx = fixtureById(M.fxId);
   const comp = COMPS[M.comp], fmt = M.fmt;
   const inXI = M.abandoned ? [] : [...M.xi[M.home], ...M.xi[M.away]];
   inXI.forEach(id => addStat(P(id), fmt, s => s.m++));
   learnFromMatch(M);
+  trackSelection(M);
   M.innings.forEach(inn => {
     inn.card.forEach(c => {
       if (!c.in) return;
@@ -1512,19 +1989,7 @@ function applyMatch(M) {
   fx.result = { winner: res.winner, draw: !!res.draw && !res.advanced, tie: !!res.tie, noResult: !!res.noResult && !res.advanced, text: res.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
   if (M.home === U() || M.away === U() || fx.stage !== 'league') game.scorecards[fx.id] = compactScorecard(M);
 
-  // Fitness, injuries, form
-  const cond = game.training === 'fitness';
-  inXI.forEach(id => {
-    const p = P(id);
-    let overs = 0; M.innings.forEach(inn => { if (inn.bw[id]) overs += inn.bw[id].balls / 6; });
-    let load = (fmt === 'FC' ? 6 : fmt === 'OD' ? 3 : 2) * (M.cond && M.cond.days.some(d => d.sky === 'hot') ? 1.25 : 1);
-    load += overs * (isPace(p) ? (fmt === 'FC' ? 0.32 : fmt === 'OD' ? 0.8 : 1.5) : (fmt === 'FC' ? 0.12 : 0.4));
-    p.fitness = clamp(p.fitness - load * (1.15 - p.sk.stamina / 200), 35, 100);
-    let risk = 0.004 + Math.max(0, 78 - p.fitness) * 0.0016 + (isPace(p) ? overs * (fmt === 'FC' ? 0.0005 : 0.0015) : 0);
-    if (cond && p.teamId === U()) risk *= 0.75;
-    if (!p.injury && rand() < risk) injure(p);
-    p.form = clamp(Math.round(p.form * 0.75 + matchPerformance(M, id) * 0.25), 15, 92);
-  });
+  matchWear(M, inXI);
 
   // User consequences
   if (M.home === U() || M.away === U()) {
@@ -1568,7 +2033,7 @@ function updateFinals(comp) {
 }
 
 // §10 CALENDAR + CONTINUE LOOP ------------------------------------------------
-function userFixtureToday() { return game.season.fixtures.find(f => f.day === game.day && !f.result && f.home && (f.home === U() || f.away === U())); }
+function userFixtureToday() { return game.season.fixtures.find(f => f.day === game.day && !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && (f.stage !== 'intl' || activeWindow())); }
 function quickPlay(fx) {
   const M = createMatch(fx);
   doToss(M); setTossDecision(M, tossDecisionAI(M));
@@ -1578,7 +2043,11 @@ function quickPlay(fx) {
 }
 function playAIFixturesToday() {
   for (const fx of game.season.fixtures) {
-    if (fx.day === game.day && !fx.result && fx.home && fx.home !== U() && fx.away !== U()) quickPlay(fx);
+    if (fx.day !== game.day || fx.result || !fx.home || isUserTeam(fx.home) || isUserTeam(fx.away)) continue;
+    if ((fx.stage === 'intl' || (fx.comp === 'WC' && (fx.home === 'AUS' || fx.away === 'AUS'))) && !activeWindow()) { fx.result = { winner: null, noResult: true, text: 'Not played', summary: '' }; continue; }
+    if (fx.home.startsWith('X_')) ensureIntlSquad(teamNat(fx.home));
+    if (fx.away.startsWith('X_')) ensureIntlSquad(teamNat(fx.away));
+    quickPlay(fx);
   }
 }
 function seasonDone() { return game.season.fixtures.every(f => f.result); }
@@ -1587,6 +2056,7 @@ function nextDay() {
   game.day++;
   let stop = false;
   const rec = game.training === 'fitness' ? 1.25 : 1;
+  const phys = {}; TEAM_DEFS.forEach(t => phys[t.id] = 0.85 + staffRating(t.id, 'physio') / 300);
   for (const p of Object.values(game.players)) {
     if (p.retired) continue;
     if (p.injury) {
@@ -1594,12 +2064,15 @@ function nextDay() {
         p.injury = null; p.fitness = Math.max(p.fitness, 85);
         if (p.teamId === U()) addNews('Medical', `${pname(p)} cleared to play`, 'Back in full training and available for selection.');
       }
-    } else p.fitness = Math.min(100, p.fitness + (2.5 + p.sk.stamina / 60) * (p.teamId === U() ? rec : 1));
+    } else p.fitness = Math.min(100, p.fitness + (2.5 + p.sk.stamina / 60) * (p.teamId === U() ? rec : 1) * (phys[p.teamId] || 1));
   }
   for (const w of game.season.windows) {
+    if (game.nation.gm && game.day === w.start - 3 && !w.locked) { w.pick = recommendSquad(w); w.selecting = true; addNews('National', `Selection meeting: ${w.label} squad`, `Name ${w.size} players for the series against ${NATIONS[w.opp]}. Staff have prepared a recommended squad.`); stop = true; }
     if (game.day === w.start) { windowStart(w); if (w.squad.some(id => P(id).teamId === U())) stop = true; }
     if (game.day === w.end) windowEnd(w);
   }
+  if (game.day % 7 === 0) weeklyMorale();
+  if (game.day % 30 === 15) monthlyDevelopment();
   if (game.day === CAL.TRADE_DEADLINE) addNews('League', 'Trade deadline passed', 'No more trades until the off-season. Free agents can still be signed.');
   game.offers = game.offers.filter(o => o.expires >= game.day);
   if (maybeAIOffer()) stop = true;
@@ -1628,8 +2101,9 @@ function simDays(n, untilEnd) {
   const start = game.day;
   for (let i = 0; i < 400; i++) {
     playAIFixturesToday();
-    const ufx = userFixtureToday();
-    if (ufx) quickPlay(ufx);
+    let ufx, g2 = 0;
+    while ((ufx = userFixtureToday()) && g2++ < 5) quickPlay(ufx);
+    for (const w of game.season.windows) if (w.selecting) { w.locked = w.pick; w.selecting = false; }
     if (seasonDone()) { game.pendingFx = null; endSeason(); break; }
     if (!untilEnd && game.day - start >= n) break;
     nextDay();
@@ -1640,24 +2114,41 @@ function simDays(n, untilEnd) {
 
 // §11 NATIONAL DUTY, BOARD, AWARDS ---------------------------------------------
 function windowStart(w) {
-  const pool = Object.values(game.players).filter(p => !p.retired && p.teamId && p.nat === 'AUS' && !p.injury);
-  const fmt = w.fmt;
-  const sc = p => overall(p, fmt) + formMod(p) * 1.3 + (p.caps[fmt] > 0 ? 1.5 : 0);
-  const chosen = [];
-  const takeN = (n, filter, score) => { pool.filter(p => !chosen.includes(p) && filter(p)).sort((a, b) => score(b) - score(a)).slice(0, n).forEach(p => chosen.push(p)); };
-  takeN(1, p => p.sk.keep >= 55, p => keeperScore(p, fmt) + formMod(p));
-  takeN(6, p => group(p) === 'BAT' || group(p) === 'WK', p => batRating(p, fmt) + formMod(p) * 1.3);
-  takeN(fmt === 'FC' ? 1 : 2, p => group(p) === 'AR', sc);
-  takeN(fmt === 'FC' ? 4 : 4, p => isPace(p) && group(p) !== 'BAT', p => bowlRating(p, fmt) + formMod(p) * 1.3);
-  takeN(2, p => isSpin(p) && group(p) !== 'BAT', p => bowlRating(p, fmt) + formMod(p) * 1.3);
-  takeN(w.size - chosen.length, () => true, sc);
-  w.squad = chosen.map(p => p.id);
+  ensureIntlSquad(w.opp);
+  if (w.wc) { Object.keys(NATION_STRENGTH).forEach(ensureIntlSquad); if (!w.groups) setupWorldCup(w); }
+  let ids = (game.nation.gm && w.locked) ? w.locked.filter(id => P(id) && !P(id).retired && P(id).teamId && !P(id).injury) : null;
+  if (!ids || ids.length < 11) ids = recommendSquad(w);
+  w.selecting = false;
+  w.squad = ids;
+  const chosen = ids.map(P);
   chosen.forEach(p => p.natDuty = w.id);
   const mine = chosen.filter(p => p.teamId === U());
   if (mine.length) game.gm.rep = clamp(game.gm.rep + mine.length, 0, 100);
   addNews('National', `Australia name ${w.label} squad`, `${w.size} players selected for the series against ${NATIONS[w.opp]}.` + (mine.length ? ` ${mine.map(pname).join(', ')} ${mine.length === 1 ? 'is' : 'are'} called up from your squad and will miss domestic matches until ${dateStr(w.end)}.` : ' None of your players were selected.'));
 }
 function windowEnd(w) {
+  if (w.wc) {
+    w.squad.map(P).forEach(p => { if (p) p.natDuty = null; });
+    const fin = wcAusFinish(w);
+    w.result = { wins: 0, losses: 0, draws: 0, finish: fin };
+    game.season.fixtures.filter(f => f.comp === 'WC' && f.result && (f.home === 'AUS' || f.away === 'AUS')).forEach(f => { if (f.result.winner === 'AUS') w.result.wins++; else if (f.result.winner) w.result.losses++; else w.result.draws++; });
+    if (game.nation.gm) { const d = { Champions: 20, 'Runners-up': 8, 'Semi-finalists': 0, 'Group stage': -15 }[fin]; game.nation.conf = clamp(game.nation.conf + d, 0, 100); game.nation.history.unshift({ year: game.year, label: 'T20 World Cup', opp: 'IND', wins: w.result.wins, losses: w.result.losses, draws: w.result.draws, finish: fin }); }
+    addNews('National', `World Cup: Australia finish as ${fin.toLowerCase()}`, `${w.result.wins} won, ${w.result.losses} lost. Players return to their states.`);
+    if (game.nation.gm && game.nation.conf < 20) { game.nation.gm = false; addNews('National', 'Removed as national selector', 'Cricket Australia has replaced you after the World Cup.'); }
+    return;
+  }
+  if (w.fx && w.fx.length) {
+    const fxs = w.fx.map(fixtureById).filter(Boolean);
+    let wins = 0, losses = 0, draws = 0;
+    fxs.forEach(f => { if (!f.result || f.result.noResult) return; if (f.result.winner === 'AUS') wins++; else if (f.result.winner) losses++; else draws++; });
+    w.result = { wins, losses, draws };
+    w.squad.map(P).forEach(p => { if (p) p.natDuty = null; });
+    const res = wins > losses ? 'win' : wins < losses ? 'lose' : 'draw';
+    if (game.nation.gm) { game.nation.conf = clamp(game.nation.conf + (res === 'win' ? 10 : res === 'lose' ? -12 : 0), 0, 100); game.nation.history.unshift({ year: game.year, label: w.label, opp: w.opp, wins, losses, draws }); }
+    addNews('National', `Australia ${res} the ${w.label.toLowerCase()} against ${NATIONS[w.opp]}`, `${wins} won, ${losses} lost${draws ? ', ' + draws + ' drawn' : ''}. Players return to their states.${game.nation.gm ? ' National board confidence: ' + game.nation.conf + '.' : ''}`);
+    if (game.nation.gm && game.nation.conf < 20) { game.nation.gm = false; addNews('National', 'Removed as national selector', 'After a poor run of results Cricket Australia has replaced you as national selector.'); }
+    return;
+  }
   const sq = w.squad.map(P);
   const aus = mean(sq.map(p => overall(p, w.fmt)).sort((a, b) => b - a).slice(0, 11));
   const opp = NATION_STRENGTH[w.opp] + randn() * 2;
@@ -1845,7 +2336,11 @@ function contractDecision(p, salary, years) {
   if (years < 1 || years > 4) return { ok: false, reason: 'Contracts run 1 to 4 years.' };
   if (p.age >= 33 && years > 2) return { ok: false, reason: `${p.last} wants a shorter deal at this stage of his career.` };
   const repAdj = 1 - (game.gm.rep - 35) / 400;
-  if (salary < ask * 0.95 * repAdj) return { ok: false, reason: `${p.last} is asking for around ${money(ask)} a season.` };
+  const per = ensurePersona(p);
+  const own = p.teamId === U();
+  const adj = (per === 'ambitious' ? 1.1 : 1) * (per === 'loyal' && own ? 0.9 : 1) * (own && p.morale < 45 ? 1.15 : 1);
+  if (own && p.wantsOut) return { ok: false, reason: `${p.last} has asked for a trade and will not discuss a new deal.` };
+  if (salary < ask * 0.95 * repAdj * adj) return { ok: false, reason: `${p.last} is asking for around ${money(Math.round(ask * adj / 5000) * 5000)} a season.` };
   return { ok: true };
 }
 function signFreeAgent(id, salary, years) {
@@ -1945,13 +2440,23 @@ function developPlayer(p) {
   if (p.age <= 22 && rand() < 0.06) g += 4;
   if (g > 0) g = head <= 0 ? 0 : Math.min(g, Math.max(0.3, head * 0.5));
   let batM = 1, bowlM = 1;
+  if (p.teamId && teamDef(p.teamId) && !teamDef(p.teamId).intl) {
+    const hm = 0.9 + staffRating(p.teamId, 'head') / 500;
+    batM = hm * (0.85 + staffRating(p.teamId, 'bat') / 300);
+    bowlM = hm * (0.85 + staffRating(p.teamId, 'bowl') / 300);
+  }
   if (p.teamId === U()) {
-    if (game.training === 'batting') { batM = 1.35; bowlM = 0.7; }
-    else if (game.training === 'bowling') { batM = 0.7; bowlM = 1.35; }
-    else if (game.training === 'fitness') { batM = 0.85; bowlM = 0.85; p.sk.stamina = clamp(p.sk.stamina + 2, 15, 99); }
+    if (game.training === 'batting') { batM *= 1.35; bowlM *= 0.7; }
+    else if (game.training === 'bowling') { batM *= 0.7; bowlM *= 1.35; }
+    else if (game.training === 'fitness') { batM *= 0.85; bowlM *= 0.85; p.sk.stamina = clamp(p.sk.stamina + 2, 15, 99); }
   }
   const grp = group(p);
-  const bump = (k, m) => { p.sk[k] = clamp(Math.round(p.sk[k] + g * m * (0.7 + rand() * 0.6)), 15, 99); };
+  const focus = DEV_FOCUS[p.focus || 'none'].skills;
+  const prof = ensurePersona(p) === 'professional' && g > 0 ? 1.1 : 1;
+  const bs = staffSpec(p.teamId, 'bat'), ws = staffSpec(p.teamId, 'bowl');
+  const specK = k => g <= 0 ? 1 : ((bs === 'technique' && (k === 'tech' || k === 'temp')) || (bs === 'power' && k === 'power') ? 1.1 : 1) * (['bowl','acc','vari'].includes(k) && ws ? (ws === (isSpin(p) ? 'spin' : 'pace') ? 1.12 : 0.92) : 1);
+  const bump = (k, m) => { const fm = g > 0 ? (focus.length ? (focus.includes(k) ? 1.6 : 0.85) : 1) : 1; p.sk[k] = clamp(Math.round(p.sk[k] + g * m * fm * prof * specK(k) * (0.7 + rand() * 0.6)), 15, 99); };
+  if (g > 0 && focus.length) focus.forEach(k => { if (k === 'keep' && grp !== 'WK') bump('keep', 0.8); if (k === 'stamina') bump('stamina', 0.8); if (['bowl','acc','vari'].includes(k) && grp === 'BAT') bump(k, 0.7); });
   const bat = ['tech','temp','power'], bowl = ['bowl','acc','vari'];
   if (grp === 'BAT' || grp === 'WK') bat.forEach(k => bump(k, g > 0 ? batM : 1));
   if (grp === 'WK') bump('keep', 1);
@@ -1998,7 +2503,7 @@ function processContracts() {
     if (p.retired || !p.teamId || !p.contract) return;
     p.contract.years--;
     if (p.contract.years > 0) return;
-    if (p.teamId === U()) { expiring.push({ id: p.id, ask: Math.round(askingSalary(p) * (p.morale < 50 ? 1.15 : 1) / 5000) * 5000, years: p.age >= 32 ? 1 : 2, status: 'pending' }); return; }
+    if (p.teamId === U()) { const per = ensurePersona(p); expiring.push({ id: p.id, ask: Math.round(askingSalary(p) * (p.morale < 50 ? 1.15 : 1) * (per === 'loyal' ? 0.9 : per === 'ambitious' ? 1.1 : 1) / 5000) * 5000, years: p.age >= 32 ? 1 : 2, status: p.wantsOut ? 'released' : 'pending' }); return; }
     const ask = askingSalary(p);
     const keep = playerValueScore(p) > 0.12 && p.age <= 33 && rand() < 0.8 && payroll(p.teamId) - p.contract.salary + ask <= SALARY_CAP;
     if (keep) p.contract = { salary: ask, years: randInt(1, 3) };
@@ -2073,6 +2578,7 @@ function startNewSeason() {
   if (game.captain && (!P(game.captain) || P(game.captain).teamId !== U())) game.captain = null;
   if (!game.captain) { const c = squadOf(U()).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0]; game.captain = c ? c.id : null; }
   game.board.objectives = makeObjectives(U());
+  Object.keys(game.nation.rankings).forEach(n => { if (n !== 'AUS') game.nation.rankings[n] += Math.round(randn() * 3); });
   game.phase = 'season'; game.offseason = null;
   addNews('League', `${game.season.label} season begins`, 'New fixtures are out and the board has set fresh objectives.');
 }
@@ -2083,9 +2589,9 @@ function offseasonContinue() {
       if (game.gm.fired) { flash('Choose your next job first.'); return; }
       runDevelopment(); game.phase = 'development'; break;
     case 'development':
-      processContracts(); game.phase = 'contracts'; break;
+      processContracts(); staffOffseason(); game.phase = 'contracts'; break;
     case 'contracts':
-      finaliseExpiring(); setupDraft(); game.phase = 'draft';
+      finaliseExpiring(); finaliseExpiringStaff(); setupDraft(); game.phase = 'draft';
       runDraftUntilUser(false); break;
     case 'draft':
       if (draftOnClock() === U()) { flash('You are on the clock. Pick a player or pass.'); return; }
@@ -2106,25 +2612,117 @@ function userDraftPick(id) {
 }
 
 // §14 SAVE / LOAD -------------------------------------------------------------
+// Saves go to IndexedDB (large, durable) with a localStorage mirror. If the browser
+// keeps neither (private mode, some file previews), the game says so and the player
+// can export the career to a file and import it later.
+const Store = {
+  db: null, idbOk: false, lsOk: false, status: 'unknown', lastSaved: null, lastError: null,
+  async init() {
+    try { localStorage.setItem('__mmc_test', '1'); this.lsOk = localStorage.getItem('__mmc_test') === '1'; localStorage.removeItem('__mmc_test'); } catch (e) { this.lsOk = false; }
+    try {
+      this.db = await new Promise((res, rej) => {
+        if (!window.indexedDB) return rej(new Error('no idb'));
+        const r = indexedDB.open('minime_cricket', 1);
+        r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves'); };
+        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+        setTimeout(() => rej(new Error('idb timeout')), 3000);
+      });
+      this.idbOk = true;
+    } catch (e) { this.idbOk = false; }
+    this.status = this.idbOk || this.lsOk ? 'ok' : 'none';
+    if (navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
+    return this.status;
+  },
+  _tx(mode, fn) { return new Promise((res, rej) => { const tx = this.db.transaction('saves', mode); const st = tx.objectStore('saves'); const r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }); },
+  async put(slot, str, meta) {
+    let ok = false;
+    if (this.idbOk) { try { await this._tx('readwrite', st => { st.put(str, 'slot' + slot); st.put(meta, 'meta' + slot); }); ok = true; } catch (e) { this.lastError = String(e); } }
+    if (this.lsOk) {
+      try { localStorage.setItem(SAVE_PREFIX + 'meta' + slot, JSON.stringify(meta)); } catch (e) {}
+      try { localStorage.setItem(SAVE_PREFIX + slot, str); ok = true; } catch (e) { if (!ok) this.lastError = 'Browser storage is full.'; try { localStorage.removeItem(SAVE_PREFIX + slot); } catch (e2) {} }
+    }
+    if (ok) this.lastSaved = new Date();
+    return ok;
+  },
+  async get(slot) {
+    if (this.idbOk) { try { const v = await this._tx('readonly', st => st.get('slot' + slot)); if (v) return v; } catch (e) {} }
+    if (this.lsOk) { try { return localStorage.getItem(SAVE_PREFIX + slot); } catch (e) {} }
+    return null;
+  },
+  async meta(slot) {
+    if (this.idbOk) { try { const v = await this._tx('readonly', st => st.get('meta' + slot)); if (v) return v; } catch (e) {} }
+    if (this.lsOk) {
+      try { const m = localStorage.getItem(SAVE_PREFIX + 'meta' + slot); if (m) return JSON.parse(m); } catch (e) {}
+      try { const raw = localStorage.getItem(SAVE_PREFIX + slot); if (raw) return metaOf(JSON.parse(raw)); } catch (e) {}
+    }
+    return null;
+  },
+  async del(slot) {
+    if (this.idbOk) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); }); } catch (e) {} }
+    if (this.lsOk) { try { localStorage.removeItem(SAVE_PREFIX + slot); localStorage.removeItem(SAVE_PREFIX + 'meta' + slot); } catch (e) {} }
+  },
+  async list() { const out = []; for (let i = 1; i <= SAVE_SLOTS; i++) out.push(await this.meta(i)); return out; }
+};
+function metaOf(g) { return { name: g.gm.name, team: g.gm.teamId, label: g.season.label, phase: g.phase, day: g.day, year: g.year, wins: g.gm.wins, losses: g.gm.losses, build: g.meta.build, saved: g.meta.saved || null, edited: !!g.edited }; }
+function serialiseGame() { game.rng = rngState; return JSON.stringify(game, (k, v) => k === '_names' ? undefined : v); }
 function saveKey(slot) { return SAVE_PREFIX + slot; }
+let _saving = Promise.resolve();
 function saveGame(slot, notify) {
   if (!game) return false;
   slot = slot || game.meta.slot || 1;
-  game.rng = rngState; game.meta.slot = slot; game.meta.saved = new Date().toISOString();
-  try {
-    localStorage.setItem(saveKey(slot), JSON.stringify(game, (k, v) => k === '_names' ? undefined : v));
-    if (notify) flash(`Career saved to slot ${slot}.`);
-    return true;
-  } catch (e) { if (notify) flash('Save failed. Browser storage may be full or blocked.'); return false; }
+  game.meta.slot = slot; game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
+  const str = serialiseGame(), meta = metaOf(game);
+  _saving = _saving.then(() => Store.put(slot, str, meta)).then(ok => {
+    if (notify) flash(ok ? `Saved to slot ${slot}.` : 'Save failed: this browser is not keeping data. Use Export save.');
+    if (!ok) Store.status = 'none';
+    return ok;
+  });
+  return true;
 }
-function autosave() { saveGame(game.meta.slot, false); }
-function readSlot(slot) { try { const raw = localStorage.getItem(saveKey(slot)); return raw ? JSON.parse(raw) : null; } catch (e) { return null; } }
-function loadGame(slot) {
-  const g = readSlot(slot);
-  if (!g) { flash('That save could not be read.'); return; }
-  game = migrateGame(g); seedRng(game.rng || Date.now());
+function autosave() { if (game) saveGame(game.meta.slot, false); }
+async function loadGame(slot) {
+  const raw = await Store.get(slot);
+  if (!raw) { flash('That save could not be found.'); return; }
+  try { loadFromString(raw, slot); } catch (e) { flash('That save could not be read.'); }
+}
+function loadFromString(raw, slot) {
+  const g = JSON.parse(raw);
+  if (!g || !g.gm || !g.players || !g.season) throw new Error('bad save');
+  game = migrateGame(g); seedRng(game.rng || Date.now()); applyTeamEdits();
+  if (slot) game.meta.slot = slot;
   closeModal(); enterApp();
 }
+function exportSave() {
+  if (!game) return;
+  const str = serialiseGame();
+  const blob = new Blob([str], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `minime-cricket-${game.gm.name.replace(/\W+/g, '')}-${game.season.label.replace(/\W+/g, '')}.json`;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  flash('Career exported to a file.');
+}
+function importSave() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json';
+  inp.onchange = () => {
+    const f = inp.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = async () => {
+      try {
+        const metas = await Store.list();
+        const slot = (metas.findIndex(m => !m) + 1) || 1;
+        loadFromString(rd.result, slot);
+        saveGame(slot, false);
+        flash(`Imported into slot ${slot}.`);
+      } catch (e) { flash('That file is not a Mini&Me Cricket save.'); }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+window.addEventListener('pagehide', () => { if (game) { try { localStorage.setItem(SAVE_PREFIX + game.meta.slot, serialiseGame()); } catch (e) {} autosave(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') autosave(); });
 // §15 UI CORE + COMPONENTS ----------------------------------------------------------
 // Pages are compact single screens. Detail lives in sheets (bottom sheets on mobile,
 // centred dialogs on PC). Every page render returns an HTML string.
@@ -2140,8 +2738,8 @@ function panel(title, body, opts) { opts = opts || {}; return `<section class="p
 function pageTitle(t, sub, end) { return `<div class="page-title"><div><h1>${t}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${end ? `<div class="end">${end}</div>` : ''}</div>`; }
 function chip(cls, label) { return `<span class="chip ${cls}">${label}</span>`; }
 function pill(v) { return `<span class="pill ${v >= 82 ? 'elite' : v >= 74 ? 'good' : v < 55 ? 'lo' : ''}">${v}</span>`; }
-function badge(id, lg) { const t = teamDef(id); return t ? `<span class="badge ${lg ? 'lg' : ''}" style="border-color:${t.color}">${t.id}</span>` : `<span class="badge">?</span>`; }
-function tdot(id) { const t = teamDef(id); return t ? `<span class="dot" style="background:${t.color}"></span>${t.id}` : '<span class="dim">FA</span>'; }
+function badge(id, lg) { const t = teamDef(id); return t ? `<span class="badge ${lg ? 'lg' : ''}" style="border-color:${t.color}">${t.short || t.id}</span>` : `<span class="badge">?</span>`; }
+function tdot(id) { const t = teamDef(id); return t ? `<span class="dot" style="background:${t.color}"></span>${t.short || t.id}` : '<span class="dim">FA</span>'; }
 function av(p) { return `<span class="av">${p.first[0]}${p.last[0]}</span>`; }
 function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${esc(txt || pname(p))}</span>` : '–'; }
 function natTag(p) { return p.nat !== 'AUS' ? ' ' + chip('os', p.nat) : ''; }
@@ -2174,12 +2772,12 @@ const ICONS = {
 };
 function navHtml() {
   const items = [['home','Home'],['squad','Squad'],['fixtures','Fixtures'],['league','League'],['office','Office']];
-  const cur = ['matchday','live'].includes(ui.page) ? 'home' : ui.page;
+  const cur = ['matchday','live'].includes(ui.page) ? 'home' : ui.page === 'natsel' ? 'office' : ui.page;
   return items.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="go('${k}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${l}${k === 'office' && game.offers.length ? `<span class="badge-n">${game.offers.length}</span>` : ''}</button>`).join('');
 }
 function render() {
   if (!game) return;
-  const pages = { home: renderHome, squad: renderSquad, fixtures: renderFixtures, league: renderLeague, office: renderOffice, matchday: renderMatchday, live: renderLive };
+  const pages = { home: renderHome, squad: renderSquad, fixtures: renderFixtures, league: renderLeague, office: renderOffice, matchday: renderMatchday, live: renderLive, natsel: renderNatSel };
   if (ui.page === 'live' && !game.live) ui.page = 'home';
   if (ui.page === 'matchday' && !(game.pendingFx && fixtureById(game.pendingFx) && !fixtureById(game.pendingFx).result)) ui.page = 'home';
   document.body.classList.toggle('live-mode', ui.page === 'live');
@@ -2192,31 +2790,33 @@ function render() {
 function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; render(); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
-function openNewCareer() {
-  const slots = [1,2,3,4,5].map(i => { const g = readSlot(i); return [i, `Slot ${i}${g ? ' · overwrite ' + esc(g.gm.name) : ' · empty'}`]; });
-  const empty = [1,2,3,4,5].find(i => !readSlot(i)) || 1;
-  window._pickedTeam = 'NSW';
+async function openNewCareer() {
+  const metas = await Store.list();
+  const slots = metas.map((g, k) => [k + 1, `Slot ${k + 1}${g ? ' · overwrite ' + esc(g.name) : ' · empty'}`]);
+  const empty = (metas.findIndex(m => !m) + 1) || 1;
+  window._pickedTeam = 'NSW'; window._nationGm = false;
   sheet('New career', 'Create your GM', `
     <div class="grid g2"><div><label class="lbl">GM name</label><input class="input" id="gmName" value="FitzO" maxlength="24"></div><div><label class="lbl">Save slot</label><select id="slotSel" class="full">${slots.map(([v, l]) => `<option value="${v}" ${v === empty ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
     <label class="lbl" style="margin-top:12px">Choose your state</label>
-    <div class="team-grid">${TEAM_DEFS.map((t, i) => `<button class="team-opt ${i === 0 ? 'on' : ''}" data-team="${t.id}" onclick="pickTeam('${t.id}')"><div class="n"><span class="dot" style="background:${t.color}"></span>${t.name}</div><div class="g">${t.nick} · ${t.ground}</div></button>`).join('')}</div>`,
+    <div class="team-grid">${TEAM_DEFS.map((t, i) => `<button class="team-opt ${i === 0 ? 'on' : ''}" data-team="${t.id}" onclick="pickTeam('${t.id}')"><div class="n"><span class="dot" style="background:${t.color}"></span>${t.name}</div><div class="g">${t.nick} · ${t.ground}</div></button>`).join('')}</div>
+    <div class="flex" style="margin-top:12px"><span class="switch" id="natSw" onclick="window._nationGm=!window._nationGm;this.classList.toggle('on',window._nationGm)"><i></i>Also serve as Australia's national selector</span></div>
+    ${Store.status === 'none' ? '<div class="note bad" style="margin-top:10px">This browser is not keeping saved data. Use Export save from the menu to keep your career.</div>' : ''}`,
     { foot: `<button class="btn pri" onclick="startCareer()">Start career</button>` });
 }
 function pickTeam(id) { window._pickedTeam = id; document.querySelectorAll('.team-opt').forEach(x => x.classList.toggle('on', x.dataset.team === id)); }
 function startCareer() {
   const name = ($('gmName').value || '').trim() || 'FitzO', slot = +$('slotSel').value || 1;
-  createGame(name, window._pickedTeam || 'NSW', 2026);
+  createGame(name, window._pickedTeam || 'NSW', 2026, window._nationGm);
   game.meta.slot = slot; saveGame(slot, false); closeModal(); enterApp();
 }
-function openLoadCareer() {
-  const rows = [1,2,3,4,5].map(i => {
-    const g = readSlot(i);
-    return `<div class="row"><div class="stack"><div class="main-t">${g ? esc(g.gm.name) + ' · ' + teamName(g.gm.teamId) : 'Empty slot ' + i}</div><div class="sub-t">${g ? `${g.season.label} · ${g.phase === 'season' ? dateStr(g.day, null, g.year) : 'off-season'} · ${g.gm.wins}W ${g.gm.losses}L · ${g.meta.build}` : 'No career saved'}</div></div>
-      ${g ? `<div class="end"><button class="btn sm pri" onclick="loadGame(${i})">Load</button><button class="btn sm ghost" onclick="deleteSlot(${i})">Delete</button></div>` : ''}</div>`;
-  }).join('');
-  sheet('Career saves', 'Load a career', `<div class="rows">${rows}</div>`, { flush: true });
+async function openLoadCareer() {
+  const metas = await Store.list();
+  const rows = metas.map((g, k) => { const i = k + 1;
+    return `<div class="row"><div class="stack"><div class="main-t">${g ? esc(g.name) + ' · ' + teamName(g.team) : 'Empty slot ' + i}</div><div class="sub-t">${g ? `${g.label} · ${g.phase === 'season' ? dateStr(g.day, null, g.year) : 'off-season'} · ${g.wins}W ${g.losses}L · ${g.build}${g.edited ? ' · edited' : ''}${g.saved ? ' · saved ' + new Date(g.saved).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}` : 'No career saved'}</div></div>
+      ${g ? `<div class="end"><button class="btn sm pri" onclick="loadGame(${i})">Load</button><button class="btn sm ghost" onclick="deleteSlot(${i})">✕</button></div>` : ''}</div>`; }).join('');
+  sheet('Career saves', 'Load a career', `${Store.status === 'none' ? '<div class="pb"><div class="note bad">This browser is not keeping saved data (private browsing or a file preview). Import a save file instead.</div></div>' : ''}<div class="rows">${rows}</div>`, { flush: true, foot: `<button class="btn" onclick="importSave()">Import save file</button>` });
 }
-function deleteSlot(i) { if (!confirm('Delete this save permanently?')) return; try { localStorage.removeItem(saveKey(i)); } catch (e) {} openLoadCareer(); }
+async function deleteSlot(i) { if (!confirm('Delete this save permanently?')) return; await Store.del(i); openLoadCareer(); }
 function openMenu() {
   const g = game.gm;
   sheet('Career', esc(g.name) + ' · ' + teamName(g.teamId), `<div class="rows">
@@ -2224,8 +2824,13 @@ function openMenu() {
     <div class="kv"><span>Reputation</span><span>${g.rep}/100</span></div>
     <div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div>
     <div class="kv"><span>Trophies</span><span>${g.titles.length ? g.titles.map(t => COMPS[t.comp].short + ' ' + t.year).join(', ') : 'None yet'}</span></div>
-    <div class="kv"><span>Save slot · build</span><span>${game.meta.slot} · ${BUILD.version}</span></div></div>`,
-    { flush: true, foot: `<button class="btn" onclick="closeModal();showHelp()">Help</button><button class="btn" onclick="saveGame(game.meta.slot,true)">Save</button><button class="btn ghost" onclick="returnToLaunch()">Exit</button>` });
+    <div class="kv"><span>Save slot · build</span><span>${game.meta.slot} · ${BUILD.version}</span></div>
+    <div class="kv"><span>Storage</span><span class="${Store.status === 'none' ? 'loss' : 'win'}">${Store.status === 'none' ? 'Not being kept by this browser' : (Store.idbOk ? 'Browser database' : 'Browser storage') + (Store.lastSaved ? ' · saved ' + Store.lastSaved.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' }) : '')}</span></div></div>
+    ${Store.status === 'none' ? '<div class="pb"><div class="note bad">This browser is not keeping saves (private browsing, or opened from a file preview). Export your career to a file and import it next time, or open the game in Safari or Chrome directly.</div></div>' : ''}
+    <div class="kv"><span>Editor mode</span><span><span class="switch ${game.editor ? 'on' : ''}" onclick="game.editor=!game.editor;if(game.editor)game.edited=true;autosave();openMenu()"><i></i>${game.editor ? 'On' : 'Off'}</span></span></div>
+    ${game.editor ? '<div class="pb" style="padding-bottom:0"><div class="xs muted">Edit any player from their profile, create players from League · Players, and rename teams below. Careers that use the editor are marked as edited.</div><button class="btn sm" style="margin-top:6px" onclick="editTeamsSheet()">Edit teams</button></div>' : ''}
+    <div class="pb flex wrap"><button class="btn sm" onclick="exportSave()">Export save file</button><button class="btn sm" onclick="importSave()">Import save file</button><button class="btn sm ghost" onclick="closeModal();showHelp()">Help</button></div>`,
+    { flush: true, foot: `<button class="btn pri" onclick="saveGame(game.meta.slot,true)">Save now</button><button class="btn ghost" onclick="returnToLaunch()">Save and exit</button>` });
 }
 function showGMProfile() { openMenu(); }
 function returnToLaunch() { saveGame(game.meta.slot, false); closeModal(); document.body.classList.remove('live-mode'); $('app').classList.add('hidden'); $('launch').classList.remove('hidden'); }
@@ -2234,14 +2839,22 @@ function showHelp() {
     <h4>The loop</h4><p>Continue moves the calendar on and stops whenever you are needed: a match, a trade offer, a national call-up. On match day, play live ball by ball or quick-sim.</p>
     <h4>Competitions</h4><p>The Sheffield Shield is four-day cricket with draws, follow-ons and declarations. The One-Day Cup is 50 overs. The T20 Championship runs through summer with semi-finals and a final. Shield and One-Day finals go to the top two; a drawn Shield final goes to the home side.</p>
     <h4>Selection and workloads</h4><p>Each format has its own XI, picked by staff on Auto or by you on Manual. Fitness falls with every match and fastest for quicks. Tired bowlers lose effectiveness and break down more often, so rotate during the T20 block.</p>
-    <h4>Bowling plans and scouting</h4><p>Every batter has strengths and weaknesses. Scout the opposition on match day and set a line and length for each batter, or change plans live from the Captain button. Plans that hit a weakness take more wickets, but batters read a plan the longer you stay with it. AI sides do the same to you.</p>
+    <h4>You are the GM</h4><p>You build the squad and the staff; the head coach and captain run the match. Before each match and at every innings break you set the brief: how to bat, how to bowl and whether to lean on pace or spin. During play you can send a message to the dressing room, which reaches the players at the next drinks break.</p>
+    <h4>Staff</h4><p>Hire a head coach, batting and bowling coaches, a performance analyst, a physio and a talent scout from a separate staff budget. Coaches speed development, the analyst builds the bowling plan for each opposition batter, the physio cuts injuries, and the scout sharpens potential grades.</p>
+    <h4>Scouting</h4><p>Every batter has strengths and weaknesses. Commission scouting on match day so your analyst can target them. Your analyst also learns about batters your bowlers bowl at. AI sides do the same to you.</p>
+    <h4>Australia</h4><p>Take on the national selector role to pick every Australia squad. Tests and white-ball matches are played out in full. Picking your own state's players weakens your state while they are away.</p>
+    <h4>The dressing room</h4><p>Every player has a personality and a mood. Mood moves with playing time, results, pay and how well your head coach manages people. Talk to players to reassure them, promise them games or challenge them. Unhappy players lose form, refuse new contracts and eventually ask for a trade.</p>
+    <h4>Development</h4><p>Put players on individual programmes (technique, power, bowling, control, variations, keeping, fitness, or learning to bowl). Your head coach decides how many programmes you can run. Programmes add monthly progress during the season and faster growth in the off-season.</p>
+    <h4>World cricket</h4><p>Other nations play their own series, the rankings move with every international, and a T20 World Cup is held in odd-year seasons.</p>
+    <h4>Editor</h4><p>Turn on Editor mode in the menu to edit any player or team, or create players. Edited careers are marked as edited.</p>
+    <h4>Saving</h4><p>The game saves to your browser automatically. Private browsing and some file previews do not keep data; if the menu says saves are not being kept, export a save file and import it next time.</p>
     <h4>Weather and pitches</h4><p>Each match gets a pitch and a forecast. Overcast days help swing, hot days tire players, and rain costs overs or washes matches out.</p>
     <h4>Front office</h4><p>${money(SALARY_CAP)} salary cap, ${SQUAD_MIN}–${SQUAD_MAX} players, up to ${OVERSEAS_MAX} overseas. Trade until the deadline, sign free agents, extend and release (half the salary stays on your cap this season). AI states value quality, age, contract and what they are short of.</p>
     <h4>The board and the off-season</h4><p>Meet objectives to keep the board happy; fall below 20 and you are sacked. After the season come awards, development and retirements, renewals, a rookie draft and free agency.</p></div>`);
 }
 
 // §17 HOME -------------------------------------------------------------------------
-function nextUserFx() { return game.season.fixtures.find(f => !f.result && f.home && (f.home === U() || f.away === U())); }
+function nextUserFx() { return game.season.fixtures.find(f => !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away))); }
 function recentForm(n) {
   return game.season.fixtures.filter(f => f.result && (f.home === U() || f.away === U())).slice(-n).map(f => {
     const r = f.result.winner === U() ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D';
@@ -2255,9 +2868,9 @@ function renderHome() {
   if (game.live) {
     hero = `<div class="hero"><div class="mid"><div class="comp">Match in progress</div><div class="vs">${teamName(game.live.home)} v ${teamName(game.live.away)}</div></div></div><button class="btn pri block" style="margin-top:10px" onclick="go('live')">Return to the match</button>`;
   } else if (fx) {
-    const opp = fx.home === U() ? fx.away : fx.home, days = fx.day - game.day;
-    hero = `<div class="hero">${badge(U(), true)}<div class="mid"><div class="comp">${chip(fx.comp, COMPS[fx.comp].short)} ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round}</div>
-      <div class="vs ell">${fx.home === U() ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${teamDef(fx.home).ground} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>
+    const mine = isUserTeam(fx.home) ? fx.home : fx.away, opp = mine === fx.home ? fx.away : fx.home, days = fx.day - game.day;
+    hero = `<div class="hero">${badge(mine, true)}<div class="mid"><div class="comp">${chip(fx.comp, COMPS[fx.comp].short)} ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round}</div>
+      <div class="vs ell">${mine === fx.home ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${teamDef(fx.venue || fx.home).ground} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>
       <div class="actions"><button class="btn pri" onclick="continueGame()">${game.pendingFx ? 'Match day ▸' : 'Continue to match ▸'}</button><button class="btn" onclick="simDays(7)">Sim week</button><button class="btn icon" onclick="simMenu()">⋯</button></div>`;
   } else {
     hero = `<div class="hero"><div class="mid"><div class="comp">Season</div><div class="vs">No fixtures left for ${me.nick}</div><div class="meta">Remaining matches play out before the review.</div></div></div><button class="btn pri block" style="margin-top:10px" onclick="continueGame()">Continue ▸</button>`;
@@ -2276,6 +2889,12 @@ function renderHome() {
   if (inj.length) alerts.push(`<span class="chip bad btn-chip" onclick="playerListSheet('Injuries','injured')">${inj.length} injured ▸</span>`);
   if (duty.length) alerts.push(`<span class="chip info btn-chip" onclick="playerListSheet('National duty','duty')">${duty.length} with Australia ▸</span>`);
   if (tired.length) alerts.push(`<span class="chip warn btn-chip" onclick="playerListSheet('Fitness watch','tired')">${tired.length} below 75% fitness ▸</span>`);
+  const outs = sq.filter(p => p.wantsOut);
+  if (outs.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.squadTab='room';go('squad')">${outs.length} trade request${outs.length > 1 ? 's' : ''} ▸</span>`);
+  const selw = game.nation.gm && game.season.windows.find(w => w.selecting);
+  if (selw) alerts.push(`<span class="chip warn btn-chip" onclick="go('natsel')">Pick the Australia squad ▸</span>`);
+  const vacant = STAFF_ORDER.filter(r => !staffIn(U(), r));
+  if (vacant.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='staff';go('office')">${vacant.length} staff vacanc${vacant.length > 1 ? 'ies' : 'y'} ▸</span>`);
   if (sq.length < SQUAD_MIN) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='fa';go('office')">Squad short: ${sq.length}/${SQUAD_MIN} ▸</span>`);
   const hc = ui.homeComp || (fx ? fx.comp : 'SHIELD');
   return `<div class="grid">
@@ -2318,7 +2937,7 @@ function playerRow(p, o) {
   const sub = o.sub || `${ROLES[p.role].label} · ${p.age}${canBowl(p) && group(p) !== 'BAT' ? ' · ' + BOWL_TYPES[p.bowlType].label : ''}`;
   return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}${av(p)}
     <div class="stack"><div class="main-t ell">${esc(pname(p))}${natTag(p)}${p.id === game.captain && p.teamId === U() ? ' ' + chip('', 'C') : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
-    <div class="end">${o.end != null ? o.end : `${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
+    <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? chip('bad', p.wantsOut ? 'Wants out' : 'Unhappy') : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
 }
 
 // §18 OFF-SEASON ------------------------------------------------------------------
@@ -2351,7 +2970,8 @@ function renderOffseason() {
     const ex = o.expiring;
     body = panel(`Expiring contracts · cap space ${money(capSpace(U()))}`, `<div class="rows">${ex.map(e => { const p = P(e.id); return playerRow(p, { sub: `${ROLES[p.role].short} · ${p.age} · asks ${money(e.ask)} × ${e.years}`,
       end: e.status === 'pending' ? `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();resignExpiring('${e.id}');render()">Re-sign</button><button class="btn sm ghost" onclick="event.stopPropagation();letGoExpiring('${e.id}');render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving') }); }).join('') || '<div class="empty">No contracts expire this year.</div>'}</div>
-      <div class="pb"><div class="note">Anyone left undecided becomes a free agent.</div></div>`, { flush: true });
+      <div class="pb"><div class="note">Anyone left undecided becomes a free agent.</div></div>`, { flush: true }) +
+      ((o.expiringStaff || []).length ? '<div style="height:8px"></div>' + panel('Expiring staff contracts', `<div class="rows">${o.expiringStaff.map(e => { const st = game.staff[e.id]; return `<div class="row"><div class="stack"><div class="main-t">${esc(st.first + ' ' + st.last)}</div><div class="sub-t">${STAFF_ROLES[st.role].label} · asks ${money(e.ask)} × 2</div></div><div class="end">${pill(st.rating)}${e.status === 'pending' ? `<button class="btn sm pri" onclick="resignStaff('${e.id}');render()">Re-sign</button><button class="btn sm ghost" onclick="(game.offseason.expiringStaff.find(x=>x.id==='${e.id}')||{}).status='released';render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving')}</div></div>`; }).join('')}</div>`, { flush: true }) : '');
     btn = 'Rookie draft ▸';
   } else if (game.phase === 'draft') {
     const d = o.draft, clock = draftOnClock();
@@ -2374,8 +2994,8 @@ function renderOffseason() {
 function setSquadTab(t) { ui.squadTab = t; render(); }
 function renderSquad() {
   const t = ui.squadTab;
-  const body = t === 'xi' ? renderXIEditor() : t === 'tactics' ? renderTactics() : t === 'contracts' ? renderContracts() : t === 'training' ? renderTraining() : renderSquadList();
-  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','Selection'],['tactics','Tactics'],['contracts','Contracts'],['training','Training']], t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'xi' ? renderXIEditor() : t === 'tactics' ? renderTactics() : t === 'contracts' ? renderContracts() : (t === 'training' || t === 'dev') ? renderDevelopment() : t === 'room' ? renderDressingRoom() : renderSquadList();
+  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','Selection'],['tactics','Brief'],['dev','Development'],['room','Dressing room'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
 }
 const GROUP_OPTS = [['ALL','All roles'],['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
 function sortPlayers(arr, key, fmt) {
@@ -2433,14 +3053,12 @@ function addXI(id) { const a = game.userXI[ui.xiFmt]; if (a.length >= 11) { clos
 
 function setTacFmt(f) { ui.tacFmt = f; render(); }
 function tacticSel(fmt, key) { const o = TACTICS[key]; return sel(Object.keys(o).map(k => [k, o[k].label]), game.tactics[fmt][key], `game.tactics['${fmt}'].${key}=this.value;autosave()`, 'full'); }
-function tacticGrid(fmt) { return `<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><div><label class="lbl">Batting</label>${tacticSel(fmt, 'bat')}</div><div><label class="lbl">Field</label>${tacticSel(fmt, 'field')}</div><div><label class="lbl">Attack</label>${tacticSel(fmt, 'bowl')}</div></div>`; }
+function tacticGrid(fmt) { return `<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><div><label class="lbl">Batting</label>${tacticSel(fmt, 'bat')}</div><div><label class="lbl">Bowling</label>${tacticSel(fmt, 'field')}</div><div><label class="lbl">Attack</label>${tacticSel(fmt, 'bowl')}</div></div>`; }
 function renderTactics() {
   const f = ui.tacFmt;
-  const dp = game.defaultPlan[f];
   return `${fmtSeg(f, 'setTacFmt')}<div style="height:8px"></div><div class="grid g2">
-    ${panel('Game plan', `${tacticGrid(f)}<p class="xs muted" style="margin:10px 0 0;line-height:1.5">Aggressive batting scores faster and loses wickets faster; batters also adjust to the phase and required rate. Attacking fields take wickets and leak boundaries. Attack decides whether the captain leans on pace or spin.</p>`)}
-    ${panel('Default bowling plan', `<div class="grid" style="grid-template-columns:1fr 1fr;gap:6px"><div><label class="lbl">Line</label>${sel(Object.keys(PLAN_LINES).map(k => [k, PLAN_LINES[k].label]), dp.line, `game.defaultPlan['${f}'].line=this.value;autosave()`, 'full')}</div><div><label class="lbl">Length</label>${sel(Object.keys(PLAN_LENGTHS).map(k => [k, PLAN_LENGTHS[k].label]), dp.len, `game.defaultPlan['${f}'].len=this.value;autosave()`, 'full')}</div></div>
-      <div class="flex between" style="margin-top:10px"><span class="xs muted">${Object.keys(game.plans).length} individual plans set</span><button class="btn sm ghost" onclick="confirmSheet('Clear plans','Clear every individual bowling plan?','Clear','game.plans={};autosave();render()')">Clear plans</button></div>`)}
+    ${panel('Standing match brief', `${tacticGrid(f)}<p class="xs muted" style="margin:10px 0 0;line-height:1.5">You set the brief; your head coach and captain carry it out. Bat time protects wickets, Take it on scores faster but loses wickets faster. Contain squeezes runs, Attack hunts wickets and leaks boundaries. Batters still adjust to the situation, and better head coaches read the game better. You can adjust the brief on match day and at each innings break.</p>`)}
+    ${panel('Coaching staff', `<div class="rows">${STAFF_ORDER.slice(0, 4).map(r => { const st = staffIn(U(), r); return `<div class="kv"><span>${STAFF_ROLES[r].label}</span><span>${st ? `${esc(st.first + ' ' + st.last)} ${pill(st.rating)}` : '<span class="loss">Vacant</span>'}</span></div>`; }).join('')}</div><div class="pb"><button class="btn sm" onclick="ui.officeTab='staff';go('office')">Manage staff ▸</button></div>`, { flush: true })}
     ${panel('Captain', sel(sortPlayers(squadOf(U()), 'ovr', f).map(p => [p.id, `${pname(p)} · ${p.age} · ${ROLES[p.role].short}`]), game.captain, "game.captain=this.value;autosave()", 'full'))}</div>`;
 }
 function renderContracts() {
@@ -2458,7 +3076,7 @@ function renderTraining() {
 // §20 FIXTURES + SCORECARDS ---------------------------------------------------------
 function renderFixtures() {
   let fx = game.season.fixtures;
-  if (ui.fxMine) fx = fx.filter(f => f.home === U() || f.away === U() || (!f.home && f.stage !== 'league'));
+  if (ui.fxMine) fx = fx.filter(f => isUserTeam(f.home) || isUserTeam(f.away) || (!f.home && f.stage !== 'league'));
   if (ui.fxComp !== 'ALL') fx = fx.filter(f => f.comp === ui.fxComp);
   const tools = `<div class="flex wrap">${seg([['1','My fixtures'],['0','All']], ui.fxMine ? '1' : '0', 'setFxMine')}<span class="grow"></span>${sel([['ALL','All comps'], ...COMP_ORDER.map(c => [c, COMPS[c].name])], ui.fxComp, "ui.fxComp=this.value;render()")}</div>`;
   const next = fx.findIndex(f => !f.result);
@@ -2466,15 +3084,16 @@ function renderFixtures() {
 }
 function setFxMine(v) { ui.fxMine = v === '1'; render(); }
 function fixtureRow(f, isNext) {
-  const mine = f.home === U() || f.away === U();
+  const mine = isUserTeam(f.home) || isUserTeam(f.away);
+  const me = isUserTeam(f.home) ? f.home : f.away;
   const d = dateOf(f.day);
   let end = '<span class="dim xs">—</span>';
   if (f.result) {
-    if (mine) { const r = f.result.winner === U() ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D'; end = `<span class="res ${r}">${r}</span>`; }
+    if (mine) { const r = f.result.winner === me ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D'; end = `<span class="res ${r}">${r}</span>`; }
     else end = f.result.winner ? `<span class="xs">${tdot(f.result.winner)}</span>` : '<span class="xs dim">Draw</span>';
   } else if (isNext) end = chip('warn', 'Next');
-  const teams = f.home ? (mine && ui.fxMine ? `${f.home === U() ? 'v' : '@'} ${teamName(f.home === U() ? f.away : f.home)}` : `${teamDef(f.home).nick} v ${teamDef(f.away).nick}`) : 'Teams to be decided';
-  const sub = f.result ? esc(f.result.summary) : f.home ? teamDef(f.home).ground : '';
+  const teams = f.home ? (mine && ui.fxMine ? `${f.stage === 'intl' ? 'AUS ' : ''}${me === f.home ? 'v' : '@'} ${teamName(me === f.home ? f.away : f.home)}` : `${teamDef(f.home).nick} v ${teamDef(f.away).nick}`) : 'Teams to be decided';
+  const sub = f.result ? esc(f.result.summary) : f.home ? teamDef(f.venue || f.home).ground : '';
   const card = f.result && game.scorecards[f.id];
   return `<div class="row ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}')"` : ''}><div class="center" style="width:34px;flex:none"><div class="b" style="line-height:1">${d.getUTCDate()}</div><div class="xs dim">${d.toLocaleDateString('en-AU', { month:'short', timeZone:'UTC' })}</div></div>
     <div class="stack"><div class="main-t ell">${chip(f.comp, COMPS[f.comp].short)} ${teams}</div><div class="sub-t ell">${f.stage !== 'league' ? f.round + ' · ' : ''}${sub}</div></div><div class="end">${end}</div></div>`;
@@ -2521,8 +3140,8 @@ function scInn(k) { showScorecard(_scFx, k); }
 function setLeagueTab(t) { ui.leagueTab = t; render(); }
 function renderLeague() {
   const t = ui.leagueTab;
-  const body = t === 'leaders' ? renderLeaders() : t === 'history' ? renderHistory() : t === 'players' ? renderPlayerSearch() : renderLadders();
-  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['leaders','Leaders'],['history','Honours'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'leaders' ? renderLeaders() : t === 'history' ? renderHistory() : t === 'players' ? renderPlayerSearch() : t === 'world' ? renderWorld() : renderLadders();
+  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['leaders','Leaders'],['world','World'],['history','Honours'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
 }
 function setLadComp(c) { ui.ladComp = c; render(); }
 function renderLadders() {
@@ -2557,7 +3176,8 @@ function renderHistory() {
 }
 function renderPlayerSearch() {
   return `<div class="grid" style="grid-template-columns:1fr auto;gap:6px"><input class="input" placeholder="Search players" value="${esc(ui.search)}" oninput="ui.search=this.value;$('psResults').innerHTML=playerSearchRows()">
-    ${sel([['ALL','All'], ...TEAM_DEFS.map(t => [t.id, t.id]), ['FA','Free agents'], ['RET','Retired']], ui.searchTeam, "ui.searchTeam=this.value;$('psResults').innerHTML=playerSearchRows()")}</div><div style="height:8px"></div>
+    ${sel([['ALL','All'], ...TEAM_DEFS.map(t => [t.id, t.id]), ...Object.keys(NATION_STRENGTH).map(n => ['X_' + n, NATIONS[n]]), ['FA','Free agents'], ['RET','Retired']], ui.searchTeam, "ui.searchTeam=this.value;$('psResults').innerHTML=playerSearchRows()")}</div><div style="height:8px"></div>
+    ${game.editor ? `<div style="height:8px"></div><button class="btn sm" onclick="const p=editorCreatePlayer(ui.searchTeam && teamDef(ui.searchTeam) && !teamDef(ui.searchTeam).intl ? ui.searchTeam : null);editPlayerSheet(p.id)">+ Create player</button>` : ''}
     ${panel('', `<div class="rows" id="psResults">${playerSearchRows()}</div>`, { flush: true })}`;
 }
 function playerSearchRows() {
@@ -2573,8 +3193,8 @@ function playerSearchRows() {
 function setOfficeTab(t) { ui.officeTab = t; render(); }
 function renderOffice() {
   const t = ui.officeTab;
-  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'national' ? renderNational() : t === 'log' ? renderLog() : renderBoard();
-  return `${pageTitle('Office', teamName(U()))}${seg([['board','Board'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['national','National'],['log','Log']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'national' ? renderNational() : t === 'log' ? renderLog() : t === 'staff' ? renderStaff() : renderBoard();
+  return `${pageTitle('Office', teamName(U()))}${seg([['board','Board'],['staff','Staff'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['national','Australia'],['log','Log']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
 }
 function renderBoard() {
   const c = game.board.confidence;
@@ -2627,11 +3247,23 @@ function renderFA() {
     ${panel(`${fas.length} free agents`, `<div class="rows">${fas.map(p => playerRow(p, { all: true, sub: `${ROLES[p.role].short} · ${p.age} · pot ${potGrade(p)} · asks ${money(askingSalary(p))}`, end: `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(peakOvr(p))}</span><button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','sign')">Offer</button>` })).join('') || '<div class="empty">No free agents.</div>'}</div>`, { flush: true })}`;
 }
 function renderNational() {
+  const N = game.nation;
+  const rk = Object.keys(N.rankings).sort((x, y) => N.rankings[y] - N.rankings[x]);
   const capped = squadOf(U()).filter(p => p.caps.FC + p.caps.OD + p.caps.T20 > 0);
-  return `<div class="grid g2">${game.season.windows.map(w => panel(`${w.label} v ${NATIONS[w.opp]}`, `<div class="kv"><span>${dateStr(w.start)} – ${dateStr(w.end)}</span><span>${w.matches} matches · ${w.size} players</span></div>
-    ${w.result ? `<div class="kv"><span>Result</span><span class="${w.result.wins > w.result.losses ? 'win' : 'loss'} b">${w.result.wins}–${w.result.losses}${w.result.draws ? ' (' + w.result.draws + 'D)' : ''}</span></div>` : ''}
-    <div class="rows">${w.squad.map(id => playerRow(P(id), { team: true, markMine: true, noStatus: true, fmt: w.fmt })).join('') || '<div class="empty">Squad not named yet. Selectors pick on ability and form.</div>'}</div>`, { flush: true })).join('')}
-    ${panel('Your internationals', `<div class="rows">${capped.map(p => playerRow(p, { end: `<span class="xs">T ${p.caps.FC} · ODI ${p.caps.OD} · T20I ${p.caps.T20}</span>` })).join('') || '<div class="empty">No capped players yet.</div>'}</div>`, { flush: true })}</div>`;
+  const selw = game.season.windows.find(w => w.selecting);
+  const role = N.gm
+    ? `<div class="kv"><span>Your role</span><span class="win">National selector</span></div><div class="kv"><span>National board confidence</span><span class="b">${N.conf}</span></div>
+       ${selw ? `<div class="pb"><button class="btn pri block" onclick="go('natsel')">Pick the ${esc(selw.label)} squad ▸</button></div>` : ''}
+       <div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`
+    : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
+  return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
+    ${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${N.rankings[n]}</span></div>`).join('')}</div>`, { flush: true })}
+    ${game.season.windows.filter(w => w.wc && w.groups).map(w => panel('T20 World Cup', ['A','B'].map(g => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Group ${g}</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${wcTable(w, g).map(r => `<tr class="${r.t === 'AUS' ? 'me' : ''}"><td>${tdot(r.t)} ${teamDef(r.t).name}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`).join('') + (w.champion ? `<div class="kv"><span>Champions</span><span class="b">${teamDef(w.champion).name}</span></div>` : ''), { flush: true })).join('')}
+    ${game.season.windows.map(w => panel(`${w.label}${w.wc ? '' : ' v ' + NATIONS[w.opp]}`, `<div class="kv"><span>${dateStr(w.start)} – ${dateStr(w.end)}</span><span>${w.result ? `<span class="${w.result.wins > w.result.losses ? 'win' : w.result.wins < w.result.losses ? 'loss' : 'draw'} b">${w.result.wins}–${w.result.losses}${w.result.draws ? ' (' + w.result.draws + 'D)' : ''}</span>` : w.size + ' players'}</span></div>
+      <div class="rows">${(w.fx || []).map(id => fixtureById(id)).filter(Boolean).map(f => fixtureRow(f, false)).join('')}</div>
+      ${w.squad.length ? `<div class="kv"><span>Squad</span><span class="xs" style="text-align:right">${w.squad.map(id => P(id) ? esc(P(id).last) : '').join(', ')}</span></div>` : w.locked ? `<div class="kv"><span>Squad</span><span class="xs">Confirmed (${w.locked.length})</span></div>` : '<div class="kv"><span>Squad</span><span class="xs dim">Not named yet</span></div>'}`, { flush: true })).join('')}
+    ${panel('Your internationals', `<div class="rows">${capped.map(p => playerRow(p, { end: `<span class="xs">T ${p.caps.FC} · ODI ${p.caps.OD} · T20I ${p.caps.T20}</span>` })).join('') || '<div class="empty">No capped players yet.</div>'}</div>`, { flush: true })}
+    ${N.history.length ? panel('Your series record', `<div class="rows">${N.history.map(h => `<div class="kv"><span>${h.year} ${esc(h.label)} v ${NATIONS[h.opp]}</span><span class="${h.wins > h.losses ? 'win' : 'loss'}">${h.wins}–${h.losses}${h.draws ? ' (' + h.draws + 'D)' : ''}</span></div>`).join('')}</div>`, { flush: true }) : ''}</div>`;
 }
 function renderLog() { return panel('Transactions', `<div class="rows">${game.transactions.map(t => `<div class="kv"><span style="color:var(--text)">${esc(t.text)}</span><span>${t.year}</span></div>`).join('') || '<div class="empty">No transactions yet.</div>'}</div>`, { flush: true }); }
 
@@ -2660,87 +3292,83 @@ function showPlayer(id, tab) {
   const p = P(id); if (!p) return;
   tab = tab || 'over';
   const sk = p.sk, own = p.teamId === U();
-  const bar = (l, v) => `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`;
+  const bar = (l, v) => { v = Math.round(v); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
   const head = `<div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
     <div class="ratings3">${FMT_LIST.map(f => `<div><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join('')}</div><div style="height:10px"></div>
     ${seg([['over','Overview'],['stats','Stats'],['hist','History']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
   let body;
   if (tab === 'stats') {
     const t = src => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>M</th><th>Runs</th><th>Avg</th><th>SR</th><th>100/50</th><th>HS</th><th>W</th><th>Avg</th><th>Econ</th><th>BB</th><th>Ct</th></tr></thead><tbody>${FMT_LIST.map(f => { const s = src[f]; return `<tr><td>${compName(f)}</td><td>${s.m}</td><td>${s.r}</td><td>${fmtNum(batAvgOf(s))}</td><td>${fmtNum(srOf(s), 0)}</td><td>${s.c100}/${s.c50}</td><td>${hsStr(s)}</td><td>${s.w}</td><td>${fmtNum(bowlAvgOf(s))}</td><td>${fmtNum(econOf(s))}</td><td>${bbStr(s)}</td><td>${s.ct}${s.st ? '/' + s.st : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
-    body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Career</h3></div>${t(p.stats.career)}</div>`;
+    body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Domestic career</h3></div>${t(p.stats.career)}</div>${p.stats.intl ? `<div style="height:8px"></div><div class="panel"><div class="ph"><h3>International (in this career)</h3></div>${t(p.stats.intl).replace(/>Shield</, '>Test<').replace(/>One-Day</, '>ODI<').replace(/>T20</, '>T20I<')}</div>` : ''}`;
   } else if (tab === 'hist') {
     body = `<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
       <div class="kv"><span>International caps</span><span>Tests ${p.caps.FC} · ODIs ${p.caps.OD} · T20Is ${p.caps.T20}</span></div></div></div>`;
   } else {
     body = `<div class="skills">${bar('Technique', sk.tech)}${bar('Temperament', sk.temp)}${bar('Power', sk.power)}${bar('Bowling', sk.bowl)}${bar('Accuracy', sk.acc)}${bar('Variation', sk.vari)}${bar('Fielding', sk.field)}${bar('Keeping', sk.keep)}${bar('Stamina', sk.stamina)}</div>
       <div class="panel" style="margin-top:10px"><div class="rows">
-        <div class="kv"><span>Potential</span><span class="b">${potGrade(p)}</span></div><div class="kv"><span>Form</span><span>${formArrow(p.form)} ${p.form}</span></div>
+        <div class="kv"><span>Potential</span><span class="b">${potGrade(p)}</span></div><div class="kv"><span>Form</span><span>${formArrow(p.form)} ${Math.round(p.form)}</span></div>
+        <div class="kv"><span>Personality</span><span title="${esc(PERSONAS[ensurePersona(p)].desc)}">${PERSONAS[p.persona].label}</span></div>
+        ${own ? `<div class="kv"><span>Mood</span><span>${chip(moodClass(p.morale), moodLabel(p.morale))} ${p.morale}${p.promise ? ' · promised games' : ''}</span></div>
+        <div class="kv"><span>Development programme</span><span>${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}</span></div>` : ''}
         <div class="kv"><span>Contract</span><span>${p.contract ? `${money(p.contract.salary)} × ${p.contract.years} yr` : p.retired ? '–' : 'Asking ' + money(askingSalary(p))}</span></div><div class="kv"><span>Market value</span><span>${money(askingSalary(p))}</span></div>
         <div class="kv" style="display:block"><span>Technique${own ? '' : ' (scouting)'}</span><div class="s" style="margin-top:4px">${scoutingHtml(p)}</div></div></div></div>`;
   }
   const acts = [];
-  if (own && !p.retired) { acts.push(`<button class="btn" onclick="game.captain='${p.id}';autosave();closeModal();flash('${esc(p.last)} named captain.')">Captain</button>`); if (game.phase === 'season' && p.contract.years <= 1) acts.push(`<button class="btn" onclick="openContract('${p.id}','extend')">Extend</button>`); acts.push(`<button class="btn ghost" onclick="confirmRelease('${p.id}')">Release</button>`); }
+  if (game.editor) acts.push(`<button class="btn ghost" onclick="editPlayerSheet('${p.id}')">Edit</button>`);
+  if (own && !p.retired) { acts.push(`<button class="btn" onclick="talkSheet('${p.id}')">Talk</button>`); acts.push(`<button class="btn" onclick="game.captain='${p.id}';autosave();closeModal();flash('${esc(p.last)} named captain.')">Captain</button>`); if (game.phase === 'season' && p.contract.years <= 1) acts.push(`<button class="btn" onclick="openContract('${p.id}','extend')">Extend</button>`); acts.push(`<button class="btn ghost" onclick="confirmRelease('${p.id}')">Release</button>`); }
   if (!p.teamId && !p.retired && !p.prospect) acts.push(`<button class="btn pri" onclick="openContract('${p.id}','sign')">Offer contract</button>`);
   if (p.teamId && !own && !p.retired) acts.push(`<button class="btn" onclick="ui.tradePartner='${p.teamId}';ui.tradeGet=['${p.id}'];ui.officeTab='trades';closeModal();go('office')">Explore trade</button>`);
   sheet(p.retired ? 'Retired' : p.teamId ? teamDef(p.teamId).nick : 'Free agent', esc(pname(p)), head + body, { foot: acts.join('') });
 }
 
 // §24 MATCH DAY + LIVE MATCH ---------------------------------------------------------------
+// The GM sets the brief and watches. The coach and captain make the on-field calls.
+function myTeamIn(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
 function renderMatchday() {
   const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt;
-  const opp = fx.home === U() ? fx.away : fx.home, v = teamDef(fx.home);
-  const mine = selectXI(U(), fmt), theirs = selectXI(opp, fmt);
+  const me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home, v = teamDef(fx.venue || fx.home);
+  const mine = selectXI(me, fmt), theirs = selectXI(opp, fmt);
   const pre = previewConditions(fx), pt = PITCHES[pre.cond.pitch];
   const xi = s => `<div class="rows">${s.order.map((id, i) => { const p = P(id); return `<div class="row tap" style="padding:5px 12px" onclick="showPlayer('${id}')"><span class="n">${i + 1}</span><div class="grow ell s">${esc(pshort(p))}${id === s.captain ? ' <span class="dim">(c)</span>' : ''}${id === s.keeper ? ' <span class="dim">†</span>' : ''}</div><span class="xs dim">${ROLES[p.role].short}</span>${pill(overall(p, fmt))}</div>`; }).join('')}</div>`;
   const avgO = s => Math.round(mean(s.order.map(id => overall(P(id), fmt))));
-  const setPlans = theirs.order.filter(id => game.plans[id]).length;
   const scouted = game.scoutedFx[fx.id];
   const wx = pre.cond.days.map((d, i) => chip(d.sky === 'rain' || d.sky === 'showers' ? 'warn' : d.sky === 'overcast' ? 'info' : '', `${fmt === 'FC' ? 'D' + (i + 1) + ' ' : ''}${SKIES[d.sky].label}${d.lost ? ' −' + d.lost : ''}`)).join(' ');
+  const hc = me === 'AUS' ? null : staffIn(me, 'head');
   return `${pageTitle('Match day', `${COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
-    ${panel('', `<div class="hero">${badge(fx.home, true)}<div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? '4 days' : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div>${badge(fx.away, true)}</div>
+    ${panel('', `<div class="hero">${badge(fx.home, true)}<div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div>${badge(fx.away, true)}</div>
       <div class="flex wrap" style="margin-top:10px;gap:5px"><span class="chip">${pt.label}</span>${wx}</div>
       <div class="xs muted" style="margin-top:6px">${pt.note}</div>
       ${pre.notes.length ? `<div class="note warn" style="margin-top:8px">${pre.notes.map(esc).join(' ')}</div>` : ''}
       ${mine.replaced && mine.replaced.length ? `<div class="note" style="margin-top:8px">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</div>` : ''}
-      <div style="margin-top:10px">${tacticGrid(fmt)}</div>
-      <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"><button class="btn" onclick="plansSheet()">Bowling plans · ${setPlans}/11</button><button class="btn" onclick="ui.squadTab='xi';ui.xiFmt='${fmt}';go('squad')">Edit XI</button></div>
-      <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Play live ▸</button>`}</div>`)}
-    <div class="grid" style="grid-template-columns:1fr 1fr">${panel(`${teamDef(U()).id} · ${avgO(mine)}`, xi(mine), { flush: true })}${panel(`${opp} · ${avgO(theirs)}`, xi(theirs), { flush: true, end: scouted ? chip('good', 'Scouted') : `<button class="link" onclick="scoutOpposition('${fx.id}','${opp}')">Scout</button>` })}</div>
+      <label class="lbl" style="margin-top:12px">Match brief to the coach${hc ? ` · ${esc(hc.first + ' ' + hc.last)} (${COACH_STYLES[hc.style]})` : ''}</label>${tacticGrid(fmt)}
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button>${me === 'AUS' ? `<button class="btn" onclick="go('natsel')" disabled>Squad locked</button>` : `<button class="btn" onclick="ui.squadTab='xi';ui.xiFmt='${fmt}';go('squad')">Edit XI</button>`}</div>
+      <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Watch live ▸</button>`}</div>`)}
+    <div class="grid" style="grid-template-columns:1fr 1fr">${panel(`${teamDef(me).short || me} · ${avgO(mine)}`, xi(mine), { flush: true })}${panel(`${teamDef(opp).short || opp} · ${avgO(theirs)}`, xi(theirs), { flush: true, end: scouted ? chip('good', 'Scouted') : `<button class="link" onclick="scoutOpposition('${fx.id}','${opp}')">Scout</button>` })}</div>
   </div>`;
 }
-function planSelect(batterId, key, fmt, rerender) {
-  const cur = (game.plans[batterId] || game.defaultPlan[fmt])[key];
-  const o = key === 'line' ? PLAN_LINES : PLAN_LENGTHS;
-  return sel(Object.keys(o).map(k => [k, o[k].label]), cur, `setPlan('${batterId}','${key}',this.value,'${fmt}',${rerender ? 1 : 0})`, 'full');
-}
-function setPlan(id, key, val, fmt, rerender) {
-  const base = game.plans[id] || Object.assign({}, game.defaultPlan[fmt]);
-  base[key] = val; game.plans[id] = base; autosave();
-  if (rerender) render();
-}
-function plansSheet() {
-  const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt, opp = fx.home === U() ? fx.away : fx.home;
+function analystSheet() {
+  const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt, me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home;
   const theirs = selectXI(opp, fmt), scouted = game.scoutedFx[fx.id];
-  sheet(`Bowling plans · ${teamName(opp)}`, 'Plan each batter', `<div class="xs muted" style="margin-bottom:8px">Target weaknesses for more wickets. Batters read a plan the longer you stay with it. Accuracy and variation decide execution.</div>
-    ${theirs.order.map((id, i) => { const p = P(id); return `<div class="panel" style="margin-bottom:6px"><div class="pb"><div class="flex"><span class="n dim xs b">${i + 1}</span><div class="grow ell"><span class="b">${esc(pname(p))}</span> <span class="xs dim">${ROLES[p.role].short} · bat ${Math.round(batRating(p, fmt))}</span></div></div>
-      <div class="xs" style="margin:4px 0 6px">${scoutingHtml(p)}</div><div class="grid" style="grid-template-columns:1fr 1fr;gap:6px">${planSelect(id, 'line', fmt)}${planSelect(id, 'len', fmt)}</div></div></div>`; }).join('')}`,
-    { foot: scouted ? `<button class="btn pri" onclick="closeModal();render()">Done</button>` : `<button class="btn" onclick="scoutOpposition('${fx.id}','${opp}');plansSheet()">Scout opposition</button><button class="btn pri" onclick="closeModal();render()">Done</button>` });
+  const an = me === 'AUS' ? null : staffIn(me, 'analyst');
+  sheet(`Analyst report · ${teamName(opp)}`, an ? `${esc(an.first + ' ' + an.last)} · rated ${an.rating}` : 'Analyst report', `<div class="xs muted" style="margin-bottom:8px">Your analyst builds a bowling plan for each batter from what the club knows. Better analysts and more scouting mean sharper plans. Plans that hit a weakness take more wickets.</div>
+    <div class="panel"><div class="rows">${theirs.order.map((id, i) => { const p = P(id); const pl = analystPlan(fmt, me, id, false, fx.id + me);
+      return `<div class="row" style="align-items:flex-start"><span class="n">${i + 1}</span><div class="stack"><div class="main-t">${esc(pname(p))} <span class="xs dim">${ROLES[p.role].short}</span></div><div class="xs" style="margin-top:2px">${scoutingHtml(p)}</div><div class="xs" style="margin-top:4px;color:var(--cyan)">Plan: ${esc(planLabel(pl))}</div></div></div>`; }).join('')}</div></div>`,
+    { flush: false, foot: scouted ? `<button class="btn pri" onclick="closeModal()">Done</button>` : `<button class="btn" onclick="scoutOpposition('${fx.id}','${opp}');analystSheet()">Commission scouting</button><button class="btn pri" onclick="closeModal()">Done</button>` });
 }
 function scoutOpposition(fxId, opp) {
   if (game.scoutedFx[fxId]) return;
   game.scoutedFx[fxId] = true;
-  squadOf(opp).forEach(p => raiseScout(p.id, Math.min(2, scoutLevel(p) + 1)));
-  flash(`Analysts have reports on ${teamDef(opp).nick}.`); autosave();
-  if (!$('modalRoot').innerHTML) render(); else render();
+  const step = staffRating(U(), 'analyst') >= 75 ? 2 : 1;
+  squadOf(opp).forEach(p => raiseScout(p.id, Math.min(2, scoutLevel(p) + step)));
+  flash(`Scouting reports on ${teamDef(opp).nick} are in.`); autosave(); render();
 }
 function quickSimUser() {
   const fx = fixtureById(game.pendingFx);
   const M = quickPlay(fx);
   game.pendingFx = null;
   autosave(); go('home');
-  if (game.scorecards[fx.id]) { _scFx = fx.id; showScorecard(fx.id, 0); }
-  else flash(M.result.text);
+  if (game.scorecards[fx.id]) showScorecard(fx.id, 0); else flash(M.result.text);
 }
 function startLive() {
   const fx = fixtureById(game.pendingFx);
@@ -2750,48 +3378,31 @@ function startLive() {
   const w = doToss(M);
   game.live = M; ui.liveTab = 'comm'; ui.liveInn = null;
   M.notes.forEach(n => M.log.unshift({ cls:'sys', text: n }));
-  if (w === U()) {
-    go('live');
-    sheet('The toss', 'You won the toss', `<p class="s">${esc(PITCHES[M.cond.pitch].label)}. ${esc(PITCHES[M.cond.pitch].note)} Forecast: ${esc(condSummary(M))}</p>`, { foot: `<button class="btn pri" onclick="liveToss('bat')">Bat first</button><button class="btn" onclick="liveToss('bowl')">Bowl first</button>` });
-    return;
-  }
+  // The captain makes the toss call, guided by conditions.
   const d = tossDecisionAI(M); setTossDecision(M, d);
   M.log.unshift({ cls:'sys', text: `${teamName(w)} won the toss and chose to ${d}.` });
   M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) });
+  M.briefPrompt = true;
   autosave(); go('live');
-}
-function liveToss(d) {
-  const M = game.live; setTossDecision(M, d);
-  M.log.unshift({ cls:'sys', text: `You won the toss and chose to ${d}.` });
-  M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) });
-  closeModal(); autosave(); render();
 }
 function liveStep(mode) {
   const M = game.live; if (!M || M.done || !M.toss.decision) return;
-  if (mode === 'match' || mode === 'innings') M.autoPilot = true;
   let guard = 0, legal = 0;
-  const target = { ball: 1, over: 6, five: 30, session: 180 }[mode] || 1e9;
+  const target = { over: 6, five: 30, session: 180 }[mode] || 1e9;
+  const startN = M.innings.length;
   while (!M.done && guard++ < 6000) {
     const ev = simBall(M);
+    if (M.innings.length > startN && mode !== 'match') { M.briefPrompt = true; break; }
     if (!ev) continue;
     if (ev.legal) legal++;
     const inn = curInn(M);
-    if (mode === 'ball') break;
     if (mode === 'wicket' && ev.wkt) break;
     if ((mode === 'over' || mode === 'five' || mode === 'session') && ((inn.overBalls === 0 && legal >= target) || inn.closed)) break;
     if (mode === 'innings' && inn.closed) break;
   }
-  if (mode !== 'match') M.autoPilot = false;
   if (M.done && !M.log.some(e => e.cls === 's')) M.log.unshift({ cls:'s', text: `RESULT: ${M.result.text}.` + (M.potm ? ` Player of the match: ${pname(P(M.potm))}.` : '') });
   ui.liveInn = null;
   autosave(); render();
-}
-function liveDeclare() {
-  const M = game.live, inn = curInn(M);
-  if (!inn || inn.bat !== U() || M.fmt !== 'FC' || inn.closed || inn.target) return;
-  inn.declared = true; inn.closed = true;
-  M.log.unshift({ cls:'sys', text: inningsClosedText(M, inn) });
-  closeModal(); render();
 }
 function finishLive() {
   const M = game.live; if (!M || !M.done) return;
@@ -2803,57 +3414,186 @@ function finishLive() {
 }
 function setLiveTab(t) { ui.liveTab = t; render(); }
 function setLiveInn(k) { ui.liveInn = +k; render(); }
-function captainSheet() {
-  const M = game.live, inn = curInn(M);
-  if (!inn) return;
-  const fmt = M.fmt;
-  let plan = '';
-  if (!inn.closed && !M.done) {
-    const p = P(inn.card[inn.striker].id);
-    if (inn.bowl === U()) {
-      const pl = planFor(M, inn, p.id);
-      const n = (inn.planBalls || {})[p.id + pl.line + pl.len] || 0;
-      const tr = ensureTraits(p), m = -((tr[pl.line] || 0) + (tr[pl.len] || 0));
-      const read = m > 0 ? Math.round((1 - clamp(1 - n / 70, 0.35, 1)) * 100) : 0;
-      plan = `<label class="lbl">Plan for ${esc(p.last)} (on strike)</label><div class="xs" style="margin-bottom:6px">${scoutingHtml(p)}</div><div class="grid" style="grid-template-columns:1fr 1fr;gap:6px">${planSelect(p.id, 'line', fmt)}${planSelect(p.id, 'len', fmt)}</div>${read ? `<div class="xs muted" style="margin-top:4px">He is reading this plan (${read}% after ${n} balls).</div>` : ''}`;
-      const ns = P(inn.card[inn.non].id);
-      plan += `<label class="lbl" style="margin-top:10px">Plan for ${esc(ns.last)} (non-striker)</label><div class="grid" style="grid-template-columns:1fr 1fr;gap:6px">${planSelect(ns.id, 'line', fmt)}${planSelect(ns.id, 'len', fmt)}</div>`;
-    } else plan = `<div class="note">They are bowling <b>${esc(planLabel(planFor(M, inn, p.id)).toLowerCase())}</b> at ${esc(p.last)}.</div>`;
-  }
-  const canDeclare = fmt === 'FC' && inn.bat === U() && !inn.closed && !inn.target && !M.done;
-  sheet('Captain', 'Tactics and plans', `${plan}<div style="height:12px"></div><label class="lbl">Game plan</label>${tacticGrid(fmt)}
-    <div class="xs muted" style="margin-top:10px">${esc(condSummary(M))} Today: ${esc(skyOf(M).label)}.</div>`,
-    { foot: `${canDeclare ? `<button class="btn danger" onclick="liveDeclare()">Declare</button>` : ''}<button class="btn ghost" onclick="closeModal();liveStep('match')">Sim to result</button><button class="btn pri" onclick="closeModal();render()">Done</button>` });
+function liveMyTeam(M) { return isUserTeam(M.home) ? M.home : M.away; }
+// Brief sheet. At an innings break the brief applies at once; mid-innings it is relayed at the next drinks break.
+function briefSheet(atBreak) {
+  const M = game.live, inn = curInn(M); if (!inn) return;
+  const me = liveMyTeam(M), batting = inn.bat === me;
+  const cur = (M.pendingBrief && M.pendingBrief.brief) || M.brief[me] || game.tactics[M.fmt];
+  window._brief = Object.assign({}, cur);
+  const opt = (key, label) => `<div><label class="lbl">${label}</label>${sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), cur[key], `window._brief.${key}=this.value`, 'full')}</div>`;
+  const striker = P(inn.card[inn.striker].id);
+  const pl = planFor(M, inn, striker.id);
+  const hc = me === 'AUS' ? null : staffIn(me, 'head');
+  const every = drinksEvery(M.fmt);
+  const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'Set the brief for this innings.' : `Your message reaches the dressing room at the next drinks break (every ${every} overs).`}</div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
+    <div class="panel" style="margin-top:10px"><div class="rows">
+      <div class="kv"><span>${batting ? 'Opposition plan to ' : 'Analyst plan for '}${esc(striker.last)}</span><span class="s">${esc(planLabel(pl))}</span></div>
+      <div class="kv"><span>Head coach</span><span>${hc ? `${esc(hc.first + ' ' + hc.last)} · ${COACH_STYLES[hc.style]} · ${hc.rating}` : me === 'AUS' ? 'National coach' : '<span class="loss">Vacant</span>'}</span></div>
+      <div class="kv"><span>Conditions</span><span class="s">${esc(PITCHES[M.cond.pitch].label)} · ${esc(skyOf(M).label)}</span></div></div></div>`;
+  sheet(atBreak ? 'Start of innings' : 'Message the coach', 'Match brief', body,
+    { foot: `<button class="btn ghost" onclick="closeModal();liveStep('match')">Sim to result</button><button class="btn pri" onclick="sendBrief(${atBreak ? 1 : 0})">${atBreak ? 'Confirm brief' : 'Send message'}</button>` });
+}
+function sendBrief(now) {
+  const M = game.live, me = liveMyTeam(M);
+  const b = Object.assign({}, M.brief[me] || game.tactics[M.fmt], window._brief);
+  if (now) { M.brief[me] = b; M.log.unshift({ cls:'sys', text: `Brief: ${briefText(b)}.` }); }
+  else { M.pendingBrief = { team: me, brief: b }; M.log.unshift({ cls:'sys', text: 'Message sent. The coach will relay it at the next drinks break.' }); }
+  closeModal(); autosave(); render();
 }
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
-  if (!inn) return `${pageTitle('Live', 'Waiting for the toss')}<div class="empty">Make your toss decision.</div>`;
+  if (!inn) return `${pageTitle('Live', 'Waiting for the toss')}<div class="empty">Starting.</div>`;
+  if (M.briefPrompt && !M.done && !inn.closed) { M.briefPrompt = false; setTimeout(() => briefSheet(true), 0); }
   const sc = inn.card[inn.striker], ns = inn.card[inn.non];
   const bw = inn.curBowler || inn.lastBowler, bf = bw ? inn.bw[bw] : null;
   let line2 = `${oversStr(inn.balls)}${M.overs ? '/' + M.overs : F.overs ? '/' + F.overs : ''} ov · RR ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   let line3 = '';
   if (inn.target) { const need = inn.target - inn.runs; line3 = `Need ${Math.max(0, need)}`; if (F.overs) { const bl = mOvers(M) * 6 - inn.balls; line3 += ` from ${bl} · RRR ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; } }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); line3 = `Day ${fcDay(M)} · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} ov left` + (M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} ${Math.abs(lead)}` : '') + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)}` : ''); }
-  const prev = M.innings.slice(0, -1).map(i => `${i.bat} ${inningsLine(i, M.fmt)}`).join(' · ');
+  const prev = M.innings.slice(0, -1).map(i => `${teamDef(i.bat).short || i.bat} ${inningsLine(i, M.fmt)}`).join(' · ');
   const cls = s => s === 'W' ? 'w' : s === '4' ? 'b4' : s === '6' ? 'b6' : /wd|nb|lb|b/.test(s) ? 'x' : '';
   const bat = (c, on) => { if (!c) return '<div></div>'; const p = P(c.id); return `<div class="${on ? 'on' : ''}" onclick="showPlayer('${c.id}')"><div class="k">${on ? 'Striker' : 'Non-striker'}</div><div class="v ell">${esc(p.last)} ${c.r}<span class="dim xs"> (${c.b})</span></div></div>`; };
   const scoreS = Object.assign(compactScorecard(M), { result: M.done ? M.result : null });
+  const me = liveMyTeam(M), b = M.brief[me] || game.tactics[M.fmt];
+  const briefLine = inn.bat === me ? `Batting: ${TACTICS.bat[b.bat].label}` : `Bowling: ${TACTICS.field[b.field].label} · ${TACTICS.bowl[b.bowl].label}`;
   const body = ui.liveTab === 'card' ? scorecardHtml(scoreS, ui.liveInn, 'setLiveInn') : `<div class="panel"><div class="comm">${M.log.slice(0, 60).map(e => `<div class="cl ${e.cls || ''}">${e.o != null ? `<span class="o">${e.o}.${Math.min(6, e.b)}</span>` : ''}${esc(e.o != null ? e.text.replace(/^\d+\.\d+ /, '') : e.text || '')}</div>`).join('')}</div></div>`;
   const bar = M.done
     ? `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish · full scorecard ▸</button>`
-    : `<button class="btn" onclick="liveStep('ball')">Ball</button><button class="btn" onclick="liveStep('over')">Over</button><button class="btn" onclick="liveStep('${M.fmt === 'FC' ? 'session' : 'five'}')">${M.fmt === 'FC' ? '30 ov' : '5 ov'}</button><button class="btn" onclick="liveStep('wicket')">Wkt</button><button class="btn" onclick="liveStep('innings')">Inns</button><button class="btn pri" onclick="captainSheet()">Captain</button>`;
+    : `<button class="btn" onclick="liveStep('over')">Over</button><button class="btn" onclick="liveStep('${M.fmt === 'FC' ? 'session' : 'five'}')">${M.fmt === 'FC' ? '30 ov' : '5 ov'}</button><button class="btn" onclick="liveStep('wicket')">Wicket</button><button class="btn" onclick="liveStep('innings')">Innings</button><button class="btn" onclick="liveStep('match')">Result</button><button class="btn pri" onclick="briefSheet(false)">Brief</button>`;
   return `<div class="grid">
     ${panel(`${COMPS[M.comp].short} · ${teamDef(M.venue).ground}`, `<div class="score-strip">${badge(inn.bat, true)}<div class="grow"><div class="big">${inn.runs}/${inn.wkts}</div><div class="ov">${line2}</div></div><div class="right"><div class="s b">${esc(line3)}</div><div class="xs muted">${esc(prev)}</div><div class="xs muted">P'ship ${inn.part.r} (${inn.part.b})</div></div></div>
       ${M.done ? `<div class="note good" style="margin-top:10px"><b>${esc(M.result.text)}</b>${M.potm ? ` · POTM ${plink(P(M.potm))}` : ''}</div>` : `<div class="crease">${bat(sc, true)}${bat(ns, false)}<div class="bowl" ${bw ? `onclick="showPlayer('${bw}')"` : ''}><div class="k">Bowler</div><div class="v ell">${bw ? esc(P(bw).last) : '–'} <span class="dim xs">${bf ? `${oversStr(bf.balls)}-${bf.m}-${bf.r}-${bf.w}` : ''}</span></div></div></div>`}
-      <div class="balls">${inn.recent.map(s => `<span class="ball ${cls(s)}">${s}</span>`).join('')}</div>${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg(M.innings, M.fmt)}</div>` : ''}`, { end: `<span class="xs dim">${esc(skyOf(M).label)}</span>` })}
+      <div class="balls">${inn.recent.map(s => `<span class="ball ${cls(s)}">${s}</span>`).join('')}</div>${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg(M.innings, M.fmt)}</div>` : ''}
+      ${M.done ? '' : `<div class="xs muted" style="margin-top:8px">Your brief · ${esc(briefLine)}${M.pendingBrief ? ' · <span class="draw">new message waiting for drinks</span>' : ''}</div>`}`, { end: `<span class="xs dim">${esc(skyOf(M).label)}</span>` })}
     ${seg([['comm','Commentary'],['card','Scorecard']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar">${bar}</div>`;
 }
 
+// §24b NATIONAL SELECTION + STAFF ----------------------------------------------------------
+function renderNatSel() {
+  const w = game.season.windows.find(x => x.selecting) || game.season.windows.find(x => !x.squad.length);
+  if (!w || !game.nation.gm) { ui.page = 'office'; ui.officeTab = 'national'; return renderOffice(); }
+  if (!w.pick) w.pick = recommendSquad(w);
+  const fmt = w.fmt;
+  const picked = w.pick.map(P).filter(Boolean);
+  const pool = sortPlayers(nationEligible().filter(p => !w.pick.includes(p.id) && (ui.natGroup === 'ALL' || !ui.natGroup || group(p) === ui.natGroup)), 'ovr', fmt).slice(0, 40);
+  const n = picked.length, ok = n === w.size;
+  const comp = { BAT:0, WK:0, AR:0, PACE:0, SPIN:0 }; picked.forEach(p => comp[group(p)]++);
+  return `${pageTitle('National selection', `${w.label} v ${NATIONS[w.opp]} · from ${dateStr(w.start)}`, `<button class="btn sm ghost" onclick="ui.officeTab='national';go('office')">Back</button>`)}
+    <div class="kpis">${Object.keys(comp).map(g => `<div class="kpi"><div class="v">${comp[g]}</div><div class="l">${{ BAT:'Batters', WK:'Keepers', AR:'All-rounders', PACE:'Pace', SPIN:'Spin' }[g]}</div></div>`).join('')}</div><div style="height:8px"></div>
+    <div class="grid g2">${panel(`Squad · ${n}/${w.size}`, `<div class="rows">${picked.map(p => playerRow(p, { team: true, fmt, sub: `${ROLES[p.role].short} · ${p.age} · ${formArrow(p.form)} · ${p.caps[fmt]} caps${p.teamId === U() ? ' · <span class="draw">your player</span>' : ''}`, end: `${pill(overall(p, fmt))}<button class="btn icon sm ghost" onclick="event.stopPropagation();natDrop('${p.id}')">✕</button>` })).join('')}</div>`, { flush: true, end: `<button class="link" onclick="natReset()">Staff picks</button>` })}
+      ${panel('Available', `<div class="pb" style="padding-bottom:0">${sel(GROUP_OPTS, ui.natGroup || 'ALL', "ui.natGroup=this.value;render()")}</div><div class="rows">${pool.map(p => playerRow(p, { team: true, fmt, sub: `${ROLES[p.role].short} · ${p.age} · ${formArrow(p.form)} · ${p.caps[fmt]} caps`, end: `${statusChip(p)}${pill(overall(p, fmt))}<button class="btn sm" ${n >= w.size ? 'disabled' : ''} onclick="event.stopPropagation();natAdd('${p.id}')">Add</button>` })).join('')}</div>`, { flush: true })}</div>
+    <div style="height:8px"></div><button class="btn pri block" ${ok ? '' : 'disabled'} onclick="natConfirm()">${ok ? 'Confirm squad' : `Select exactly ${w.size} players`}</button>
+    <div class="xs dim" style="margin-top:6px">Selected players miss state matches during the series, including yours. Results move the national board's confidence and Australia's ranking.</div>`;
+}
+function natWin() { return game.season.windows.find(x => x.selecting); }
+function natDrop(id) { const w = natWin(); w.pick = w.pick.filter(x => x !== id); render(); }
+function natAdd(id) { const w = natWin(); if (w.pick.length < w.size) w.pick.push(id); render(); }
+function natReset() { const w = natWin(); w.pick = recommendSquad(w); render(); }
+function natConfirm() { const w = natWin(); w.locked = w.pick.slice(); w.selecting = false; addNews('National', `Squad confirmed for the ${w.label.toLowerCase()}`, `${w.locked.length} players named.`); autosave(); ui.officeTab = 'national'; go('office'); }
+
+function renderStaff() {
+  const pay = staffPayroll(U());
+  const rows = STAFF_ORDER.map(r => { const s = staffIn(U(), r);
+    return `<div class="row tap" onclick="staffMarketSheet('${r}')"><div class="stack"><div class="main-t">${STAFF_ROLES[r].label}${s && s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t ell">${s ? `${esc(s.first + ' ' + s.last)} · ${s.age} · ${money(s.salary)} × ${s.years} yr` : '<span class="loss">Vacant</span>'} · ${STAFF_ROLES[r].desc}</div></div><div class="end">${s ? pill(s.rating) : chip('bad', 'Hire')}</div></div>`; }).join('');
+  return `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="v">${money(pay)}</div><div class="l">Staff spend</div></div><div class="kpi"><div class="v">${money(STAFF_BUDGET - pay)}</div><div class="l">Budget left</div></div><div class="kpi"><div class="v">${Math.round(mean(STAFF_ORDER.map(r => staffRating(U(), r))))}</div><div class="l">Avg rating</div></div></div><div style="height:8px"></div>
+    ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}
+    <div class="xs dim" style="margin-top:6px">Tap a role to see candidates. Staff are paid from a separate ${money(STAFF_BUDGET)} budget, not the player salary cap.</div>`;
+}
+function staffMarketSheet(role) {
+  const cur = staffIn(U(), role);
+  const c = staffMarket().filter(s => s.role === role).sort((a, b) => b.rating - a.rating);
+  sheet(STAFF_ROLES[role].label, cur ? `Current: ${esc(cur.first + ' ' + cur.last)} · ${cur.rating}` : 'Vacant', `<div class="xs muted" style="margin-bottom:8px">${STAFF_ROLES[role].desc} Budget left: ${money(STAFF_BUDGET - staffPayroll(U()) + (cur ? cur.salary : 0))} if you replace the current holder.</div>
+    <div class="panel"><div class="rows">${c.map(s => `<div class="row"><div class="stack"><div class="main-t">${esc(s.first + ' ' + s.last)}${s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t">${s.age} · asks ${money(s.salary)} × ${s.years} yr</div></div><div class="end">${pill(s.rating)}<button class="btn sm pri" onclick="doHire('${s.id}','${role}')">Hire</button></div></div>`).join('') || '<div class="empty">No candidates right now.</div>'}</div></div>`,
+    { foot: cur ? `<button class="btn ghost" onclick="releaseStaff('${cur.id}');closeModal();autosave();render()">Release ${esc(cur.last)}</button>` : '' });
+}
+function doHire(id, role) { const r = hireStaff(id); if (!r.ok) { flash(r.reason); return; } closeModal(); autosave(); render(); flash('Hired.'); }
+
+// §24c DEVELOPMENT, DRESSING ROOM, WORLD, EDITOR -----------------------------------------
+function uiSetFocus(id, f) { const r = setFocus(id, f); if (!r.ok) { flash(r.reason); showPlayer(id); return; } autosave(); render(); }
+function renderDevelopment() {
+  const sq = sortPlayers(squadOf(U()), 'pot', 'T20').filter(p => p.age <= 33);
+  const used = devUsed(), slots = devSlots();
+  return `<div class="grid g2">${panel('Team training focus', `<div class="rows">${Object.keys(TRAINING).map(k => `<div class="row tap ${game.training === k ? 'me' : ''}" onclick="game.training='${k}';autosave();render()"><div class="stack"><div class="main-t">${TRAINING[k].label}</div><div class="sub-t">${TRAINING[k].desc}</div></div><div class="end">${game.training === k ? chip('good', 'Active') : ''}</div></div>`).join('')}</div>`, { flush: true })}
+    ${panel('Coaching capacity', `<div class="rows"><div class="kv"><span>Individual programmes</span><span class="b">${used}/${slots}</span></div>${['head','bat','bowl','physio'].map(r => { const st = staffIn(U(), r); return `<div class="kv"><span>${STAFF_ROLES[r].label}</span><span>${st ? `${esc(st.last)}${st.spec ? ' · ' + st.spec : ''} ${pill(st.rating)}` : '<span class="loss">Vacant</span>'}</span></div>`; }).join('')}</div>
+      <div class="pb xs muted">Programmes make the chosen skills grow about 60% faster in the off-season and add monthly progress during the season. Better head coaches can run more programmes; batting and bowling coach specialities give extra growth in their area.</div>`, { flush: true })}</div>
+    <div style="height:8px"></div>${panel('Individual programmes', `<div class="rows">${sq.map(p => `<div class="row"><div class="av">${p.first[0]}${p.last[0]}</div><div class="stack"><div class="main-t ell">${plink(p)} <span class="xs dim">${p.age} · pot ${potGrade(p)}</span></div><div class="sub-t">${ROLES[p.role].short} · ${PERSONAS[ensurePersona(p)].label}</div></div><div class="end">${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}${pill(peakOvr(p))}</div></div>`).join('')}</div>`, { flush: true })}`;
+}
+function renderDressingRoom() {
+  const sq = squadOf(U()).sort((a, b) => a.morale - b.morale);
+  const tm = teamMorale(U()), cap = P(game.captain), h = staffIn(U(), 'head');
+  return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${tm < 50 ? 'loss' : tm >= 65 ? 'win' : ''}">${tm}</div><div class="l">Team morale</div></div><div class="kpi"><div class="v">${sq.filter(p => p.morale < 45).length}</div><div class="l">Unhappy</div></div><div class="kpi"><div class="v">${sq.filter(p => p.wantsOut).length}</div><div class="l">Trade requests</div></div><div class="kpi"><div class="v">${h ? h.mm : '–'}</div><div class="l">Coach man-mgmt</div></div></div>
+    <div style="height:8px"></div>${cap ? `<div class="note" style="margin-bottom:8px">Captain: <b>${esc(pname(cap))}</b> (${PERSONAS[ensurePersona(cap)].label})${cap.persona === 'leader' ? ' lifts the whole squad every week.' : '. A Leader as captain would lift team morale.'}</div>` : ''}
+    ${panel('Squad mood', `<div class="rows">${sq.map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'} · ${expectedStarter(p) ? 'expects to play' : 'squad player'}${p.promise ? ' · promised games' : ''}`, end: `${chip(moodClass(p.morale), moodLabel(p.morale))}<button class="btn sm" onclick="event.stopPropagation();talkSheet('${p.id}')">Talk</button>` })).join('')}</div>`, { flush: true })}
+    <div class="xs dim" style="margin-top:6px">Mood moves weekly with playing time, results, pay against market value, the head coach's man-management and the captain. Unhappy players lose form and may ask to leave; a player who stays unsettled for a month drags the room down.</div>`;
+}
+function talkSheet(id) {
+  const p = P(id); ensurePersona(p);
+  sheet('Talk to player', esc(pname(p)), `<div class="note" style="margin-bottom:10px">${PERSONAS[p.persona].label}: ${esc(PERSONAS[p.persona].desc)} Mood: ${moodLabel(p.morale)} (${p.morale}).</div>
+    <div class="panel"><div class="rows">
+    <div class="row tap" onclick="doTalk('${id}','reassure')"><div class="stack"><div class="main-t">Reassure him</div><div class="sub-t">A quiet word about his place in the plans. Works best with a good man-manager.</div></div></div>
+    <div class="row tap" onclick="doTalk('${id}','promise')"><div class="stack"><div class="main-t">Promise more cricket</div><div class="sub-t">Big lift now. He must get regular games in the next five weeks or it backfires.</div></div></div>
+    <div class="row tap" onclick="doTalk('${id}','challenge')"><div class="stack"><div class="main-t">Challenge him</div><div class="sub-t">Demand more. Driven players respond with form; others resent it.</div></div></div></div></div>`);
+}
+function doTalk(id, kind) { const r = talkToPlayer(id, kind); closeModal(); flash(r.text); autosave(); render(); }
+
+function setWorldNat(n) { ui.worldNat = n; render(); }
+function renderWorld() {
+  const R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]);
+  const intl = game.season.fixtures.filter(f => f.result && !f.result.noResult && (f.stage === 'intl' || f.stage === 'world' || f.comp === 'WC')).slice(-14).reverse();
+  const nat = ui.worldNat || rk.find(n => n !== 'AUS');
+  const sq = nat === 'AUS' ? [] : Object.values(game.players).filter(p => p.teamId === 'X_' + nat && !p.retired).sort((a, b) => peakOvr(b) - peakOvr(a));
+  return `<div class="grid g2">${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="setWorldNat('${n}')"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
+    ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
+    ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
+    ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
+}
+
+function editPlayerSheet(id) {
+  const p = P(id);
+  const num = (k, v, min, max) => `<div><label class="lbl">${k}</label><input class="input" data-k="${k}" type="number" min="${min}" max="${max}" value="${Math.round(v)}"></div>`;
+  const txt = (k, label, v) => `<div><label class="lbl">${label}</label><input class="input" data-k="${k}" value="${esc(v)}"></div>`;
+  const dd = (k, label, opts, cur) => `<div><label class="lbl">${label}</label><select class="full" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
+  const teams = [['', 'Free agent'], ...TEAM_DEFS.map(t => [t.id, t.name]), ...Object.keys(NATION_STRENGTH).map(n => ['X_' + n, NATIONS[n] + ' (national pool)'])];
+  const skn = { tech:'Technique', temp:'Temperament', power:'Power', bowl:'Bowling', acc:'Accuracy', vari:'Variation', field:'Fielding', keep:'Keeping', stamina:'Stamina' };
+  sheet('Editor', esc(pname(p)), `<div id="edForm"><div class="grid g2" style="gap:8px">${txt('first', 'First name', p.first)}${txt('last', 'Last name', p.last)}</div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">${num('age', p.age, 15, 45)}${dd('nat', 'Nation', Object.keys(NATIONS).map(n => [n, n]), p.nat)}${dd('hand', 'Bats', [['R','Right'],['L','Left']], p.hand)}</div>
+    <div class="grid g2" style="gap:8px;margin-top:8px">${dd('role', 'Role', Object.keys(ROLES).map(r => [r, ROLES[r].label]), p.role)}${dd('bowlType', 'Bowling', Object.keys(BOWL_TYPES).map(b => [b, BOWL_TYPES[b].label]), p.bowlType)}</div>
+    <div class="grid g2" style="gap:8px;margin-top:8px">${dd('team', 'Team', teams, p.teamId || '')}${dd('persona', 'Personality', Object.keys(PERSONAS).map(k => [k, PERSONAS[k].label]), ensurePersona(p))}</div>
+    <label class="lbl" style="margin-top:12px">Skills</label><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px">${Object.keys(skn).map(k => `<div><label class="lbl">${skn[k]}</label><input class="input" data-k="sk_${k}" type="number" min="15" max="99" value="${Math.round(p.sk[k])}"></div>`).join('')}</div>
+    <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px">${num('pot', p.pot, 15, 99)}${num('form', p.form, 0, 100)}${num('fitness', p.fitness, 0, 100)}${num('morale', p.morale || 65, 0, 100)}</div>
+    ${p.contract ? `<div class="grid g2" style="gap:8px;margin-top:8px">${num('salary', p.contract.salary, MIN_SALARY, 2000000)}${num('years', p.contract.years, 1, 6)}</div>` : ''}
+    ${p.injury ? `<label class="switch" style="margin-top:10px" onclick="this.classList.toggle('on')" data-k="healInjury"><i></i>Heal ${esc(p.injury.type)}</label>` : ''}</div>`,
+    { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="saveEditPlayer('${id}')">Save player</button>` });
+}
+function saveEditPlayer(id) {
+  const data = {};
+  document.querySelectorAll('#edForm [data-k]').forEach(el => { const k = el.dataset.k; data[k] = el.classList.contains('switch') ? el.classList.contains('on') : el.value; });
+  ['age','pot','form','fitness','morale','salary','years'].forEach(k => { if (data[k] !== undefined && data[k] !== '') data[k] = +data[k]; else delete data[k]; });
+  editPlayerApply(id, data); autosave(); closeModal(); render(); showPlayer(id); flash('Player updated.');
+}
+function editTeamsSheet() {
+  sheet('Editor', 'Edit teams', `<div id="tmForm">${TEAM_DEFS.map(t => `<div class="panel" style="margin-bottom:8px"><div class="pb"><div class="grid" style="grid-template-columns:2fr 2fr 1fr;gap:6px">
+    <div><label class="lbl">${t.id} name</label><input class="input" data-t="${t.id}" data-k="name" value="${esc(t.name)}"></div><div><label class="lbl">Nickname</label><input class="input" data-t="${t.id}" data-k="nick" value="${esc(t.nick)}"></div><div><label class="lbl">Colour</label><input class="input" type="color" data-t="${t.id}" data-k="color" value="${t.color}" style="padding:2px;height:36px"></div></div>
+    <div style="margin-top:6px"><label class="lbl">Home ground</label><input class="input" data-t="${t.id}" data-k="ground" value="${esc(t.ground)}"></div></div></div>`).join('')}</div>`,
+    { foot: `<button class="btn ghost" onclick="game.teamEdits={};applyTeamEdits();autosave();closeModal();render()">Reset all</button><button class="btn pri" onclick="saveTeams()">Save teams</button>` });
+}
+function saveTeams() {
+  game.teamEdits = game.teamEdits || {};
+  document.querySelectorAll('#tmForm [data-t]').forEach(el => { const t = el.dataset.t; game.teamEdits[t] = game.teamEdits[t] || {}; if (el.value.trim()) game.teamEdits[t][el.dataset.k] = el.value.trim().slice(0, 30); });
+  game.edited = true; applyTeamEdits(); autosave(); closeModal(); render(); flash('Teams updated.');
+}
+
 // §25 BOOT ----------------------------------------------------------------------------------
-(function boot() {
+(async function boot() {
   $('bVer').textContent = BUILD.version; $('bTitle').textContent = BUILD.title; $('bEng').textContent = BUILD.engine;
   document.title = `Mini&Me Cricket ${BUILD.version}`;
+  await Store.init();
+  if (Store.status === 'none') { const n = document.createElement('div'); n.className = 'note bad'; n.style.marginTop = '12px'; n.innerHTML = 'This browser is not keeping saved data (private browsing or a file preview). Open the game directly in Safari or Chrome, or use Export save in the menu to keep your career.'; document.querySelector('.launch').appendChild(n); }
+  const metas = await Store.list(); const last = metas.map((m, i) => m ? Object.assign({ slot: i + 1 }, m) : null).filter(Boolean).sort((a, b) => (b.saved || '').localeCompare(a.saved || ''))[0];
+  if (last) { const b = document.createElement('button'); b.className = 'btn pri block'; b.style.marginTop = '8px'; b.textContent = `Continue: ${last.name} · ${teamName(last.team)} · ${last.label}`; b.onclick = () => loadGame(last.slot); document.querySelector('.launch .btns').after(b); }
 })();
 </script>
 </body>
