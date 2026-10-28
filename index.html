@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>H³O Cricket</title>
+<title>Legacy Cricket</title>
 <style>
 /* =====================================================================
    MINI&ME CRICKET UI v0.3 — compact, mobile-first design system
@@ -269,13 +269,20 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 @media (min-width:900px){.sheet-h::before{display:none}.sheet{max-height:88vh}}
 .home-acts{margin-top:0}
 .top .cont.hidden{display:none}
+
+/* v0.7.0 styles, specialists, contracts */
+.rtag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;background:var(--s3);color:var(--text);margin-right:6px;vertical-align:1px}
+.spec{font-weight:800}.spec.T20{color:#f0abfc}.spec.OD{color:#7dd3fc}.spec.FC{color:#fca5a5}
+.ratings3 .best{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.row.con .stack{gap:1px}.row.con .end{gap:6px}
+.row.con .tag.warn{padding:2px 6px;border-radius:5px;background:rgba(245,158,11,.14)}
 </style>
 </head>
 <body>
 <section id="launch">
   <div class="launch">
-    <div class="kick">H³O Interactive</div>
-    <h1>H³O <span>Cricket</span></h1>
+    <div class="kick">H³O Interactive · Legacy GM series</div>
+    <h1>Legacy <span>Cricket</span></h1>
     <p>Run a state side across the Shield, the One-Day Cup and the T20 Championship. Pick the XI, plan every batter's downfall, manage your quicks, trade, sign and survive the board.</p>
     <div class="btns"><button class="btn pri" onclick="openNewCareer()">New career</button><button class="btn" onclick="openLoadCareer()">Load career</button></div>
     <button class="btn ghost block" style="margin-top:8px" onclick="showHelp()">How to play</button>
@@ -284,7 +291,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 </section>
 <div id="app" class="hidden">
   <header class="top">
-    <div class="ell"><div class="brand">H³O <span>Cricket</span></div><div class="date" id="dateChip"></div></div>
+    <div class="ell"><div class="brand">Legacy <span>Cricket</span></div><div class="date" id="dateChip"></div></div>
     <button class="btn pri cont" id="topContinue" onclick="continueGame()">Continue</button>
     <button class="btn icon" title="Menu" onclick="openMenu()">☰</button>
   </header>
@@ -319,8 +326,12 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.6.1', title: 'Feedback pass', engine: 'C2.2 Ball-by-Ball' };
-const SAVE_PREFIX = 'minime_cricket_v01_slot_';
+const BUILD = { version: 'v0.7.0', title: 'Styles, Specialists & Scale', engine: 'C2.2 Ball-by-Ball' };
+const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
+// v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
+// ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
+// balance is unchanged while the numbers players see read like a modern sports game.
+const RATING_SHIFT = 6, STAFF_SHIFT = 8, SCALE_VERSION = 2;
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
 const MIN_SALARY = 60000;
@@ -466,18 +477,25 @@ function isPace(p) { return BOWL_TYPES[p.bowlType].kind === 'pace'; }
 function isSpin(p) { return BOWL_TYPES[p.bowlType].kind === 'spin'; }
 function formMod(p) { return (p.form - 50) / 8; }
 
+// Format aptitude (p.apt) is a per-format offset that makes genuine specialists:
+// a white-ball gun can sit 10-18 points higher in T20 than in the Shield, and vice versa.
+function aptOf(p, fmt) { return p.apt ? p.apt[fmt] || 0 : 0; }
 function batRating(p, fmt) {
-  const s = p.sk;
-  if (fmt === 'FC') return s.tech * 0.50 + s.temp * 0.35 + s.power * 0.15;
-  if (fmt === 'OD') return s.tech * 0.42 + s.temp * 0.25 + s.power * 0.33;
-  return s.tech * 0.28 + s.temp * 0.14 + s.power * 0.58;
+  const s = p.sk, rot = s.rot != null ? s.rot : (s.tech + s.power) / 2;
+  let r;
+  if (fmt === 'FC') r = s.tech * 0.50 + s.temp * 0.35 + s.power * 0.15;
+  else if (fmt === 'OD') r = s.tech * 0.38 + s.temp * 0.22 + s.power * 0.28 + rot * 0.12;
+  else r = s.tech * 0.24 + s.temp * 0.12 + s.power * 0.50 + rot * 0.14;
+  return r + aptOf(p, fmt);
 }
 function bowlRating(p, fmt) {
-  const s = p.sk;
+  const s = p.sk, death = s.death != null ? s.death : (s.acc + s.vari) / 2;
   if (!canBowl(p)) return Math.min(25, s.bowl);
-  if (fmt === 'FC') return s.bowl * 0.55 + s.acc * 0.32 + s.vari * 0.13;
-  if (fmt === 'OD') return s.bowl * 0.45 + s.acc * 0.35 + s.vari * 0.20;
-  return s.bowl * 0.36 + s.acc * 0.34 + s.vari * 0.30;
+  let r;
+  if (fmt === 'FC') r = s.bowl * 0.55 + s.acc * 0.32 + s.vari * 0.13;
+  else if (fmt === 'OD') r = s.bowl * 0.42 + s.acc * 0.33 + s.vari * 0.15 + death * 0.10;
+  else r = s.bowl * 0.32 + s.acc * 0.28 + s.vari * 0.22 + death * 0.18;
+  return r + aptOf(p, fmt);
 }
 function keeperScore(p, fmt) { return p.sk.keep < 45 ? -100 : p.sk.keep * 0.65 + batRating(p, fmt) * 0.35; }
 function overall(p, fmt) {
@@ -488,15 +506,23 @@ function overall(p, fmt) {
   else if (g === 'WK') o = b * 0.6 + k * 0.33 + f * 0.07;
   else if (g === 'AR') o = Math.max(b, w) * 0.62 + Math.min(b, w) * 0.3 + f * 0.08;
   else o = w * 0.9 + f * 0.06 + b * 0.04;
-  return Math.round(o);
+  return clamp(Math.round(o), 1, 99);
 }
 function peakOvr(p) { return Math.max(overall(p, 'FC'), overall(p, 'OD'), overall(p, 'T20')); }
 function potGrade(p) {
   let v = p.pot;
   if (typeof game !== 'undefined' && game && p.teamId !== U() && game.staff) v = Math.round(v + (hash01(p.id) - 0.5) * 2 * (100 - staffRating(U(), 'scout')) / 6);
-  return v >= 90 ? 'A+' : v >= 85 ? 'A' : v >= 80 ? 'B+' : v >= 75 ? 'B' : v >= 70 ? 'C+' : v >= 65 ? 'C' : 'D';
+  return v >= 94 ? 'A+' : v >= 90 ? 'A' : v >= 86 ? 'B+' : v >= 81 ? 'B' : v >= 76 ? 'C+' : v >= 71 ? 'C' : 'D';
 }
-function ratingClass(v) { return v >= 82 ? 'elite' : v >= 74 ? 'good' : ''; }
+function ratingClass(v) { return v >= 86 ? 'elite' : v >= 78 ? 'good' : ''; }
+// Format the player is best in, and whether the gap makes him a specialist.
+function specialistOf(p) {
+  const r = FMT_LIST.map(f => [f, overall(p, f)]).sort((a, b) => b[1] - a[1]);
+  const gap = r[0][1] - r[2][1];
+  return { best: r[0][0], gap, label: gap >= 8 ? (r[0][0] === 'FC' ? 'Red-ball specialist' : r[0][0] === 'T20' ? 'T20 specialist' : 'One-day specialist') : null };
+}
+function styleOf(p) { return p.style && STYLES[p.style] ? STYLES[p.style] : null; }
+function styleLabel(p) { const st = styleOf(p); return st ? st.label : ''; }
 
 // §4 PLAYER GENERATION + VALUE --------------------------------------------
 function genName(nat) {
@@ -509,6 +535,49 @@ function genName(nat) {
   }
   return [pick(L.first), pick(L.last)];
 }
+// §4a PLAYING STYLES --------------------------------------------------------
+// Each player has one style that fits his role. sk shifts his skills when he is generated,
+// int shifts his batting intent in the engine, wkt and bnd scale a bowler's wicket and
+// boundary rates, newBall is a rating bonus with the new ball, and spec biases the chance
+// of being a red-ball (red), white-ball (white) or one-day (one) specialist.
+const STYLES = {
+  anchor:      { label:'Anchor',           roles:['OPEN','TOP'],              desc:'Bats time, blunts the new ball and builds long innings.', sk:{ tech:4, temp:5, power:-7, rot:-2 }, int:-0.22, spec:{ red:0.32, white:0.04 } },
+  aggressor:   { label:'Aggressor',        roles:['OPEN','TOP'],              desc:'Attacks the new ball and the fielding restrictions.', sk:{ tech:-3, temp:-3, power:8, rot:1 }, int:0.22, spec:{ red:0.04, white:0.34 } },
+  accumulator: { label:'Accumulator',      roles:['OPEN','TOP','MID','BAR'],  desc:'Rotates the strike and keeps the scoreboard moving.', sk:{ tech:2, temp:1, power:-3, rot:9 }, int:0, spec:{ one:0.18 } },
+  strokemaker: { label:'Strokemaker',      roles:['TOP','MID'],               desc:'Classical stroke-player who scores all round the ground.', sk:{ tech:3, power:2, temp:-2 }, int:0.06 },
+  finisher:    { label:'Finisher',         roles:['MID','BAR','WK'],          desc:'Closes out chases and launches in the final overs.', sk:{ temp:3, power:5, tech:-4, rot:3 }, int:0.1, finisher:true, spec:{ white:0.3, red:0.06 } },
+  enforcer:    { label:'Enforcer',         roles:['MID','BAR'],               desc:'Clears the rope. High risk, high reward.', sk:{ power:10, tech:-5, temp:-4, rot:-3 }, int:0.3, spec:{ white:0.36, red:0.03 } },
+  gloveman:    { label:'Gloveman',         roles:['WK'],                      desc:'Specialist keeper first, batter second.', sk:{ keep:6, tech:-3, power:-3 } },
+  wkbat:       { label:'Keeper-batter',    roles:['WK'],                      desc:'Bats in the top six and keeps tidily.', sk:{ keep:-4, tech:3, temp:2, power:2 } },
+  express:     { label:'Express quick',    roles:['PACE','BWAR'], kind:'pace', desc:'Raw pace and bounce. Takes wickets, leaks runs.', sk:{ bowl:6, acc:-5 }, wkt:1.1, bnd:1.08, spec:{ red:0.22 } },
+  swing:       { label:'Swing bowler',     roles:['PACE','SEAM','BWAR'], kind:'pace', desc:'Moves the new ball and strikes early.', sk:{ vari:4, acc:2, bowl:-1, death:-4 }, newBall:4, spec:{ red:0.22 } },
+  lineLength:  { label:'Line and length',  roles:['SEAM','PACE','BWAR'], kind:'pace', desc:'Relentlessly accurate and builds pressure.', sk:{ acc:7, vari:-4, bowl:-2 }, wkt:0.95, bnd:0.9 },
+  deathSpec:   { label:'Death specialist', roles:['PACE','SEAM','BWAR'], kind:'pace', desc:'Yorkers and slower balls in the final overs.', sk:{ death:12, vari:3, bowl:-3 }, spec:{ white:0.42, red:0.04 } },
+  holding:     { label:'Holding spinner',  roles:['OFF','SLA','BWAR'], kind:'spin', desc:'Tight and economical through the middle overs.', sk:{ acc:6, vari:-4 }, wkt:0.92, bnd:0.88, spec:{ white:0.22 } },
+  wicketTaker: { label:'Wicket-taker',     roles:['OFF','LEG','SLA','BWAR'], kind:'spin', desc:'Gives it air and attacks the stumps.', sk:{ vari:6, bowl:3, acc:-5 }, wkt:1.1, bnd:1.08, spec:{ red:0.26 } },
+  mystery:     { label:'Mystery spinner',  roles:['LEG','OFF'], kind:'spin',  desc:'Hard to read and a weapon in white-ball cricket.', sk:{ vari:9, acc:-3, death:4 }, wkt:1.06, spec:{ white:0.36 } }
+};
+function pickStyle(role, bowlType) {
+  const kind = BOWL_TYPES[bowlType] ? BOWL_TYPES[bowlType].kind : 'none';
+  const opts = Object.keys(STYLES).filter(k => STYLES[k].roles.includes(role) && (!STYLES[k].kind || role !== 'BWAR' || STYLES[k].kind === kind));
+  return opts.length ? pick(opts) : null;
+}
+// Per-format aptitude. Most players are all-format; roughly one in three leans clearly one way.
+function genApt(style) {
+  const sp = (STYLES[style] && STYLES[style].spec) || {};
+  const pr = { white: (sp.white != null ? sp.white : 0.12) * 0.7, red: (sp.red != null ? sp.red : 0.1) * 0.7, one: (sp.one != null ? sp.one : 0.05) * 0.7 };
+  const r = rand();
+  if (r < pr.white) return { T20: randInt(5, 9), OD: randInt(1, 4), FC: -randInt(4, 7) };
+  if (r < pr.white + pr.red) return { FC: randInt(4, 7), OD: randInt(-2, 1), T20: -randInt(5, 9) };
+  if (r < pr.white + pr.red + pr.one) return { OD: randInt(4, 7), FC: -randInt(0, 3), T20: -randInt(0, 3) };
+  return { FC: Math.round(randn() * 1.2), OD: Math.round(randn() * 1), T20: Math.round(randn() * 1.2) };
+}
+function applyStyle(p) {
+  const st = STYLES[p.style];
+  if (!st) return;
+  Object.keys(st.sk).forEach(k => { p.sk[k] = clamp(Math.round(p.sk[k] + st.sk[k]), 15, 99); });
+}
+
 function genSkills(role, q) {
   const v = (base, sd = 4) => clamp(Math.round(base + randn() * sd), 15, 99);
   const low = () => v(26, 7);
@@ -526,6 +595,11 @@ function genSkills(role, q) {
     default:     s = Object.assign(tail(), { bowl:v(q+1), acc:v(q+1), vari:v(q+3), field:v(q-5,7), keep:v(12,3) });
   }
   s.stamina = v(['PACE','SEAM','BWAR'].includes(role) ? 72 : 68, 9);
+  // Strike rotation (rot) and death bowling (death) matter mostly in white-ball cricket.
+  const rotQ = { OPEN: q - 1, TOP: q + 1, MID: q + 1, WK: q - 2, BAR: q, BWAR: q - 8 }[role];
+  s.rot = rotQ != null ? v(rotQ, 6) : v(q - 28, 7);
+  const deathQ = { PACE: q - 4, SEAM: q - 3, BWAR: q - 4, OFF: q - 8, LEG: q - 7, SLA: q - 8, BAR: q - 14 }[role];
+  s.death = deathQ != null ? v(deathQ, 6) : low();
   return s;
 }
 function genBowlType(role) {
@@ -549,7 +623,7 @@ function makePlayer(opts) {
   const nat = opts.nat || 'AUS';
   const sk = genSkills(role, opts.q);
   const bowlType = genBowlType(role);
-  if (bowlType === 'NONE') { sk.bowl = Math.min(sk.bowl, 25); sk.acc = Math.min(sk.acc, 30); sk.vari = Math.min(sk.vari, 30); }
+  if (bowlType === 'NONE') { sk.bowl = Math.min(sk.bowl, 25); sk.acc = Math.min(sk.acc, 30); sk.vari = Math.min(sk.vari, 30); sk.death = Math.min(sk.death, 30); }
   const nm = genName(nat);
   const p = {
     id: 'p' + (game.nextPid++), first: nm[0], last: nm[1], age: opts.age, nat, teamId: opts.teamId || null,
@@ -558,18 +632,24 @@ function makePlayer(opts) {
     caps: { FC:0, OD:0, T20:0 }, contract: null, stats: { season: blankStats3(), career: blankStats3() },
     hist: [], retired: false, prospect: !!opts.prospect, morale: 70
   };
+  p.style = opts.style || pickStyle(role, bowlType);
+  applyStyle(p);
+  p.apt = genApt(p.style);
   const cur = peakOvr(p);
   const a = p.age;
-  p.pot = opts.pot != null ? opts.pot : clamp(Math.round(cur + (a <= 20 ? randInt(6, 16) : a <= 23 ? randInt(3, 10) : a <= 26 ? randInt(0, 5) : randInt(0, 2))), cur, 93);
+  p.pot = opts.pot != null ? opts.pot : clamp(Math.round(cur + (a <= 20 ? randInt(6, 16) : a <= 23 ? randInt(3, 10) : a <= 26 ? randInt(0, 5) : randInt(0, 2))), cur, 97);
   if (p.teamId) p.contract = { salary: askingSalary(p), years: randInt(1, 3) };
   game.players[p.id] = p;
   return p;
 }
 
 // Value: 0..~1.4. Drives salary demands, trades and AI signings.
+// Market rating: the average of a player's best two formats, so a one-format specialist
+// is paid for what he gives across a season, not just his best format.
+function marketOvr(p) { const r = FMT_LIST.map(f => overall(p, f)).sort((a, b) => b - a); return (r[0] + r[1]) / 2; }
 function playerValueScore(p) {
-  const o = peakOvr(p);
-  let v = Math.pow(clamp((o - 50) / 35, 0, 1.3), 2);
+  const o = marketOvr(p);
+  let v = Math.pow(clamp((o - 50 - RATING_SHIFT) / 35, 0, 1.3), 2);
   if (p.age <= 23) v *= 1 + clamp(p.pot - o, 0, 25) / 50;
   else if (p.age >= 34) v *= 0.6;
   else if (p.age >= 32) v *= 0.78;
@@ -593,7 +673,7 @@ function tradeValue(p) {
 function seedCareer(p) {
   const yrs = Math.max(0, p.age - 20 - randInt(0, 2));
   if (!yrs) return;
-  const frac = clamp((peakOvr(p) - 50) / 35, 0.1, 1);
+  const frac = clamp((peakOvr(p) - 50 - RATING_SHIFT) / 35, 0.1, 1);
   const g = group(p);
   const tailEnder = g === 'PACE' || g === 'SPIN';
   FMT_LIST.forEach(f => {
@@ -604,17 +684,18 @@ function seedCareer(p) {
     s.m = m;
     s.inn = Math.round(m * (f === 'FC' ? 1.7 : 0.9) * (tailEnder ? 0.7 : 0.97));
     s.no = Math.round(s.inn * (tailEnder ? 0.28 : 0.1));
-    const br = batRating(p, f);
+    const br = batRating(p, f) - RATING_SHIFT;
     const avgB = Math.max(4, f === 'FC' ? (br - 36) * 1.0 : f === 'OD' ? (br - 37) * 0.9 : (br - 40) * 0.65);
     s.r = Math.round((s.inn - s.no) * avgB);
-    const sr = f === 'FC' ? 44 + (p.sk.power - 50) * 0.35 : f === 'OD' ? 72 + (p.sk.power - 50) * 0.6 : 112 + (p.sk.power - 50) * 1.1;
+    const pw = p.sk.power - RATING_SHIFT;
+    const sr = f === 'FC' ? 44 + (pw - 50) * 0.35 : f === 'OD' ? 72 + (pw - 50) * 0.6 : 112 + (pw - 50) * 1.1;
     s.b = Math.round(s.r / Math.max(20, sr) * 100);
     s.f4 = Math.round(s.r * 0.11); s.f6 = Math.round(s.r * (f === 'T20' ? 0.045 : f === 'OD' ? 0.02 : 0.008));
     s.c100 = avgB >= 25 ? Math.round(s.r / (f === 'FC' ? 950 : f === 'OD' ? 1400 : 4200)) : 0;
     s.c50 = Math.round(s.r / (f === 'FC' ? 380 : f === 'OD' ? 420 : 380) * clamp(avgB / 35, 0.1, 1.2));
     s.hs = s.c100 ? 100 + randInt(0, f === 'FC' ? 110 : 50) : s.c50 ? 50 + randInt(0, 45) : Math.min(49, Math.round(avgB * 1.8 + randInt(0, 12)));
-    if (canBowl(p) && bowlRating(p, f) > 45) {
-      const wr = bowlRating(p, f);
+    if (canBowl(p) && bowlRating(p, f) - RATING_SHIFT > 45) {
+      const wr = bowlRating(p, f) - RATING_SHIFT;
       const wpm = (f === 'FC' ? 2.8 : 1.3) * clamp((wr - 42) / 38, 0.05, 1.3);
       s.w = Math.round(m * wpm);
       const bAvg = f === 'FC' ? 24 + (85 - wr) * 0.45 : f === 'OD' ? 26 + (85 - wr) * 0.5 : 21 + (85 - wr) * 0.35;
@@ -632,10 +713,10 @@ function seedCareer(p) {
 
 function makeProspect() {
   const role = pick(['OPEN','TOP','MID','MID','WK','BAR','BWAR','PACE','PACE','SEAM','OFF','LEG','SLA']);
-  const q = randInt(46, 60);
+  const q = randInt(46, 60) + RATING_SHIFT;
   const age = randInt(17, 20);
   const p = makePlayer({ role, q, age, prospect: true });
-  p.pot = clamp(peakOvr(p) + randInt(10, 28), 60, 92);
+  p.pot = clamp(peakOvr(p) + randInt(10, 28), 66, 96);
   return p;
 }
 
@@ -764,12 +845,16 @@ const OPENER_PREF = 6; // rating points a specialist opener is worth over a top-
 const ORDER_TIER = { OPEN: 0, TOP: 0, MID: 1, WK: 1, BAR: 2, BWAR: 3, PACE: 4, SEAM: 4, OFF: 4, LEG: 4, SLA: 4 };
 function battingOrder(xi, fmt) {
   const byBat = (a, b) => batRating(b, fmt) - batRating(a, fmt);
-  const openScore = p => batRating(p, fmt) + (p.role === 'OPEN' ? OPENER_PREF : 0);
+  // Anchors suit the Shield, aggressors suit white-ball cricket.
+  const styleOpen = p => p.style === 'anchor' ? (fmt === 'FC' ? 3 : -1) : p.style === 'aggressor' ? (fmt === 'FC' ? -1 : 3) : 0;
+  const openScore = p => batRating(p, fmt) + (p.role === 'OPEN' ? OPENER_PREF : 0) + styleOpen(p);
   const openers = xi.filter(p => ['OPEN','TOP'].includes(p.role)).sort((a, b) => openScore(b) - openScore(a)).slice(0, 2);
   const fill = list => { list.forEach(p => { if (openers.length < 2 && !openers.includes(p)) openers.push(p); }); };
   if (openers.length < 2) fill(xi.filter(p => ['BAT','WK','AR'].includes(group(p))).sort((a, b) => b.sk.tech - a.sk.tech));
   if (openers.length < 2) fill(xi.slice().sort(byBat));
-  const rest = xi.filter(p => !openers.includes(p)).sort((a, b) => (ORDER_TIER[a.role] - ORDER_TIER[b.role]) || byBat(a, b));
+  // Within a tier, finishers and enforcers drop below the others in white-ball cricket.
+  const tierOf = p => ORDER_TIER[p.role] + (fmt !== 'FC' && ['finisher','enforcer'].includes(p.style) ? 0.5 : 0);
+  const rest = xi.filter(p => !openers.includes(p)).sort((a, b) => (tierOf(a) - tierOf(b)) || byBat(a, b));
   return [...openers, ...rest];
 }
 function finaliseXI(xi, fmt, keepOrder) {
@@ -877,12 +962,15 @@ function bowlerEffective(M, inn, bowler) {
   let w = bowlRating(bowler, fmt) + formMod(bowler);
   if (isPace(bowler)) {
     w += (condFactor(M, 'pace') - 1) * 45;
-    if (phaseOf(fmt, inn.overNo) === 'new' || (fmt !== 'FC' && inn.overNo < 2)) w += 2.5;
+    const nb = phaseOf(fmt, inn.overNo) === 'new' || (fmt !== 'FC' && inn.overNo < 2);
+    if (nb) w += 2.5 + ((styleOf(bowler) || {}).newBall || 0);
     if (fmt === 'FC') w -= (fcDay(M) - 1) * 0.6;
   } else if (isSpin(bowler)) {
     w += (condFactor(M, 'spin') - 1) * 45;
     if (fmt === 'FC') w += (fcDay(M) - 1) * 1.8;
   }
+  // Death overs reward genuine death bowlers beyond what the format rating already counts.
+  if (fmt !== 'FC' && canBowl(bowler) && phaseOf(fmt, inn.overNo, mOvers(M)) === 'death') w += ((bowler.sk.death || 50) - 60 - RATING_SHIFT) * 0.25;
   const spell = inn.spell[bowler.id] || 0;
   const lim = isSpin(bowler) ? (fmt === 'FC' ? 10 : 4) : (fmt === 'FC' ? 6 : 4);
   w -= Math.max(0, spell - lim) * 2.2;
@@ -927,21 +1015,28 @@ function ballContext(M, inn, batter, bowler, sc) {
   bR -= Math.max(0, 70 - batter.fitness) * 0.15;
   const wR = bowlerEffective(M, inn, bowler);
   const home = inn.bat === M.home ? 0.7 : -0.7;
+  // Playing styles: a batter's style shifts his intent, finishers lift in the death overs,
+  // and a bowler's style scales his wicket and boundary rates.
+  const bst = styleOf(batter) || {}, wst = styleOf(bowler) || {};
+  const ph = M.fmt === 'FC' ? null : phaseOf(M.fmt, inn.overNo, mOvers(M));
+  let intent = battingIntent(M, inn) + (bst.int || 0) * (M.fmt === 'FC' ? 0.6 : 1);
+  if (bst.finisher && ph === 'death') { intent += 0.12; bR += 3; }
   const d = clamp((bR - wR + 6 + home) / 15, -2.5, 2.5);
-  const intent = battingIntent(M, inn);
   const fld = TACTICS.field[tacticsFor(M, inn.bowl).field];
-  const fieldQ = 1 + ((M.fieldAvg[inn.bowl] || 60) - 62) / 300;
-  const pW = B.wkt * Math.exp(-0.42 * d) * (1 + 0.5 * intent) * fld.wkt * fieldQ * pe.wkt;
-  const pow = (batter.sk.power - 60) / 40;
+  const fieldQ = 1 + ((M.fieldAvg[inn.bowl] || 60 + RATING_SHIFT) - 62 - RATING_SHIFT) / 300;
+  const pW = B.wkt * Math.exp(-0.42 * d) * (1 + 0.5 * intent) * fld.wkt * fieldQ * pe.wkt * (wst.wkt || 1);
+  const pow = (batter.sk.power - 60 - RATING_SHIFT) / 40;
+  const rotF = ((batter.sk.rot != null ? batter.sk.rot : 60 + RATING_SHIFT) - 60 - RATING_SHIFT) / 100;
+  const bndF = wst.bnd || 1;
   const dist = B.dist;
   const bf = condFactor(M, 'bat') * pe.run;
   const weights = [
-    dist[0] * Math.exp(-0.22 * d) * (1 - 0.3 * intent),
-    dist[1] * (1 + 0.05 * intent) * Math.exp(0.05 * d) * bf * fld.single,
+    dist[0] * Math.exp(-0.22 * d) * (1 - 0.3 * intent) * Math.exp(-0.9 * rotF),
+    dist[1] * (1 + 0.05 * intent) * Math.exp(0.05 * d) * bf * fld.single * Math.exp(0.7 * rotF),
     dist[2] * Math.exp(0.12 * d) * bf,
     dist[3] * bf,
-    dist[4] * Math.exp(0.3 * d) * (1 + 0.45 * intent) * bf * fld.bnd,
-    dist[5] * Math.exp(0.4 * d) * Math.max(0.05, 1 + 0.9 * intent) * (1 + 0.5 * pow) * bf * fld.bnd
+    dist[4] * Math.exp(0.3 * d) * (1 + 0.45 * intent) * bf * fld.bnd * bndF,
+    dist[5] * Math.exp(0.4 * d) * Math.max(0.05, 1 + 0.9 * intent) * (1 + 0.5 * pow) * bf * fld.bnd * bndF
   ];
   const accMul = clamp(1.5 - bowler.sk.acc / 100, 0.5, 1.4);
   const keeper = P(M.keeper[inn.bowl]);
@@ -986,6 +1081,8 @@ function chooseBowler(M, inn) {
       if (ph === 'pp' && isPace(p)) s += 3;
       if (ph === 'middle' && isSpin(p)) s += 4;
       if (ph === 'death' && isPace(p)) s += 4;
+      if (ph === 'death' && canBowl(p)) s += ((p.sk.death || 50) - 60 - RATING_SHIFT) * 0.15;
+      if (ph === 'pp' && (styleOf(p) || {}).newBall) s += 2;
       if (ph === 'middle' && top) s -= 3;
       s += rem * 0.9;
       if (ph === 'death' && top) s += 3;
@@ -1347,7 +1444,7 @@ const DEFAULT_PLAN = { line:'off', len:'good' };
 function ensureTraits(p) {
   if (p.tr) return p.tr;
   const tr = { off:0, stumps:0, body:0, full:0, good:0, short:0, yorker:0, pace:0, spin:0 };
-  const q = batRating(p, 'FC');
+  const q = batRating(p, 'FC') - RATING_SHIFT;
   const nWeak = q < 50 ? 3 : q < 66 ? 2 : (rand() < 0.5 ? 1 : 2);
   const nStrong = q >= 70 ? 2 : 1;
   const keys = shuffle(['off','stumps','body','full','short','good','yorker','pace','spin']);
@@ -1461,7 +1558,7 @@ function planEffect(M, inn, bowler, batter, sc) {
   const plan = planFor(M, inn, batter.id);
   const L = PLAN_LINES[plan.line] || PLAN_LINES.off, N = PLAN_LENGTHS[plan.len] || PLAN_LENGTHS.good;
   const specMul = staffSpec(inn.bowl, 'bowl') ? (staffSpec(inn.bowl, 'bowl') === (isSpin(bowler) ? 'spin' : 'pace') ? 1.3 : 0.7) : 1;
-  const exec = clamp((bowler.sk.acc * 0.7 + bowler.sk.vari * 0.3) / 100 + (staffRating(inn.bowl, 'bowl') - 60) / 400 * specMul, 0.3, 0.97);
+  const exec = clamp((bowler.sk.acc * 0.7 + bowler.sk.vari * 0.3 - RATING_SHIFT) / 100 + (staffEff(inn.bowl, 'bowl') - 60) / 400 * specMul, 0.3, 0.97);
   const ph = phaseOf(M.fmt, inn.overNo, mOvers(M));
   let wkt = L.wkt * N.wkt, run = L.run * N.run, wideMul = L.wide || 1;
   const spin = isSpin(bowler);
@@ -1490,9 +1587,28 @@ function planLabel(plan) { return `${(PLAN_LINES[plan.line] || PLAN_LINES.off).l
 function learnFromMatch(M) {
   M.innings.forEach(inn => {
     if (!isUserTeam(inn.bowl)) return;
-    const good = staffRating(U(), 'analyst') >= 75;
+    const good = staffEff(U(), 'analyst') >= 75;
     inn.card.forEach(c => { if (c.b >= (good ? 40 : 60)) raiseScout(c.id, 2); else if (c.b >= (good ? 15 : 24)) raiseScout(c.id, 1); });
   });
+}
+// v0.7 save upgrade: lift ratings to the new scale and give every player a style,
+// a format aptitude and the two new skills. Relative strengths are kept, so a save
+// plays the same after the upgrade, just with modern-looking numbers.
+function upgradeScale(g) {
+  const lift = (v, n) => clamp(Math.round(v + n), 15, 99);
+  Object.values(g.players).forEach(p => {
+    const s = p.sk;
+    ['tech','temp','power','field'].forEach(k => s[k] = lift(s[k], RATING_SHIFT));
+    if (canBowl(p) && s.bowl > 35) ['bowl','acc','vari'].forEach(k => s[k] = lift(s[k], RATING_SHIFT));
+    if (s.keep > 40) s.keep = lift(s.keep, RATING_SHIFT);
+    if (s.rot == null) s.rot = lift((s.tech + s.power) / 2 + randn() * 5, 0);
+    if (s.death == null) s.death = canBowl(p) && s.bowl > 35 ? lift((s.acc + s.vari) / 2 - 4 + randn() * 5, 0) : Math.min(30, lift(26 + randn() * 6, 0));
+    if (p.style === undefined) { p.style = pickStyle(p.role, p.bowlType); applyStyle(p); }
+    if (!p.apt) p.apt = genApt(p.style);
+    p.pot = clamp(Math.round((p.pot || 0) + RATING_SHIFT), peakOvr(p), 97);
+  });
+  Object.values(g.staff || {}).forEach(st => { st.rating = clamp(st.rating + STAFF_SHIFT, 40, 97); if (st.mm != null) st.mm = clamp(st.mm + STAFF_SHIFT, 40, 99); });
+  g.scaleV = SCALE_VERSION;
 }
 function migrateGame(g) {
   const prev = game; game = g;
@@ -1501,6 +1617,7 @@ function migrateGame(g) {
   if (!g.fin) g.fin = initFinances();
   if (!g.inbox) g.inbox = [];
   Object.values(g.staff).forEach(ensureStaffAttrs);
+  if ((g.scaleV || 1) < SCALE_VERSION) upgradeScale(g);
   applyTeamEdits();
   g.season.windows.forEach(w => { if (!w.fx) w.fx = []; });
   game = prev;
@@ -1528,30 +1645,33 @@ const STAFF_BUDGET = 900000;
 
 function makeStaff(role, q, teamId) {
   const nm = genName('AUS');
-  const rating = clamp(Math.round(q + randn() * 6), 35, 92);
-  const s = { id: 's' + (game.nextSid = (game.nextSid || 1) + 1), role, first: nm[0], last: nm[1], age: randInt(34, 64), rating, mm: role === 'head' ? clamp(Math.round(rating + randn() * 10), 35, 95) : null, spec: role === 'bowl' ? (rand() < 0.65 ? 'pace' : 'spin') : role === 'bat' ? (rand() < 0.5 ? 'technique' : 'power') : null,
+  const rating = clamp(Math.round(q + randn() * 7), 40, 97);
+  const s = { id: 's' + (game.nextSid = (game.nextSid || 1) + 1), role, first: nm[0], last: nm[1], age: randInt(34, 64), rating, mm: role === 'head' ? clamp(Math.round(rating + randn() * 10), 40, 99) : null, spec: role === 'bowl' ? (rand() < 0.65 ? 'pace' : 'spin') : role === 'bat' ? (rand() < 0.5 ? 'technique' : 'power') : null,
     style: role === 'head' ? pick(Object.keys(COACH_STYLES)) : null, teamId: teamId || null, salary: staffAsk({ role, rating }), years: randInt(1, 3) };
   game.staff[s.id] = s;
   return s;
 }
-function staffAsk(s) { const base = s.role === 'head' ? 90000 : 50000; return Math.round((base + Math.pow(clamp((s.rating - 35) / 55, 0, 1), 2) * (s.role === 'head' ? 210000 : 120000)) / 5000) * 5000; }
+function staffAsk(s) { const base = s.role === 'head' ? 90000 : 50000; return Math.round((base + Math.pow(clamp((s.rating - STAFF_SHIFT - 35) / 55, 0, 1.15), 2) * (s.role === 'head' ? 210000 : 120000)) / 5000) * 5000; }
 function staffOf(teamId) { return Object.values(game.staff || {}).filter(s => s.teamId === teamId); }
 function staffIn(teamId, role) { return staffOf(teamId).find(s => s.role === role) || null; }
 function staffRating(teamId, role) {
-  if (teamId === 'AUS') return 82;
-  if (teamId && teamId.startsWith('X_')) return 70;
-  const s = staffIn(teamId, role); return s ? s.rating : 35;
+  if (teamId === 'AUS') return 82 + STAFF_SHIFT;
+  if (teamId && teamId.startsWith('X_')) return 70 + STAFF_SHIFT;
+  const s = staffIn(teamId, role); return s ? s.rating : 35 + STAFF_SHIFT;
 }
+// Effect strength of a staff role. Formulas use this, not the displayed rating, so lifting the
+// display scale (STAFF_SHIFT) did not change how much staff matter.
+function staffEff(teamId, role) { return staffRating(teamId, role) - STAFF_SHIFT; }
 function staffPayroll(teamId) { return staffOf(teamId).reduce((a, s) => a + s.salary, 0); }
 function staffMarket() { return Object.values(game.staff || {}).filter(s => !s.teamId); }
 function ensureStaff() {
   game.staff = game.staff || {};
-  TEAM_DEFS.forEach(t => STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) makeStaff(r, 58 + randInt(-6, 10), t.id); }));
+  TEAM_DEFS.forEach(t => STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) makeStaff(r, 58 + STAFF_SHIFT + randInt(-8, 10), t.id); }));
   refreshStaffMarket();
 }
 function refreshStaffMarket() {
   const pool = staffMarket();
-  STAFF_ORDER.forEach(r => { const have = pool.filter(s => s.role === r).length; for (let i = have; i < 3; i++) makeStaff(r, 50 + randInt(-8, 30)); });
+  STAFF_ORDER.forEach(r => { const have = pool.filter(s => s.role === r).length; for (let i = have; i < 3; i++) makeStaff(r, 50 + STAFF_SHIFT + randInt(-8, 32)); });
 }
 function hireStaff(id) {
   const s = game.staff[id];
@@ -1572,7 +1692,7 @@ function releaseStaff(id) {
 function staffOffseason() {
   Object.values(game.staff).forEach(s => {
     s.age++;
-    s.rating = clamp(s.rating + (s.age < 50 ? randInt(-1, 3) : randInt(-3, 1)), 35, 92);
+    s.rating = clamp(s.rating + (s.age < 50 ? randInt(-1, 3) : randInt(-3, 1)), 40, 97);
     if (!s.teamId) return;
     s.years--;
     if (s.years > 0) return;
@@ -1580,7 +1700,7 @@ function staffOffseason() {
     if (rand() < 0.75 && s.age < 66) { s.salary = staffAsk(s); s.years = randInt(1, 3); } else s.teamId = null;
   });
   Object.values(game.staff).filter(s => !s.teamId && s.age >= 68).forEach(s => delete game.staff[s.id]);
-  TEAM_DEFS.forEach(t => { if (t.id === U()) return; STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) { const c = staffMarket().filter(s => s.role === r).sort((a, b) => b.rating - a.rating)[randInt(0, 1)]; if (c) { c.teamId = t.id; c.years = randInt(1, 3); } else makeStaff(r, 58, t.id); } }); });
+  TEAM_DEFS.forEach(t => { if (t.id === U()) return; STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) { const c = staffMarket().filter(s => s.role === r).sort((a, b) => b.rating - a.rating)[randInt(0, 1)]; if (c) { c.teamId = t.id; c.years = randInt(1, 3); } else makeStaff(r, 58 + STAFF_SHIFT, t.id); } }); });
   refreshStaffMarket();
 }
 function resignStaff(id) { const e = (game.offseason.expiringStaff || []).find(x => x.id === id); if (!e) return; const s = game.staff[id]; s.salary = e.ask; s.years = 2; e.status = 'signed'; }
@@ -1593,7 +1713,7 @@ function hash01(str) { let h = 2166136261; for (let i = 0; i < str.length; i++) 
 // for the user's side, on how much scouting the club has done.
 function analystPlan(fmt, bowlTeam, batterId, death, key) {
   const p = P(batterId), tr = ensureTraits(p);
-  let q = 0.2 + staffRating(bowlTeam, 'analyst') / 140;
+  let q = 0.2 + staffEff(bowlTeam, 'analyst') / 140;
   if (bowlTeam === U() || (bowlTeam === 'AUS' && game.nation && game.nation.gm)) { const lvl = scoutLevel(p); q *= lvl === 0 ? 0.45 : lvl === 1 ? 0.8 : 1.05; }
   const plan = Object.assign({}, DEFAULT_PLAN);
   if (hash01(key + batterId) < q) {
@@ -1602,7 +1722,7 @@ function analystPlan(fmt, bowlTeam, batterId, death, key) {
     if (tr[line] < 0) plan.line = line;
     if (tr[len] < 0) plan.len = len;
   }
-  if (death && fmt !== 'FC' && hash01('d' + key + batterId) < 0.4 + staffRating(bowlTeam, 'bowl') / 300) plan.len = 'yorker';
+  if (death && fmt !== 'FC' && hash01('d' + key + batterId) < 0.4 + staffEff(bowlTeam, 'bowl') / 300) plan.len = 'yorker';
   return plan;
 }
 
@@ -1630,7 +1750,8 @@ function ensureIntlSquad(nat) {
   const tid = 'X_' + nat;
   const sq = Object.values(game.players).filter(p => p.teamId === tid && !p.retired);
   if (sq.length >= 16) return;
-  const base = 73 + (NATION_STRENGTH[nat] - 76) * 0.6;
+  // Test-standard sides: squads average high 80s for the strong nations and low 80s for the weaker ones.
+  const base = 74 + RATING_SHIFT + (NATION_STRENGTH[nat] - 76) * 0.7;
   const need = ['OPEN','OPEN','TOP','MID','MID','WK','BAR','BWAR','PACE','PACE','PACE','SEAM','OFF','SPIN2','TOP','BAR'];
   const counts = {}; sq.forEach(p => counts[p.role] = (counts[p.role] || 0) + 1);
   need.forEach(r => {
@@ -1710,7 +1831,7 @@ function weeklyMorale() {
     if (expectedStarter(p) && !p.injury && !p.natDuty && (p.played == null ? 0.6 : p.played) < 0.4) d -= per === 'ambitious' ? 5 : per === 'easygoing' ? 1 : per === 'volatile' ? 4 : 3;
     d += clamp(r.form, -3, 3) * (per === 'ambitious' ? 0.8 : per === 'easygoing' ? 0.2 : 0.45);
     if (p.contract && askingSalary(p) > p.contract.salary * 1.3) d -= per === 'loyal' ? 0.5 : 2;
-    d += (r.mm - 60) / 20;
+    d += (r.mm - 60 - STAFF_SHIFT) / 20;
     if (r.leader) d += 1;
     if (p.promise && game.day > p.promise.until) { if ((p.played || 0) < 0.45) { d -= 15; addNews('Dressing room', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
     if (per === 'volatile') d *= 1.5; if (per === 'professional') d *= 0.7;
@@ -1755,14 +1876,16 @@ const DEV_FOCUS = {
   none:      { label:'Balanced',            skills:[] },
   technique: { label:'Technique & defence', skills:['tech','temp'] },
   power:     { label:'Power hitting',       skills:['power'] },
+  rotation:  { label:'Strike rotation',     skills:['rot'] },
   pace:      { label:'Bowling skill',       skills:['bowl'] },
   control:   { label:'Control & accuracy',  skills:['acc'] },
   variation: { label:'Variations',          skills:['vari'] },
+  death:     { label:'Death bowling',       skills:['death'] },
   keeping:   { label:'Wicketkeeping',       skills:['keep'] },
   fitness:   { label:'Fitness & fielding',  skills:['stamina','field'] },
   learnbowl: { label:'Develop part-time bowling', skills:['bowl','acc','vari'] }
 };
-function devSlots() { return 2 + Math.round(staffRating(U(), 'head') / 25) + (staffRating(U(), 'bat') + staffRating(U(), 'bowl') >= 150 ? 1 : 0); }
+function devSlots() { return 2 + Math.round(staffEff(U(), 'head') / 25) + (staffEff(U(), 'bat') + staffEff(U(), 'bowl') >= 150 ? 1 : 0); }
 function devUsed() { return squadOf(U()).filter(p => p.focus && p.focus !== 'none').length; }
 function setFocus(id, f) {
   const p = P(id);
@@ -1780,7 +1903,7 @@ function monthlyDevelopment() {
     const ageF = p.age <= 21 ? 1 : p.age <= 24 ? 0.75 : p.age <= 27 ? 0.45 : 0.2;
     const f = DEV_FOCUS[p.focus || 'none'];
     const team = p.teamId;
-    const coach = k => ['tech','temp','power','keep'].includes(k) ? staffRating(team, 'bat') : ['bowl','acc','vari'].includes(k) ? staffRating(team, 'bowl') : staffRating(team, 'physio');
+    const coach = k => ['tech','temp','power','keep','rot'].includes(k) ? staffEff(team, 'bat') : ['bowl','acc','vari','death'].includes(k) ? staffEff(team, 'bowl') : staffEff(team, 'physio');
     const prof = ensurePersona(p) === 'professional' ? 1.2 : 1;
     const before = peakOvr(p);
     const keys = f.skills.length ? f.skills : [];
@@ -1795,7 +1918,7 @@ function monthlyDevelopment() {
 
 // ---- Staff attributes (lazy, so old saves gain them) ----
 function ensureStaffAttrs(s) {
-  if (s.role === 'head' && s.mm == null) s.mm = clamp(Math.round(s.rating + randn() * 10), 35, 95);
+  if (s.role === 'head' && s.mm == null) s.mm = clamp(Math.round(s.rating + randn() * 10), 40, 99);
   if (s.role === 'bowl' && !s.spec) s.spec = rand() < 0.65 ? 'pace' : 'spin';
   if (s.role === 'bat' && !s.spec) s.spec = rand() < 0.5 ? 'technique' : 'power';
   return s;
@@ -1903,6 +2026,8 @@ function editPlayerApply(id, data) {
   ['first','last'].forEach(k => { if (data[k]) p[k] = String(data[k]).slice(0, 24); });
   ['age','pot','form','fitness','morale'].forEach(k => { if (data[k] != null && !isNaN(data[k])) p[k] = clamp(Math.round(+data[k]), k === 'age' ? 15 : 0, k === 'age' ? 45 : 100); });
   ['nat','role','hand','bowlType','persona'].forEach(k => { if (data[k]) p[k] = data[k]; });
+  if (data.style !== undefined) p.style = data.style && STYLES[data.style] ? data.style : null;
+  FMT_LIST.forEach(f => { const v = data['apt_' + f]; if (v != null && v !== '' && !isNaN(v)) { p.apt = p.apt || { FC: 0, OD: 0, T20: 0 }; p.apt[f] = clamp(Math.round(+v), -12, 12); } });
   Object.keys(p.sk).forEach(k => { if (data['sk_' + k] != null && !isNaN(data['sk_' + k])) p.sk[k] = clamp(+data['sk_' + k], 15, 99); });
   if (data.team !== undefined) {
     const t = data.team || null;
@@ -1915,7 +2040,7 @@ function editPlayerApply(id, data) {
   game.edited = true;
 }
 function editorCreatePlayer(teamId) {
-  const p = makePlayer({ role: 'MID', q: 65, age: 24, teamId: teamId || null });
+  const p = makePlayer({ role: 'MID', q: 65 + RATING_SHIFT, age: 24, teamId: teamId || null });
   if (!teamId) p.contract = null;
   game.edited = true;
   return p;
@@ -1961,7 +2086,7 @@ function gateTakings(M) {
   const base = { T20: 0.45, OD: 0.2, FC: 0.08 }[M.fmt];
   const price = { T20: 32, OD: 24, FC: 14 }[M.fmt] * TICKET[f.ticket].price;
   const days = M.fmt === 'FC' ? Math.max(1, Math.ceil(M.balls / (FORMATS.FC.oversPerDay * 6))) : 1;
-  const opp = 0.9 + (teamStrength(M.away) - 65) / 60;
+  const opp = 0.9 + (teamStrength(M.away) - 65 - RATING_SHIFT) / 60;
   const rain = M.abandoned ? 0.1 : M.cond && M.cond.days.some(d => d.sky === 'rain') ? 0.7 : 1;
   const big = M.stage !== 'league' ? 1.5 : 1;
   const crowd = Math.round(Math.min(cap, cap * base * TICKET[f.ticket].demand * (0.5 + f.fans / 100) * opp * rain * big) * days);
@@ -1974,7 +2099,7 @@ function weeklyFans() {
   const f = game.fin; if (!f) return;
   const recent = game.season.fixtures.filter(x => x.result && (x.home === U() || x.away === U()) && x.day > game.day - 7 && x.day <= game.day);
   const w = recent.filter(x => x.result.winner === U()).length, l = recent.filter(x => x.result.winner && x.result.winner !== U()).length;
-  const stars = squadOf(U()).filter(p => peakOvr(p) >= 80).length;
+  const stars = squadOf(U()).filter(p => peakOvr(p) >= 80 + RATING_SHIFT).length;
   f.fans = clamp(Math.round(f.fans + (w - l) * 1.5 + TICKET[f.ticket].fans + (stars - 2) * 0.3 + (60 - f.fans) * 0.03), 5, 100);
 }
 function upgradeFacility(k) {
@@ -2009,7 +2134,7 @@ const EVENTS = {
       choices: [['Fine him', { morale: { id: p.id, v: -8 }, team: 1 }], ['Quiet word', { morale: { id: p.id, v: 2 } }], ['Let it go', { team: -1 }]] };
   },
   media() {
-    const p = squadOf(U()).filter(x => x.form < 40 && peakOvr(x) >= 70)[0];
+    const p = squadOf(U()).filter(x => x.form < 40 && peakOvr(x) >= 70 + RATING_SHIFT)[0];
     if (!p) return null;
     return { title: `Media question ${pname(p)}'s form`, body: `A columnist says ${p.last} is out of form and out of his depth. Reporters want a response.`, pid: p.id,
       choices: [['Back him publicly', { morale: { id: p.id, v: 8 }, form: { id: p.id, v: 3 } }], ['Say he must improve', { morale: { id: p.id, v: -6 }, form: { id: p.id, v: ensurePersona(p) === 'professional' || p.persona === 'ambitious' ? 6 : -3 } }], ['No comment', {}]] };
@@ -2023,7 +2148,7 @@ const EVENTS = {
       choices: [['Stadium', { cash: -150000, fac: 'stadium' }], ['Academy', { cash: -150000, fac: 'academy' }], ['Decline', {}]] };
   },
   rival() {
-    const p = squadOf(U()).filter(x => x.age <= 24 && x.pot >= 78 && x.contract && x.contract.years <= 1)[0];
+    const p = squadOf(U()).filter(x => x.age <= 24 && x.pot >= 78 + RATING_SHIFT && x.contract && x.contract.years <= 1)[0];
     if (!p) return null;
     const rival = pick(TEAM_DEFS.filter(t => t.id !== U()));
     return { title: `${rival.nick} chasing ${pname(p)}`, body: `${rival.name} have been in touch with ${p.last}'s agent. His deal runs out at the end of the season.`, pid: p.id,
@@ -2128,7 +2253,7 @@ function academyIntake() {
     p.prospect = false; p.academy = true;
     const boost = (lvl - 1) * 2;
     Object.keys(p.sk).forEach(k => p.sk[k] = clamp(p.sk[k] + boost * 0.5, 15, 99));
-    p.pot = clamp(p.pot + boost, 55, 94);
+    p.pot = clamp(p.pot + boost, 61, 97);
     ids.push(p.id);
   }
   return ids;
@@ -2213,17 +2338,17 @@ function createGame(gmName, teamId, year, nationGm) {
     training: 'balanced', deadMoney: 0, plans: {}, scout: {}, scoutedFx: {},
     defaultPlan: { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) },
     board: { confidence: 60, objectives: [] },
-    history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1,
+    history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1, scaleV: SCALE_VERSION,
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
   game.nation.rankings = initRankings();
   game.fin = initFinances(); game.inbox = [];
   // Squads
   TEAM_DEFS.forEach(t => {
-    const base = 64 + randInt(0, 5);
+    const base = 64 + RATING_SHIFT + randInt(0, 5);
     const stars = shuffle([...Array(SQUAD_TEMPLATE.length).keys()]).slice(0, 2);
     SQUAD_TEMPLATE.forEach((role, i) => {
-      const q = base + randn() * 5 + (stars.includes(i) ? 11 : 0);
+      const q = base + randn() * 5.5 + (stars.includes(i) ? 13 : 0);
       const age = clamp(Math.round(26.5 + randn() * 4), 19, 36);
       const p = makePlayer({ role, q, age, teamId: t.id });
       seedCareer(p);
@@ -2234,9 +2359,9 @@ function createGame(gmName, teamId, year, nationGm) {
     if (pay > SALARY_CAP * 0.9) { const f = SALARY_CAP * 0.9 / pay; sq.forEach(p => p.contract.salary = Math.max(MIN_SALARY, Math.round(p.contract.salary * f / 5000) * 5000)); }
   });
   // Free agents: local depth plus a handful of overseas professionals.
-  for (let i = 0; i < 14; i++) { const p = makePlayer({ role: pick(Object.keys(ROLES)), q: randInt(54, 68), age: randInt(20, 35) }); seedCareer(p); }
+  for (let i = 0; i < 14; i++) { const p = makePlayer({ role: pick(Object.keys(ROLES)), q: randInt(54, 68) + RATING_SHIFT, age: randInt(20, 35) }); seedCareer(p); }
   const osNats = Object.keys(NATIONS).filter(n => n !== 'AUS');
-  for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 80), age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
+  for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 82) + RATING_SHIFT, age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
   game.captain = squadOf(teamId).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0].id;
   ensureStaff();
   game.season = buildSeason(year);
@@ -2288,7 +2413,7 @@ const INJURIES = {
 function injure(p) {
   const list = isPace(p) ? INJURIES.pace : INJURIES.other;
   const t = weightedPick(list, x => x[3]);
-  const days = Math.max(3, Math.round(randInt(t[1], t[2]) * (1.25 - staffRating(p.teamId, 'physio') / 250)));
+  const days = Math.max(3, Math.round(randInt(t[1], t[2]) * (1.25 - staffEff(p.teamId, 'physio') / 250)));
   p.injury = { type: t[0], until: game.day + days, days };
   if (p.teamId === U()) addNews('Medical', `${pname(p)} injured`, `${t[0]}. Expected to miss about ${Math.ceil(days / 7)} week${days > 7 ? 's' : ''}.`);
 }
@@ -2325,7 +2450,7 @@ function matchWear(M, inXI) {
     p.fitness = clamp(p.fitness - load * (1.15 - p.sk.stamina / 200), 35, 100);
     let risk = 0.004 + Math.max(0, 78 - p.fitness) * 0.0016 + (isPace(p) ? overs * (fmt === 'FC' ? 0.0005 : 0.0015) : 0);
     if (cond && p.teamId === U()) risk *= 0.75;
-    risk *= 1.3 - staffRating(p.teamId, 'physio') / 200;
+    risk *= 1.3 - staffEff(p.teamId, 'physio') / 200;
     if (p.teamId === U()) risk *= 1 - (facLevel('medical') - 1) * 0.06;
     if (!p.injury && rand() < risk) injure(p);
     p.form = clamp(Math.round(p.form * 0.75 + matchPerformance(M, id) * 0.25), 15, 92);
@@ -2453,7 +2578,7 @@ function nextDay() {
   game.day++;
   let stop = false;
   const rec = game.training === 'fitness' ? 1.25 : 1;
-  const phys = {}; TEAM_DEFS.forEach(t => phys[t.id] = 0.85 + staffRating(t.id, 'physio') / 300);
+  const phys = {}; TEAM_DEFS.forEach(t => phys[t.id] = 0.85 + staffEff(t.id, 'physio') / 300);
   phys[U()] *= 1 + (facLevel('medical') - 1) * 0.04;
   for (const p of Object.values(game.players)) {
     if (p.retired) continue;
@@ -2852,9 +2977,9 @@ function developPlayer(p) {
   if (g > 0 && p.teamId === U()) g *= 1 + (facLevel('training') - 1) * 0.05;
   let batM = 1, bowlM = 1;
   if (p.teamId && teamDef(p.teamId) && !teamDef(p.teamId).intl) {
-    const hm = 0.9 + staffRating(p.teamId, 'head') / 500;
-    batM = hm * (0.85 + staffRating(p.teamId, 'bat') / 300);
-    bowlM = hm * (0.85 + staffRating(p.teamId, 'bowl') / 300);
+    const hm = 0.9 + staffEff(p.teamId, 'head') / 500;
+    batM = hm * (0.85 + staffEff(p.teamId, 'bat') / 300);
+    bowlM = hm * (0.85 + staffEff(p.teamId, 'bowl') / 300);
   }
   if (p.teamId === U()) {
     if (game.training === 'batting') { batM *= 1.35; bowlM *= 0.7; }
@@ -2865,10 +2990,10 @@ function developPlayer(p) {
   const focus = DEV_FOCUS[p.focus || 'none'].skills;
   const prof = ensurePersona(p) === 'professional' && g > 0 ? 1.1 : 1;
   const bs = staffSpec(p.teamId, 'bat'), ws = staffSpec(p.teamId, 'bowl');
-  const specK = k => g <= 0 ? 1 : ((bs === 'technique' && (k === 'tech' || k === 'temp')) || (bs === 'power' && k === 'power') ? 1.1 : 1) * (['bowl','acc','vari'].includes(k) && ws ? (ws === (isSpin(p) ? 'spin' : 'pace') ? 1.12 : 0.92) : 1);
+  const specK = k => g <= 0 ? 1 : ((bs === 'technique' && (k === 'tech' || k === 'temp')) || (bs === 'power' && k === 'power') ? 1.1 : 1) * (['bowl','acc','vari','death'].includes(k) && ws ? (ws === (isSpin(p) ? 'spin' : 'pace') ? 1.12 : 0.92) : 1);
   const bump = (k, m) => { const fm = g > 0 ? (focus.length ? (focus.includes(k) ? 1.6 : 0.85) : 1) : 1; p.sk[k] = clamp(Math.round(p.sk[k] + g * m * fm * prof * specK(k) * (0.7 + rand() * 0.6)), 15, 99); };
   if (g > 0 && focus.length) focus.forEach(k => { if (k === 'keep' && grp !== 'WK') bump('keep', 0.8); if (k === 'stamina') bump('stamina', 0.8); if (['bowl','acc','vari'].includes(k) && grp === 'BAT') bump(k, 0.7); });
-  const bat = ['tech','temp','power'], bowl = ['bowl','acc','vari'];
+  const bat = ['tech','temp','power','rot'], bowl = ['bowl','acc','vari','death'];
   if (grp === 'BAT' || grp === 'WK') bat.forEach(k => bump(k, g > 0 ? batM : 1));
   if (grp === 'WK') bump('keep', 1);
   if (grp === 'AR') { bat.forEach(k => bump(k, g > 0 ? batM : 1)); if (canBowl(p)) bowl.forEach(k => bump(k, g > 0 ? bowlM : 1)); }
@@ -2883,7 +3008,7 @@ function retires(p) {
   const o = peakOvr(p);
   let ch = 0;
   if (p.age >= 33) ch = 0.12 + (p.age - 33) * 0.16;
-  if (p.age >= 31 && o < 62) ch += 0.25;
+  if (p.age >= 31 && o < 62 + RATING_SHIFT) ch += 0.25;
   if (!p.teamId && p.age >= 30) ch += 0.3;
   if (p.age >= 38) ch = 1;
   return rand() < ch;
@@ -3114,7 +3239,7 @@ function exportSave() {
   const blob = new Blob([str], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `h3o-cricket-${game.gm.name.replace(/\W+/g, '')}-${game.season.label.replace(/\W+/g, '')}.json`;
+  a.download = `legacy-cricket-${game.gm.name.replace(/\W+/g, '')}-${game.season.label.replace(/\W+/g, '')}.json`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   flash('Career exported to a file.');
 }
@@ -3131,7 +3256,7 @@ function importSave() {
         loadFromString(rd.result, slot);
         saveGame(slot, false);
         flash(`Imported into slot ${slot}.`);
-      } catch (e) { flash('That file is not an H³O Cricket save.'); }
+      } catch (e) { flash('That file is not a Legacy Cricket save.'); }
     };
     rd.readAsText(f);
   };
@@ -3370,10 +3495,15 @@ function ladderTable(comp, compact) {
 }
 
 // Generic player row used across the game.
+// One-line identity used in lists: role tag, style, age and, for specialists, the format he is built for.
+function identityLine(p) {
+  const sp = specialistOf(p), st = styleLabel(p);
+  return `<span class="rtag">${ROLES[p.role].short}</span>${st ? esc(st) + ' · ' : ''}${p.age}${sp.label ? ` · <span class="spec ${sp.best}">${sp.best === 'FC' ? 'Red-ball' : compName(sp.best)}</span>` : ''}`;
+}
 function playerRow(p, o) {
   o = o || {};
   const f = o.fmt || ui.listFmt;
-  const sub = o.sub || `${ROLES[p.role].label} · ${p.age}${canBowl(p) && group(p) !== 'BAT' ? ' · ' + BOWL_TYPES[p.bowlType].label : ''}`;
+  const sub = o.sub || identityLine(p);
   return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}
     <div class="stack"><div class="main-t ell">${esc(pname(p))}${p.nat !== 'AUS' && !(p.teamId || '').startsWith('X_') ? ` <span class="dim xs">${p.nat}</span>` : ''}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
     <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? `<span class="tag bad">${p.wantsOut ? 'Wants out' : 'Unhappy'}</span>` : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
@@ -3471,7 +3601,7 @@ function renderXIEditor() {
   const xiIds = auto ? autoXI(U(), f).order : game.userXI[f];
   const issues = auto ? [] : xiIssues(xiIds, f);
   const avgO = Math.round(mean(xiIds.map(id => overall(P(id), f))));
-  const rows = xiIds.map((id, i) => { const p = P(id); return playerRow(p, { n: i + 1, fmt: f, sub: `${ROLES[p.role].short} · bat ${Math.round(batRating(p, f))}${canBowl(p) && bowlRating(p, f) >= 45 ? ' · bowl ' + Math.round(bowlRating(p, f)) : ''}${p.sk.keep >= 45 ? ' · keeps' : ''}`,
+  const rows = xiIds.map((id, i) => { const p = P(id); return playerRow(p, { n: i + 1, fmt: f, sub: `${ROLES[p.role].short}${styleLabel(p) ? ' · ' + esc(styleLabel(p)) : ''} · bat ${Math.round(batRating(p, f))}${canBowl(p) && bowlRating(p, f) >= 45 ? ' · bowl ' + Math.round(bowlRating(p, f)) : ''}${p.sk.keep >= 45 ? ' · keeps' : ''}`,
     end: auto ? `${statusChip(p)}${pill(overall(p, f))}` : `${isAvailable(p) ? '' : statusChip(p)}<button class="btn icon sm" onclick="event.stopPropagation();moveXI('${id}',-1)">↑</button><button class="btn icon sm" onclick="event.stopPropagation();moveXI('${id}',1)">↓</button><button class="btn icon sm ghost" onclick="event.stopPropagation();dropXI('${id}')">✕</button>` }); }).join('');
   return `<div class="flex wrap">${fmtSeg(f, 'setXIFmt')}<span class="grow"></span><span class="switch ${auto ? 'on' : ''}" onclick="toggleAutoXI('${f}')"><i></i>Staff pick</span></div><div style="height:8px"></div>
     ${issues.length ? `<div class="note warn" style="margin-bottom:8px">${issues.map(esc).join(' · ')}</div>` : ''}
@@ -3505,12 +3635,30 @@ function renderTactics() {
     ${panel('Captain', sel(sortPlayers(squadOf(U()), 'ovr', f).map(p => [p.id, `${pname(p)} · ${p.age} · ${ROLES[p.role].short}`]), game.captain, "game.captain=this.value;autosave()", 'full'))}</div>`;
 }
 function renderContracts() {
-  const sq = sortPlayers(squadOf(U()), 'sal', 'T20');
+  let sq = squadOf(U());
+  if ((ui.conGroup || 'ALL') !== 'ALL') sq = sq.filter(p => group(p) === ui.conGroup);
+  const key = ui.conSort || 'sal';
+  const sorters = { sal: p => -p.contract.salary, yrs: p => p.contract.years * 1e7 - p.contract.salary, val: p => -(askingSalary(p) - p.contract.salary), age: p => p.age, ovr: p => -peakOvr(p) };
+  sq = sq.slice().sort((a, b) => sorters[key](a) - sorters[key](b));
   const inSeason = game.phase === 'season';
+  const expiring = squadOf(U()).filter(p => p.contract.years <= 1).length;
+  const tools = `<div class="flex wrap" style="gap:6px;margin-bottom:8px">${sel(GROUP_OPTS, ui.conGroup || 'ALL', "ui.conGroup=this.value;render()")}${sel([['sal','Salary'],['yrs','Years left'],['val','Value vs pay'],['ovr','Rating'],['age','Age']], key, "ui.conSort=this.value;render()")}<span class="grow"></span>${expiring ? `<span class="xs muted">${expiring} expiring</span>` : ''}</div>`;
   return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v">${money(payroll(U()))}</div><div class="l">Payroll</div></div><div class="kpi"><div class="v">${money(capSpace(U()))}</div><div class="l">Cap space</div></div><div class="kpi"><div class="v">${money(game.deadMoney)}</div><div class="l">Dead money</div></div><div class="kpi"><div class="v">${overseasCount(U())}/${OVERSEAS_MAX}</div><div class="l">Overseas</div></div></div><div style="height:8px"></div>
-    ${panel('Contracts', `<div class="rows">${sq.map(p => { const ask = askingSalary(p); return playerRow(p, { sub: `${money(p.contract.salary)} × ${p.contract.years} yr · value <span class="${ask > p.contract.salary * 1.15 ? 'win' : ask < p.contract.salary * 0.8 ? 'loss' : ''}">${money(ask)}</span>`,
-      end: `${pill(peakOvr(p))}${inSeason && p.contract.years <= 1 ? `<button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','extend')">Extend</button>` : ''}<button class="btn sm ghost" onclick="event.stopPropagation();confirmRelease('${p.id}')">Release</button>` }); }).join('')}</div>`, { flush: true })}
-    <div class="xs dim" style="margin-top:6px">Value is the player's open-market asking price. In-season releases leave half the salary on your cap.</div>`;
+    ${tools}${panel('Contracts', `<div class="rows">${sq.map(p => { const ask = askingSalary(p), exp = p.contract.years <= 1; return `<div class="row tap con" onclick="showPlayer('${p.id}')">
+      <div class="stack"><div class="main-t ell">${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}${p.nat !== 'AUS' ? ` <span class="dim xs">${p.nat}</span>` : ''}</div>
+        <div class="sub-t ell">${identityLine(p)}</div>
+        <div class="sub-t ell">${money(p.contract.salary)} × ${p.contract.years} yr · value <span class="${ask > p.contract.salary * 1.15 ? 'win' : ask < p.contract.salary * 0.8 ? 'loss' : ''}">${money(ask)}</span></div></div>
+      <div class="end">${exp ? '<span class="tag warn">Expiring</span>' : ''}${pill(peakOvr(p))}<button class="btn icon sm ghost" aria-label="Contract actions" onclick="event.stopPropagation();contractMenu('${p.id}')">⋯</button></div></div>`; }).join('') || '<div class="empty">No players in this group.</div>'}</div>`, { flush: true })}
+    <div class="xs dim" style="margin-top:6px">Tap a player for his profile. Value is his open-market asking price. In-season releases leave half the salary on your cap.</div>`;
+}
+function contractMenu(id) {
+  const p = P(id), inSeason = game.phase === 'season';
+  const canExt = inSeason && p.contract.years <= 1;
+  sheet(esc(pname(p)), 'Contract', `<div class="rows">
+    <div class="kv"><span>${identityLine(p)}</span><span>${money(p.contract.salary)} × ${p.contract.years} yr</span></div>
+    <div class="row tap" onclick="closeModal();showPlayer('${id}')"><div class="grow">View profile</div><span class="dim">›</span></div>
+    ${canExt ? `<div class="row tap" onclick="closeModal();openContract('${id}','extend')"><div class="grow">Extend contract</div><span class="dim">›</span></div>` : `<div class="row"><div class="grow dim">Extend contract</div><span class="xs dim">${inSeason ? 'Final year only' : 'In the off-season contracts step'}</span></div>`}
+    <div class="row tap" onclick="closeModal();confirmRelease('${id}')"><div class="grow loss">Release</div><span class="dim">›</span></div></div>`, { flush: true });
 }
 function renderTraining() {
   return panel('Training focus', `<div class="rows">${Object.keys(TRAINING).map(k => `<div class="row tap ${game.training === k ? 'me' : ''}" onclick="game.training='${k}';autosave();render()"><div class="stack"><div class="main-t">${TRAINING[k].label}</div><div class="sub-t">${TRAINING[k].desc}</div></div><div class="end">${game.training === k ? chip('good', 'Active') : ''}</div></div>`).join('')}</div>`, { flush: true });
@@ -3746,8 +3894,9 @@ function showPlayer(id, tab) {
   const sk = p.sk, own = p.teamId === U();
   const bar = (l, v) => { v = Math.round(v); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
   const tcol = teamDef(p.teamId) ? teamDef(p.teamId).color : '#3b5568';
-  const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
-    <div class="ratings3">${FMT_LIST.map(f => `<div><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join('')}</div><div style="height:10px"></div>
+  const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label}${styleLabel(p) ? ' · <b>' + esc(styleLabel(p)) + '</b>' : ''} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
+    <div class="ratings3">${(() => { const sp = specialistOf(p); return FMT_LIST.map(f => `<div class="${sp.label && sp.best === f ? 'best' : ''}"><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join(''); })()}</div>
+    ${(() => { const sp = specialistOf(p), st = styleOf(p); return sp.label || st ? `<div class="xs muted" style="margin-top:6px">${st ? esc(st.desc) : ''}${sp.label ? `${st ? ' ' : ''}<b class="spec ${sp.best}">${sp.label}</b>.` : ''}</div>` : ''; })()}<div style="height:10px"></div>
     ${seg([['over','Overview'],['stats','Stats'],['hist','History']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
   let body;
   if (tab === 'stats') {
@@ -3757,7 +3906,7 @@ function showPlayer(id, tab) {
     body = `${careerChart(p)}<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
       <div class="kv"><span>International caps</span><span>Tests ${p.caps.FC} · ODIs ${p.caps.OD} · T20Is ${p.caps.T20}</span></div></div></div>`;
   } else {
-    body = `${formChart(p)}<div class="skills">${bar('Technique', sk.tech)}${bar('Temperament', sk.temp)}${bar('Power', sk.power)}${bar('Bowling', sk.bowl)}${bar('Accuracy', sk.acc)}${bar('Variation', sk.vari)}${bar('Fielding', sk.field)}${bar('Keeping', sk.keep)}${bar('Stamina', sk.stamina)}</div>
+    body = `${formChart(p)}<div class="skills">${bar('Technique', sk.tech)}${bar('Temperament', sk.temp)}${bar('Power', sk.power)}${bar('Bowling', sk.bowl)}${bar('Accuracy', sk.acc)}${bar('Variation', sk.vari)}${bar('Fielding', sk.field)}${bar('Keeping', sk.keep)}${bar('Stamina', sk.stamina)}${bar('Strike rotation', sk.rot || 0)}${bar('Death bowling', canBowl(p) ? sk.death || 0 : 0)}</div>
       <div class="panel" style="margin-top:10px"><div class="rows">
         <div class="kv"><span>Potential</span><span class="b">${potGrade(p)}</span></div><div class="kv"><span>Form</span><span>${formArrow(p.form)} ${Math.round(p.form)}</span></div>
         <div class="kv"><span>Personality</span><span title="${esc(PERSONAS[ensurePersona(p)].desc)}">${PERSONAS[p.persona].label}</span></div>
@@ -3812,7 +3961,7 @@ function analystSheet() {
 function scoutOpposition(fxId, opp) {
   if (game.scoutedFx[fxId]) return;
   game.scoutedFx[fxId] = true;
-  const step = staffRating(U(), 'analyst') >= 75 ? 2 : 1;
+  const step = staffEff(U(), 'analyst') >= 75 ? 2 : 1;
   squadOf(opp).forEach(p => raiseScout(p.id, Math.min(2, scoutLevel(p) + step)));
   flash(`Scouting reports on ${teamDef(opp).nick} are in.`); autosave(); render();
 }
@@ -4129,12 +4278,13 @@ function editPlayerSheet(id) {
   const txt = (k, label, v) => `<div><label class="lbl">${label}</label><input class="input" data-k="${k}" value="${esc(v)}"></div>`;
   const dd = (k, label, opts, cur) => `<div><label class="lbl">${label}</label><select class="full" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
   const teams = [['', 'Free agent'], ...TEAM_DEFS.map(t => [t.id, t.name]), ...Object.keys(NATION_STRENGTH).map(n => ['X_' + n, NATIONS[n] + ' (national pool)'])];
-  const skn = { tech:'Technique', temp:'Temperament', power:'Power', bowl:'Bowling', acc:'Accuracy', vari:'Variation', field:'Fielding', keep:'Keeping', stamina:'Stamina' };
+  const skn = { tech:'Technique', temp:'Temperament', power:'Power', rot:'Rotation', bowl:'Bowling', acc:'Accuracy', vari:'Variation', death:'Death', field:'Fielding', keep:'Keeping', stamina:'Stamina' };
   sheet('Editor', esc(pname(p)), `<div id="edForm"><div class="grid g2" style="gap:8px">${txt('first', 'First name', p.first)}${txt('last', 'Last name', p.last)}</div>
     <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">${num('age', p.age, 15, 45)}${dd('nat', 'Nation', Object.keys(NATIONS).map(n => [n, n]), p.nat)}${dd('hand', 'Bats', [['R','Right'],['L','Left']], p.hand)}</div>
     <div class="grid g2" style="gap:8px;margin-top:8px">${dd('role', 'Role', Object.keys(ROLES).map(r => [r, ROLES[r].label]), p.role)}${dd('bowlType', 'Bowling', Object.keys(BOWL_TYPES).map(b => [b, BOWL_TYPES[b].label]), p.bowlType)}</div>
     <div class="grid g2" style="gap:8px;margin-top:8px">${dd('team', 'Team', teams, p.teamId || '')}${dd('persona', 'Personality', Object.keys(PERSONAS).map(k => [k, PERSONAS[k].label]), ensurePersona(p))}</div>
-    <label class="lbl" style="margin-top:12px">Skills</label><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px">${Object.keys(skn).map(k => `<div><label class="lbl">${skn[k]}</label><input class="input" data-k="sk_${k}" type="number" min="15" max="99" value="${Math.round(p.sk[k])}"></div>`).join('')}</div>
+    <div class="grid" style="grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;margin-top:8px">${dd('style', 'Style', [['', 'None'], ...Object.keys(STYLES).map(k => [k, STYLES[k].label])], p.style || '')}${FMT_LIST.map(f => num('apt_' + f, (p.apt || {})[f] || 0, -12, 12).replace('>apt_' + f + '<', '>' + compName(f) + ' +/-<')).join('')}</div>
+    <label class="lbl" style="margin-top:12px">Skills</label><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px">${Object.keys(skn).map(k => `<div><label class="lbl">${skn[k]}</label><input class="input" data-k="sk_${k}" type="number" min="15" max="99" value="${Math.round(p.sk[k] || 0)}"></div>`).join('')}</div>
     <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px">${num('pot', p.pot, 15, 99)}${num('form', p.form, 0, 100)}${num('fitness', p.fitness, 0, 100)}${num('morale', p.morale || 65, 0, 100)}</div>
     ${p.contract ? `<div class="grid g2" style="gap:8px;margin-top:8px">${num('salary', p.contract.salary, MIN_SALARY, 2000000)}${num('years', p.contract.years, 1, 6)}</div>` : ''}
     ${p.injury ? `<label class="switch" style="margin-top:10px" onclick="this.classList.toggle('on')" data-k="healInjury"><i></i>Heal ${esc(p.injury.type)}</label>` : ''}</div>`,
@@ -4288,7 +4438,7 @@ function homeExtras() {
 // §25 BOOT ----------------------------------------------------------------------------------
 (async function boot() {
   $('bVer').textContent = BUILD.version; $('bTitle').textContent = BUILD.title; $('bEng').textContent = BUILD.engine;
-  document.title = `H³O Cricket ${BUILD.version}`;
+  document.title = `Legacy Cricket ${BUILD.version}`;
   await Store.init();
   if (Store.status === 'none') { const n = document.createElement('div'); n.className = 'note bad'; n.style.marginTop = '12px'; n.innerHTML = 'This browser is not keeping saved data (private browsing or a file preview). Open the game directly in Safari or Chrome, or use Export save in the menu to keep your career.'; document.querySelector('.launch').appendChild(n); }
   const metas = await Store.list(); const last = metas.map((m, i) => m ? Object.assign({ slot: i + 1 }, m) : null).filter(Boolean).sort((a, b) => (b.saved || '').localeCompare(a.saved || ''))[0];
