@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
 <title>Legacy Cricket</title>
 <style>
 /* =====================================================================
@@ -301,6 +301,9 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .dslot-l{color:var(--accent);font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:10px}
 .dslot.out .main-t{opacity:.55}
 .fit{color:var(--cyan);font-weight:700}.fit.start{color:var(--good)}
+
+@media(max-width:899px){input,textarea,select{font-size:16px!important}}
+button{touch-action:manipulation}
 </style>
 </head>
 <body>
@@ -351,7 +354,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.5', title: 'Bowling Rotation', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.6', title: 'Coach Autonomy & Leadership', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -953,7 +956,7 @@ function createMatch(fx) {
   M.override = {};
   [fx.home, fx.away].forEach(t => {
     const mo = game.matchOverride;
-    if (isUserTeam(t) && mo && mo.fx === fx.id) { M.brief[t] = Object.assign({}, mo.brief); M.override[t] = { inn: 1 }; }
+    // New matches always delegate the plan to the head coach; old saves still load.
   });
   rollConditions(M, fx);
   return M;
@@ -4211,6 +4214,7 @@ function renderFixtures() {
   return `${pageTitle('Fixtures', game.season.label)}${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${rows || '<div class="empty">No fixtures.</div>'}</div>`, { flush: true })}`;
 }
 function setFxMine(v) { ui.fxMine = v === '1'; render(); }
+function displayInternationalSummary(s) { return String(s || '').replace(/\bX_([A-Z]{2,3})\b/g, (all, nat) => NATIONS[nat] || all); }
 function fixtureRow(f, isNext) {
   const mine = isUserTeam(f.home) || isUserTeam(f.away);
   const me = isUserTeam(f.home) ? f.home : f.away;
@@ -4221,7 +4225,7 @@ function fixtureRow(f, isNext) {
     else end = f.result.winner ? `<span class="xs">${tdot(f.result.winner)}</span>` : '<span class="xs dim">Draw</span>';
   } else if (isNext) end = chip('warn', 'Next');
   const teams = f.home ? (mine && ui.fxMine ? `${f.stage === 'intl' ? 'AUS ' : ''}${me === f.home ? 'v' : '@'} ${teamName(me === f.home ? f.away : f.home)}` : `${teamDef(f.home).nick} v ${teamDef(f.away).nick}`) : 'Teams to be decided';
-  const sub = f.result ? esc(f.result.summary) : f.home ? teamDef(f.venue || f.home).ground : '';
+  const sub = f.result ? esc(displayInternationalSummary(f.result.summary)) : f.home ? teamDef(f.venue || f.home).ground : '';
   const card = f.result && game.scorecards[f.id];
   return `<div class="row ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}')"` : ''}><div class="center" style="width:34px;flex:none"><div class="b" style="line-height:1">${d.getUTCDate()}</div><div class="xs dim">${d.toLocaleDateString('en-AU', { month:'short', timeZone:'UTC' })}</div></div>
     <div class="stack"><div class="main-t ell">${chip(f.comp, COMPS[f.comp].short)} ${teams}</div><div class="sub-t ell">${f.stage !== 'league' ? f.round + ' · ' : ''}${sub}</div></div><div class="end">${end}</div></div>`;
@@ -4638,43 +4642,47 @@ function setLiveTab(t) { ui.liveTab = t; render(); }
 function setLiveInn(k) { ui.liveInn = +k; render(); }
 function liveMyTeam(M) { return isUserTeam(M.home) ? M.home : M.away; }
 // Brief sheet. At an innings break the brief applies at once; mid-innings it is relayed at the next drinks break.
-function briefSheet(atBreak) {
-  const M = game.live, inn = curInn(M); if (!inn) return;
-  const me = liveMyTeam(M);
-  atBreak = atBreak || inn.closed || !!M.pause;
-  const nb = inn.closed ? predictNextBat(M) : inn.bat;
-  const batting = (nb || inn.bat) === me;
-  const cur = (M.pendingBrief && M.pendingBrief.brief) || M.brief[me] || game.tactics[M.fmt];
-  window._brief = Object.assign({}, cur);
-  const opt = (key, label) => `<div><label class="lbl">${label}</label>${sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), cur[key], `window._brief.${key}=this.value`, 'full')}</div>`;
-  const striker = P(inn.card[inn.striker].id);
-  const pl = planFor(M, inn, striker.id);
-  const hc = staffIn(me, 'head');
-  const every = drinksEvery(M.fmt);
-  const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'This replaces the coach\'s plan for the rest of this innings' + (inn.closed ? ' (the next innings)' : '') + '.' : M.fmt === 'FC' ? 'Your instruction reaches the dressing room at the next break: drinks, lunch, tea or stumps, and stands for the rest of the innings.' : `Your instruction reaches the dressing room at the next drinks break (every ${every} overs) and stands for the rest of the innings.`} Overruling the coach costs some of his trust (now ${coachRelLabel(game.coachRel)}, ${game.coachRel}).</div>
-    <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
-    <div class="panel" style="margin-top:10px"><div class="rows">
-      <div class="kv"><span>${batting ? 'Opposition plan to ' : 'Analyst plan for '}${esc(striker.last)}</span><span class="s">${esc(planLabel(pl))}</span></div>
-      <div class="kv"><span>Head coach</span><span>${hc ? `${esc(hc.first + ' ' + hc.last)} · ${COACH_STYLES[hc.style]} · ${hc.rating}` : me === 'AUS' ? 'National coach' : '<span class="loss">Vacant</span>'}</span></div>
-      <div class="kv"><span>Conditions</span><span class="s">${esc(PITCHES[M.cond.pitch].label)} · ${esc(skyOf(M).label)}</span></div></div></div>`;
-  sheet('Override the coach', 'Your instruction', body,
-    { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="sendBrief(${atBreak ? 1 : 0})">Overrule the coach</button>` });
-}
-function sendBrief(now) {
-  const M = game.live, me = liveMyTeam(M);
-  const b = Object.assign({}, tacticsFor(M, me), window._brief);
-  noteOverride();
+// The GM encourages the side but never selects on-field tactics.
+const GM_MESSAGES = {
+  focus: ['Stay focused', 'Keep concentrating on the next ball.'],
+  support: ['Keep your heads up', 'Back yourselves. There is plenty of cricket left.'],
+  praise: ['Great effort', 'That was an excellent passage of play.'],
+  fight: ['Keep fighting', 'Stay together and compete for every run.'],
+  milestone: ['Well played', 'Acknowledge the individual milestone and the team effort.'],
+  finish: ['Bring it home', 'Stay composed and finish the job.']
+};
+function canGMMessage(M) {
+  if (!M || M.done || !M.innings.length) return false;
   const inn = curInn(M);
-  M.override = M.override || {};   // matches started before v0.7.3 have no override record
-  if (now) { M.brief[me] = b; M.override[me] = { inn: inn.closed ? M.innings.length + 1 : M.innings.length }; M.log.unshift({ cls:'sys', text: `GM override: ${briefText(b)}.` }); }
-  else { M.pendingBrief = { team: me, brief: b }; M.log.unshift({ cls:'sys', text: `Instruction sent. The coach will relay it at the next ${M.fmt === 'FC' ? 'break' : 'drinks break'}.` }); }
+  if (!inn || inn.closed) return true;
+  if (M.pause) return true;
+  return M.fmt !== 'FC' && inn.overNo > 0 && inn.overNo % drinksEvery(M.fmt) === 0 && inn.overBalls === 0;
+}
+function gmMessageSheet() {
+  const M = game.live;
+  if (!canGMMessage(M)) return;
+  const used = M.gmTalks || 0, max = M.fmt === 'FC' ? 3 : 1;
+  const choices = Object.entries(GM_MESSAGES).map(([key, [label, desc]]) => `<button class="btn ghost" style="white-space:normal;text-align:left;padding:12px" onclick="sendGMMessage('${key}')"><b>${label}</b><div class="xs muted" style="margin-top:3px">${desc}</div></button>`).join('');
+  sheet('GM leadership', 'A word with the team', `<p class="s muted">Optional encouragement at a natural break. Your head coach remains responsible for tactics and bowling changes.</p>${used >= max ? '<p class="note">You have already addressed the team enough in this match.</p>' : `<div class="grid" style="gap:8px">${choices}</div>`}`);
+}
+function sendGMMessage(key) {
+  const M = game.live, msg = GM_MESSAGES[key];
+  if (!msg || !canGMMessage(M)) return;
+  const max = M.fmt === 'FC' ? 3 : 1;
+  if ((M.gmTalks || 0) >= max) return;
+  M.gmTalks = (M.gmTalks || 0) + 1;
+  const team = liveMyTeam(M);
+  // Modest morale response only; no direct change to batting, bowling or wicket odds.
+  const lift = M.gmTalks === 1 ? 1 : 0;
+  M.xi[team].forEach(id => { const p = P(id); if (p && typeof p.morale === 'number') p.morale = clamp(p.morale + lift, 0, 100); });
+  M.log.unshift({ cls:'sys', text: `GM to the dressing room: ${msg[0]}.` });
   closeModal(); autosave(); render();
 }
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
   if (!inn) return `${pageTitle('Live', 'Starting')}<div class="empty">Starting.</div>`;
   M.briefPrompt = false;
-  const me = liveMyTeam(M), b = tacticsFor(M, me), overridden = M.override && M.override[me] && M.override[me].inn === M.innings.length;
+  const me = liveMyTeam(M);
   const sc = inn.card[inn.striker], ns = inn.card[inn.non];
   const bw = inn.curBowler || inn.lastBowler, bf = bw ? inn.bw[bw] : null;
   // Situation sentence
@@ -4695,7 +4703,7 @@ function renderLive() {
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
   else if (M.pause) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="resumeLive()">${M.pause.type === 'stumps' ? `Start day ${M.pause.day + 2}` : 'Resume play'} ▸</button>`;
-  else bar = `<button class="btn" onclick="briefSheet(false)">Override</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
+  else bar = `${canGMMessage(M) && (M.gmTalks || 0) < (M.fmt === 'FC' ? 3 : 1) ? '<button class="btn" onclick="gmMessageSheet()">Team talk</button>' : ''}<button class="btn pri" style="${canGMMessage(M) && (M.gmTalks || 0) < (M.fmt === 'FC' ? 3 : 1) ? '' : 'grid-column:span 2'}" onclick="liveStep('over')">Next over ▸</button>
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   if (recap) return `<div class="grid">${recap}
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
@@ -4704,7 +4712,7 @@ function renderLive() {
     <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
       <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
         <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
-        ${!M.done && !inn.closed ? `<div class="xs dim" style="margin-top:6px">${overridden ? 'Your plan' : 'Coach\'s plan'}: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ` · <span class="draw">your instruction goes in at the next ${M.fmt === 'FC' ? 'break' : 'drinks break'}</span>` : ''}</div>` : ''}</div>
+        </div>
       ${crease}<div style="height:12px"></div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
@@ -4719,11 +4727,9 @@ function recapShell(eyebrow, title, sub, inner) {
 function perfRows(items) { return `<div class="rows rc-rows">${items.join('')}</div>`; }
 function batRow(c, team) { return `<div class="kv tap" onclick="showPlayer('${c.id}')"><span>${esc(pshort(P(c.id)))}${team ? ` <span class="xs dim">${tShort(team)}</span>` : ''}</span><span><b>${c.r}${c.out ? '' : '*'}</b> <span class="xs dim">(${c.b})</span></span></div>`; }
 function bowlRow(id, f, team) { return `<div class="kv tap" onclick="showPlayer('${id}')"><span>${esc(pshort(P(id)))}${team ? ` <span class="xs dim">${tShort(team)}</span>` : ''}</span><span><b>${f.w}/${f.r}</b> <span class="xs dim">(${oversStr(f.balls)})</span></span></div>`; }
-function coachPlanLine(M, nextInnings, role) {
-  const me = liveMyTeam(M), ov = M.override && M.override[me];
-  const mine = ov && ov.inn === M.innings.length + (nextInnings ? 1 : 0);
-  const b = mine ? M.brief[me] : coachBrief(M, me), h = staffIn(me, 'head');
-  return `<div class="plan-row" style="margin-top:10px"><div class="grow"><div class="lbl" style="margin:0">${mine ? 'Your plan · coach overruled' : `Coach's plan${h ? ' · ' + esc(h.last) : ''}`}</div><div class="s b" style="margin-top:2px">${briefSummary(b, role)}</div></div>${mine ? '' : `<button class="link" onclick="briefSheet(true)">Override</button>`}</div>`;
+function coachPlanLine(M) {
+  const me = liveMyTeam(M), hc = staffIn(me, 'head');
+  return `<div class="plan-row" style="margin-top:10px"><div class="grow"><div class="lbl" style="margin:0">Coaching staff in charge</div><div class="s muted" style="margin-top:2px">${hc ? esc(hc.first + ' ' + hc.last) : 'Head coach'} manages tactics and bowling changes.</div></div>${canGMMessage(M) && (M.gmTalks || 0) < (M.fmt === 'FC' ? 3 : 1) ? '<button class="link" onclick="gmMessageSheet()">Team talk</button>' : ''}</div>`;
 }
 function inningsRecap(M, inn) {
   const bats = inn.card.filter(c => c.in).sort((a, b) => b.r - a.r || a.b - b.b).slice(0, 3);
@@ -4746,7 +4752,7 @@ function inningsRecap(M, inn) {
       <div><div class="lbl">Best bowling</div>${perfRows(bowls.map(([id, f]) => bowlRow(id, f)))}</div></div>
     ${best ? `<div class="xs muted" style="margin-top:8px">Best partnership: <b class="t">${best.r}</b> for the ${ordinal(best.w)} wicket${best.live ? ' (unbroken)' : ''}</div>` : ''}
     ${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg([inn], M.fmt)}</div>` : ''}
-    ${nb ? `<div class="lbl" style="margin-top:12px">Next innings · ${nb === me ? 'we bat' : 'we bowl'}</div>${coachPlanLine(M, true, nb === me ? 'bat' : 'bowl')}` : ''}`;
+    ${nb ? `<div class="lbl" style="margin-top:12px">Next innings · ${nb === me ? 'we bat' : 'we bowl'}</div>${coachPlanLine(M)}` : ''}`;
   return recapShell(`Innings complete${M.fmt === 'FC' ? ' · Day ' + fcDay(M) : ''}`, `${teamName(inn.bat)} ${inn.runs}${inn.allOut ? ' all out' : '/' + inn.wkts}${inn.declared ? ' declared' : ''}`,
     `${oversStr(inn.balls)} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`, inner);
 }
@@ -4767,7 +4773,7 @@ function breakRecap(M, r) {
     <div class="rows rc-rows">${r.breaks.map(x => `<div class="kv"><span>${{ lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[x.type]}</span><span>${esc(x.score)}</span></div>`).join('')}${potd ? `<div class="kv"><span>Player of the day</span><span class="b">${potd}</span></div>` : ''}</div>
     ${sit ? `<div class="note" style="margin-top:10px">${esc(sit)}</div>` : ''}
     ${nd ? `<div class="flex" style="gap:10px;margin-top:10px;align-items:center"><svg viewBox="0 0 24 24" style="width:30px;height:30px;flex:none">${SKY_ICON[nd.sky]}</svg><div><div class="s b">Day ${r.day + 2}: ${SKY_SHORT[nd.sky]}${nd.lost ? ` · about ${nd.lost} overs lost` : ''}</div><div class="xs muted">${esc(trend)}</div></div></div>` : ''}
-    ${coachPlanLine(M, false, inn.bat === liveMyTeam(M) ? 'bat' : 'bowl')}`;
+    ${coachPlanLine(M)}`;
   return recapShell(`Stumps · Day ${r.day + 1}`, esc(r.score), `${r.overs} overs`, inner);
 }
 function resultRecap(M) {
@@ -4864,19 +4870,7 @@ function previewCoachBrief(fx, team) {
   return coachBrief(stub, team);
 }
 function gamePlanRow(fmt, hc, fx) {
-  const me = fx ? myTeamIn(fx) : U();
-  const mo = game.matchOverride && fx && game.matchOverride.fx === fx.id ? game.matchOverride.brief : null;
-  const b = mo || (fx ? previewCoachBrief(fx, me) : game.tactics[fmt]);
-  const ph = PHILOSOPHY[(game.philosophy || {})[fmt] || 'balanced'];
-  return `<div class="plan-row"><div class="grow"><div class="lbl" style="margin:0">${mo ? 'Your plan · coach overruled' : `Coach's plan · ${ph.label} philosophy`}</div><div class="s b" style="margin-top:2px">${briefSummary(b)}</div><div class="xs dim" style="margin-top:2px">${hc ? `${esc(hc.first + ' ' + hc.last)}, ${COACH_STYLES[hc.style].toLowerCase()} head coach, adjusts it at every break` : 'The coaching staff adjust it at every break'}</div></div>${fx ? (mo ? `<button class="link" onclick="game.matchOverride=null;autosave();render()">Restore</button>` : `<button class="link" onclick="preOverrideSheet('${fx.id}')">Override</button>`) : ''}</div>`;
-}
-function preOverrideSheet(fxId) {
-  const fx = fixtureById(fxId), fmt = COMPS[fx.comp].fmt, cur = previewCoachBrief(fx, myTeamIn(fx));
-  window._brief = Object.assign({}, cur);
-  const opt = (key, label) => `<div><label class="lbl">${label}</label>${sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), cur[key], `window._brief.${key}=this.value`, 'full')}</div>`;
-  sheet('Override the coach', 'Your plan for the first innings', `<p class="s muted" style="margin:0 0 10px">The coach has set the plan from the conditions and the club philosophy. Your plan stands for the first innings, then the coach takes over again. Overruling him costs some of his trust (now ${coachRelLabel(game.coachRel)}, ${game.coachRel}).</p>
-    <div class="grid" style="gap:10px">${opt('bat', 'When we bat')}${opt('field', 'When we bowl')}${opt('bowl', 'Bowling attack')}</div>`,
-    { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="game.matchOverride={fx:'${fxId}',brief:Object.assign({},window._brief)};noteOverride();closeModal();autosave();render()">Overrule the coach</button>` });
+  return `<div class="plan-row"><div class="grow"><div class="s b">Head coach${hc ? ' · ' + esc(hc.first + ' ' + hc.last) : ''}</div><div class="xs muted" style="margin-top:3px">Match strategy and on-field decisions delegated to coaching staff.</div></div></div>`;
 }
 function setPhilosophy(fmt, v) { game.philosophy = game.philosophy || {}; game.philosophy[fmt] = v; autosave(); render(); }
 // Who bats next, so the innings-break panel can ask the right question.
