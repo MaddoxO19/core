@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Mini&amp;Me Cricket</title>
+<title>H³O Cricket</title>
 <style>
 /* =====================================================================
    MINI&ME CRICKET UI v0.3 — compact, mobile-first design system
@@ -258,13 +258,24 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .tbl.rec td{padding:9px 8px;border-bottom:1px solid var(--line2)}.tbl.rec td.big{font-size:16px;text-align:right}.tbl.rec .n2{width:22px;color:var(--dim);font-weight:800;text-align:left;padding-left:12px}
 .neglog{margin-top:10px;display:flex;flex-direction:column;gap:6px}.neglog div{padding:8px 10px;border-radius:10px;background:var(--s2);font-size:12.5px;line-height:1.45;max-width:88%}.neglog div.me{align-self:flex-end;background:#173a2a;color:#d9f7e6}
 .inbox-item{border-left:3px solid var(--accent)}
+
+/* v0.6.1 feedback pass */
+.ovh{gap:8px}.ovw{flex:1;min-width:0;font-size:12px;color:var(--muted);font-weight:600}
+.sheet{max-height:92vh;max-height:calc(100dvh - env(safe-area-inset-top,0px) - 10px);touch-action:pan-y}
+.sheet-b{flex:1 1 auto;min-height:0;overscroll-behavior:contain}
+.sheet-h{position:relative}.sheet-h .sub{font-size:12px;font-weight:700;color:var(--muted);margin-top:1px}
+.sheet-h .x{width:36px;height:36px;font-size:18px}
+.sheet-h::before{content:'';position:absolute;top:4px;left:50%;width:36px;height:4px;margin-left:-18px;border-radius:3px;background:var(--line)}
+@media (min-width:900px){.sheet-h::before{display:none}.sheet{max-height:88vh}}
+.home-acts{margin-top:0}
+.top .cont.hidden{display:none}
 </style>
 </head>
 <body>
 <section id="launch">
   <div class="launch">
-    <div class="kick">Mini&amp;Me Sports</div>
-    <h1>Mini&amp;Me <span>Cricket</span></h1>
+    <div class="kick">H³O Interactive</div>
+    <h1>H³O <span>Cricket</span></h1>
     <p>Run a state side across the Shield, the One-Day Cup and the T20 Championship. Pick the XI, plan every batter's downfall, manage your quicks, trade, sign and survive the board.</p>
     <div class="btns"><button class="btn pri" onclick="openNewCareer()">New career</button><button class="btn" onclick="openLoadCareer()">Load career</button></div>
     <button class="btn ghost block" style="margin-top:8px" onclick="showHelp()">How to play</button>
@@ -273,7 +284,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 </section>
 <div id="app" class="hidden">
   <header class="top">
-    <div class="ell"><div class="brand">Mini&amp;Me <span>Cricket</span></div><div class="date" id="dateChip"></div></div>
+    <div class="ell"><div class="brand">H³O <span>Cricket</span></div><div class="date" id="dateChip"></div></div>
     <button class="btn pri cont" id="topContinue" onclick="continueGame()">Continue</button>
     <button class="btn icon" title="Menu" onclick="openMenu()">☰</button>
   </header>
@@ -308,7 +319,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.6.0', title: 'Club, Profiles & Records', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.6.1', title: 'Feedback pass', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_';
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
@@ -727,7 +738,10 @@ function autoXI(teamId, fmt, poolIn) {
   take(best(p => p.sk.keep >= 45, p => keeperScore(p, fmt) + fitAdj(p)) || best(() => true, p => p.sk.keep));
   take(best(p => isSpin(p) && group(p) !== 'BAT', bowlS));
   for (let i = 0; i < 3; i++) take(best(p => isPace(p) && group(p) !== 'BAT', bowlS));
-  for (let i = 0; i < 5; i++) take(best(p => ['BAT','WK','AR'].includes(group(p)), batS));
+  // Two specialist openers first (a top-order batter covers if the squad is short), then three more batters.
+  const openPair = [];
+  for (let i = 0; i < 2; i++) { const o = best(p => ['OPEN','TOP'].includes(p.role), p => batS(p) + (p.role === 'OPEN' ? OPENER_PREF : 0)); if (o) openPair.push(o); take(o); }
+  for (let i = 0; i < 3; i++) take(best(p => ['BAT','WK','AR'].includes(group(p)), batS));
   while (xi.length < 11 && pool.some(ok)) take(best(() => true, allS));
 
   // Guarantee five bowling options rated 50+.
@@ -736,21 +750,27 @@ function autoXI(teamId, fmt, poolIn) {
   while (opts() < 5 && guard++ < 4) {
     const sub = best(p => canBowl(p) && bowlRating(p, fmt) >= 50, bowlS);
     const keeper = xi[0];
-    const out = xi.filter(p => p !== keeper && !(canBowl(p) && bowlRating(p, fmt) >= 50)).sort((a, b) => batS(a) - batS(b))[0];
+    const out = xi.filter(p => p !== keeper && !openPair.includes(p) && !(canBowl(p) && bowlRating(p, fmt) >= 50)).sort((a, b) => batS(a) - batS(b))[0];
     if (!sub || !out) break;
     xi.splice(xi.indexOf(out), 1); pool.push(out); take(sub);
   }
   return finaliseXI(xi, fmt);
 }
 
+// Batting order follows role, not raw rating. Two openers go first, drawn from specialist openers
+// and top-order batters (openers preferred by OPENER_PREF); failing that, the most technical batter left. The rest bat in role tiers
+// (top order, middle order and keeper, all-rounders, bowlers); rating only orders players within a tier.
+const OPENER_PREF = 6; // rating points a specialist opener is worth over a top-order batter for an opening slot
+const ORDER_TIER = { OPEN: 0, TOP: 0, MID: 1, WK: 1, BAR: 2, BWAR: 3, PACE: 4, SEAM: 4, OFF: 4, LEG: 4, SLA: 4 };
 function battingOrder(xi, fmt) {
-  const sorted = xi.slice().sort((a, b) => batRating(b, fmt) - batRating(a, fmt));
-  const openers = sorted.filter(p => p.role === 'OPEN').slice(0, 2);
-  while (openers.length < 2) {
-    const nxt = sorted.filter(p => !openers.includes(p) && ['BAT','WK','AR'].includes(group(p))).sort((a, b) => b.sk.tech - a.sk.tech)[0] || sorted.find(p => !openers.includes(p));
-    if (!nxt) break; openers.push(nxt);
-  }
-  return [...openers, ...sorted.filter(p => !openers.includes(p))];
+  const byBat = (a, b) => batRating(b, fmt) - batRating(a, fmt);
+  const openScore = p => batRating(p, fmt) + (p.role === 'OPEN' ? OPENER_PREF : 0);
+  const openers = xi.filter(p => ['OPEN','TOP'].includes(p.role)).sort((a, b) => openScore(b) - openScore(a)).slice(0, 2);
+  const fill = list => { list.forEach(p => { if (openers.length < 2 && !openers.includes(p)) openers.push(p); }); };
+  if (openers.length < 2) fill(xi.filter(p => ['BAT','WK','AR'].includes(group(p))).sort((a, b) => b.sk.tech - a.sk.tech));
+  if (openers.length < 2) fill(xi.slice().sort(byBat));
+  const rest = xi.filter(p => !openers.includes(p)).sort((a, b) => (ORDER_TIER[a.role] - ORDER_TIER[b.role]) || byBat(a, b));
+  return [...openers, ...rest];
 }
 function finaliseXI(xi, fmt, keepOrder) {
   const ordered = keepOrder ? xi : battingOrder(xi, fmt);
@@ -3094,7 +3114,7 @@ function exportSave() {
   const blob = new Blob([str], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `minime-cricket-${game.gm.name.replace(/\W+/g, '')}-${game.season.label.replace(/\W+/g, '')}.json`;
+  a.download = `h3o-cricket-${game.gm.name.replace(/\W+/g, '')}-${game.season.label.replace(/\W+/g, '')}.json`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   flash('Career exported to a file.');
 }
@@ -3111,7 +3131,7 @@ function importSave() {
         loadFromString(rd.result, slot);
         saveGame(slot, false);
         flash(`Imported into slot ${slot}.`);
-      } catch (e) { flash('That file is not a Mini&Me Cricket save.'); }
+      } catch (e) { flash('That file is not an H³O Cricket save.'); }
     };
     rd.readAsText(f);
   };
@@ -3156,8 +3176,19 @@ function flash(msg) { const d = document.createElement('div'); d.className = 'to
 function sheet(eyebrow, title, body, opts) {
   opts = opts || {};
   $('modalRoot').innerHTML = `<div class="sheet-bg" onclick="if(event.target===this)closeModal()"><div class="sheet ${opts.wide ? 'wide' : ''}">
-    <div class="sheet-h"><div class="ell">${eyebrow ? `<div class="e">${eyebrow}</div>` : ''}<div class="t ell">${title}</div></div><button class="x" onclick="closeModal()">×</button></div>
+    <div class="sheet-h"><div class="ell">${eyebrow ? `<div class="e">${eyebrow}</div>` : ''}<div class="t ell">${title}</div>${opts.sub ? `<div class="sub ell">${opts.sub}</div>` : ''}</div><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
     <div class="sheet-b ${opts.flush ? 'flush' : ''}">${body}</div>${opts.foot ? `<div class="sheet-f">${opts.foot}</div>` : ''}</div></div>`;
+  sheetSwipe($('modalRoot').querySelector('.sheet'));
+}
+// Drag the sheet header (or the top of the body when it is scrolled to the top) down to close.
+function sheetSwipe(el) {
+  if (!el) return;
+  const head = el.querySelector('.sheet-h'), bodyEl = el.querySelector('.sheet-b');
+  let y0 = null, dy = 0;
+  const start = e => { if (e.currentTarget === bodyEl && bodyEl.scrollTop > 0) return; y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none'; };
+  const move = e => { if (y0 == null) return; dy = e.touches[0].clientY - y0; if (dy > 0) { el.style.transform = `translateY(${dy}px)`; if (e.cancelable) e.preventDefault(); } else if (e.currentTarget === bodyEl) { y0 = null; el.style.transform = ''; } };
+  const end = () => { if (y0 == null) return; y0 = null; el.style.transition = 'transform .15s'; if (dy > 90) closeModal(); else el.style.transform = ''; };
+  [head, bodyEl].forEach(t => { if (!t) return; t.addEventListener('touchstart', start, { passive: true }); t.addEventListener('touchmove', move, { passive: false }); t.addEventListener('touchend', end); t.addEventListener('touchcancel', end); });
 }
 function closeModal() { $('modalRoot').innerHTML = ''; }
 function confirmSheet(title, text, yesLabel, yesJs) { sheet('Confirm', title, `<p class="s" style="margin:0">${text}</p>`, { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="closeModal();${yesJs}">${yesLabel}</button>` }); }
@@ -3184,6 +3215,7 @@ function render() {
   $('nav').innerHTML = navHtml();
   $('dateChip').textContent = game.phase === 'season' ? `${dateStr(game.day)} · ${game.season.label}` : `${game.season.label} off-season`;
   const tc = $('topContinue');
+  tc.classList.toggle('hidden', ui.page === 'home');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
 function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; render(); }
@@ -3266,16 +3298,18 @@ function recentForm(n) {
 function renderHome() {
   if (game.phase !== 'season') return renderOffseason();
   const me = teamDef(U()), fx = nextUserFx(), sq = squadOf(U());
-  let hero;
+  let hero, acts = '';
   if (game.live) {
-    hero = `<div class="hero"><div class="mid"><div class="comp">Match in progress</div><div class="vs">${teamName(game.live.home)} v ${teamName(game.live.away)}</div></div></div><button class="btn pri block" style="margin-top:10px" onclick="go('live')">Return to the match</button>`;
+    hero = `<div class="hero"><div class="mid"><div class="comp">Match in progress</div><div class="vs">${teamName(game.live.home)} v ${teamName(game.live.away)}</div></div></div>`;
+    acts = `<button class="btn pri block home-acts" onclick="go('live')">Return to the match</button>`;
   } else if (fx) {
     const mine = isUserTeam(fx.home) ? fx.home : fx.away, opp = mine === fx.home ? fx.away : fx.home, days = fx.day - game.day;
     hero = `<div class="hero">${badge(mine, true)}<div class="mid"><div class="comp">${chip(fx.comp, COMPS[fx.comp].short)} ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round}</div>
-      <div class="vs ell">${mine === fx.home ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${teamDef(fx.venue || fx.home).ground} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>
-      <div class="actions"><button class="btn pri" onclick="continueGame()">${game.pendingFx ? 'Match day ▸' : 'Continue to match ▸'}</button><button class="btn" onclick="simDays(7)">Sim week</button><button class="btn icon" onclick="simMenu()">⋯</button></div>`;
+      <div class="vs ell">${mine === fx.home ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${teamDef(fx.venue || fx.home).ground} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>`;
+    acts = `<div class="actions home-acts"><button class="btn pri" onclick="continueGame()">${game.pendingFx ? 'Match day ▸' : 'Continue to match ▸'}</button><button class="btn" onclick="simDays(7)">Sim week</button><button class="btn icon" onclick="simMenu()">⋯</button></div>`;
   } else {
-    hero = `<div class="hero"><div class="mid"><div class="comp">Season</div><div class="vs">No fixtures left for ${me.nick}</div><div class="meta">Remaining matches play out before the review.</div></div></div><button class="btn pri block" style="margin-top:10px" onclick="continueGame()">Continue ▸</button>`;
+    hero = `<div class="hero"><div class="mid"><div class="comp">Season</div><div class="vs">No fixtures left for ${me.nick}</div><div class="meta">Remaining matches play out before the review.</div></div></div>`;
+    acts = `<button class="btn pri block home-acts" onclick="continueGame()">Continue ▸</button>`;
   }
   const form = recentForm(5);
   const pos = c => game.season.standings[c][U()].P ? ordinal(ladderPos(c, U())) : '–';
@@ -3306,7 +3340,7 @@ function renderHome() {
     ${kpis}
     ${alerts.length ? panel('Needs your attention', `<div class="rows">${alerts.map(a => a.replace(/<span class="chip (\w+) btn-chip" onclick="([^"]*)">([^<]*)<\/span>/, (m, c, on, t) => `<div class="row tap" onclick="${on}"><span class="dot" style="background:var(--${c === 'bad' ? 'bad' : c === 'info' ? 'cyan' : 'warn'})"></span><div class="grow s">${t.replace(' ▸', '')}</div><span class="dim">›</span></div>`)).join('')}</div>`, { flush: true }) : ''}
     <div class="grid g2">
-      ${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}
+      <div class="grid">${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
       <div class="grid">
         ${homeExtras()}
         ${panel('News', `<div class="rows">${game.news.slice(0, 4).map(newsRow).join('') || '<div class="empty">No news yet.</div>'}</div>`, { flush: true, end: `<button class="link" onclick="newsSheet()">All news ▸</button>` })}
@@ -3441,8 +3475,8 @@ function renderXIEditor() {
     end: auto ? `${statusChip(p)}${pill(overall(p, f))}` : `${isAvailable(p) ? '' : statusChip(p)}<button class="btn icon sm" onclick="event.stopPropagation();moveXI('${id}',-1)">↑</button><button class="btn icon sm" onclick="event.stopPropagation();moveXI('${id}',1)">↓</button><button class="btn icon sm ghost" onclick="event.stopPropagation();dropXI('${id}')">✕</button>` }); }).join('');
   return `<div class="flex wrap">${fmtSeg(f, 'setXIFmt')}<span class="grow"></span><span class="switch ${auto ? 'on' : ''}" onclick="toggleAutoXI('${f}')"><i></i>Staff pick</span></div><div style="height:8px"></div>
     ${issues.length ? `<div class="note warn" style="margin-bottom:8px">${issues.map(esc).join(' · ')}</div>` : ''}
-    ${panel(`${FORMATS[f].name} XI · avg ${avgO}`, `<div class="rows">${rows}</div>`, { flush: true, end: auto ? `<button class="link" onclick="toggleAutoXI('${f}')">Edit ▸</button>` : `<button class="btn sm" ${xiIds.length >= 11 ? 'disabled' : ''} onclick="benchSheet('${f}')">+ Add</button><button class="btn sm ghost" onclick="resetXI('${f}')">Reset</button>` })}
-    <div class="xs dim" style="margin-top:6px">${auto ? 'Staff pick the best available XI before every match. Switch off to set your own order.' : 'Your order is the batting order. Unavailable players are swapped like-for-like on match day.'}</div>`;
+    ${panel(`${FORMATS[f].name} XI · avg ${avgO}`, `<div class="rows">${rows}</div>`, { flush: true, end: auto ? `<button class="link" onclick="toggleAutoXI('${f}')">Edit ▸</button>` : `<button class="btn sm" ${xiIds.length >= 11 ? 'disabled' : ''} onclick="benchSheet('${f}')">+ Add</button><button class="btn sm ghost" onclick="sortXIByRole('${f}')">Sort by role</button><button class="btn sm ghost" onclick="resetXI('${f}')">Reset</button>` })}
+    <div class="xs dim" style="margin-top:6px">${auto ? 'Staff pick the best available XI before every match. Openers open, then the order follows role. Switch off to set and lock your own order.' : 'Your order is locked as the batting order and staff will not reshuffle it. Unavailable players are swapped like-for-like on match day.'}</div>`;
 }
 function benchSheet(f) {
   const xi = game.userXI[f];
@@ -3454,6 +3488,7 @@ function toggleAutoXI(f) {
   else game.autoXI[f] = true;
   autosave(); render();
 }
+function sortXIByRole(f) { game.userXI[f] = battingOrder(game.userXI[f].map(P).filter(Boolean), f).map(p => p.id); autosave(); render(); }
 function resetXI(f) { game.userXI[f] = autoXI(U(), f).order; autosave(); render(); }
 function moveXI(id, d) { const a = game.userXI[ui.xiFmt], i = a.indexOf(id), j = i + d; if (j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; autosave(); render(); }
 function dropXI(id) { game.userXI[ui.xiFmt] = game.userXI[ui.xiFmt].filter(x => x !== id); autosave(); render(); }
@@ -3526,7 +3561,7 @@ function scorecardHtml(S, k, fnName, noWorm) {
   const nth = S.innings.filter((x, j) => j <= k && x.bat === inn.bat).length;
   const tabs = S.innings.length > 1 ? seg(S.innings.map((x, j) => [String(j), innLabel(S, j)]), String(k), fnName) : '';
   const shots = []; inn.card.forEach(c => (c.shots || []).forEach(s => shots.push(s)));
-  return `${S.result ? `<div class="sc-result ${S.result.winner === U() ? 'win' : S.result.winner && (S.home === U() || S.away === U()) ? 'loss' : ''}">${esc(S.result.text)}${S.potm ? `<span>Player of the match · ${plink(P(S.potm))}</span>` : ''}</div>` : ''}
+  return `
     ${tabs}
     <div class="sc-head"><div><div class="sc-team">${teamName(inn.bat)}</div><div class="xs dim">${S.fmt === 'FC' ? ordinal(nth) + ' innings' : 'Innings'}${inn.followOn ? ' · following on' : ''}${inn.target ? ' · target ' + inn.target : ''}</div></div>
       <div class="right"><div class="sc-total">${inn.runs}${inn.allOut ? '' : '/' + inn.wkts}${inn.declared ? 'd' : ''}</div><div class="xs dim">${oversStr(inn.balls)} overs · RR ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}</div></div></div>
@@ -3539,7 +3574,7 @@ function scorecardHtml(S, k, fnName, noWorm) {
       ${bw.filter(b => b.balls || b.r).map(b => `<tr><td class="l"><div class="nm">${plink(P(b.id), pshort(P(b.id)))}</div></td><td>${oversStr(b.balls)}</td><td>${b.m}</td><td>${b.r}</td><td class="b">${b.w}</td><td class="dim hide-xs">${b.balls ? (b.r / (b.balls / 6)).toFixed(2) : '–'}</td></tr>`).join('')}</tbody></table></div>
     ${!noWorm && shots.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Wagon wheel</h3></div><div class="pb center">${wagonSvg(shots, 'R')}</div></div>` : ''}
     ${!noWorm && S.fmt !== 'FC' ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Run chart</h3></div><div class="pb">${wormSvg(S.innings, S.fmt)}</div></div>` : ''}
-    <div class="panel" style="margin-top:8px"><div class="rows"><div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}${S.crowd ? `<div class="kv"><span>Crowd</span><span>${S.crowd.toLocaleString('en-AU')}</span></div>` : ''}</div></div>`;
+    <div class="panel" style="margin-top:8px"><div class="rows">${S.potm ? `<div class="kv"><span>Player of the match</span><span>${plink(P(S.potm))}</span></div>` : ''}<div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}${S.crowd ? `<div class="kv"><span>Crowd</span><span>${S.crowd.toLocaleString('en-AU')}</span></div>` : ''}</div></div>`;
 }
 let _scFx = null;
 function showScorecard(fxId, k) {
@@ -3547,7 +3582,7 @@ function showScorecard(fxId, k) {
   if (!S) { flash('Scorecard not available.'); return; }
   _scFx = fxId;
   const f = fixtureById(fxId);
-  sheet(`${COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true });
+  sheet(`${COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(S.result.text)}</span>` : '' });
 }
 function scInn(k) { showScorecard(_scFx, k); }
 
@@ -3945,8 +3980,7 @@ function commentaryHtml(M) {
     const runs = balls.reduce((a, b) => a + (b.runs || 0), 0);
     const last = g.balls[0];
     const shown = all ? balls : balls.filter(b => b.wkt || b.bat >= 4 || /Fifty|Hundred/.test(b.short || ''));
-    return `<div class="ov"><div class="ovh"><span class="ovn">Over ${g.o + 1}</span><span class="ovb">${balls.map(b => ballSym(b.sym)).join('')}</span><span class="ovr">${runs} · ${esc(last.score || '')}</span></div>
-      <div class="ovsub">${esc(g.bn || '')}</div>
+    return `<div class="ov"><div class="ovh"><span class="ovn">Over ${g.o + 1}</span><span class="ovw ell">${esc(g.bn || '')}</span><span class="ovr">${runs} run${runs === 1 ? '' : 's'} · ${esc(last.score || '')}</span></div>
       ${shown.map(b => `<div class="cball ${b.wkt ? 'w' : b.bat >= 4 ? 'b' : ''}"><span class="o">${b.o}.${Math.min(6, b.b)}</span><span>${esc(b.short || b.text)}</span></div>`).join('')}</div>`;
   }).join('');
   return `<div style="margin:0 0 6px">${seg([['0','Key moments'],['1','Every ball']], all ? '1' : '0', 'setCommAll')}</div><div class="panel comm2">${html || '<div class="empty">The first ball is yet to be bowled.</div>'}</div>`;
@@ -4254,7 +4288,7 @@ function homeExtras() {
 // §25 BOOT ----------------------------------------------------------------------------------
 (async function boot() {
   $('bVer').textContent = BUILD.version; $('bTitle').textContent = BUILD.title; $('bEng').textContent = BUILD.engine;
-  document.title = `Mini&Me Cricket ${BUILD.version}`;
+  document.title = `H³O Cricket ${BUILD.version}`;
   await Store.init();
   if (Store.status === 'none') { const n = document.createElement('div'); n.className = 'note bad'; n.style.marginTop = '12px'; n.innerHTML = 'This browser is not keeping saved data (private browsing or a file preview). Open the game directly in Safari or Chrome, or use Export save in the menu to keep your career.'; document.querySelector('.launch').appendChild(n); }
   const metas = await Store.list(); const last = metas.map((m, i) => m ? Object.assign({ slot: i + 1 }, m) : null).filter(Boolean).sort((a, b) => (b.saved || '').localeCompare(a.saved || ''))[0];
