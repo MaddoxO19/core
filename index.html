@@ -196,6 +196,31 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 }
 @media (max-width:899px){ .hide-m{display:none!important} }
 @media (max-width:420px){ :root{--fs:13.5px} .kpi .v{font-size:15px} .crease{grid-template-columns:1fr 1fr}.crease .bowl{grid-column:span 2} .skills{grid-template-columns:repeat(2,1fr)} }
+
+/* ---------- v0.5.1 calmer presentation ---------- */
+.tag{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+.tag.bad{color:var(--bad)}.tag.warn{color:var(--warn)}.tag.info,.info-t{color:var(--cyan)}.tag.good{color:var(--good)}
+.chip{background:transparent;border:1px solid var(--line);color:var(--muted);font-weight:700}
+.chip.FC,.chip.SHIELD,.chip.OD,.chip.ODC,.chip.T20,.chip.T20C{background:transparent}
+.chip.FC,.chip.SHIELD{border-color:#5b4416;color:#fcd38d}.chip.OD,.chip.ODC{border-color:#174a6b;color:#93d5ff}.chip.T20,.chip.T20C{border-color:#5c1d55;color:#f9a8d4}
+.chip.good{border-color:#1f5c3d;color:#86efac;background:transparent}.chip.bad{border-color:#6b2730;color:#fca5a5;background:transparent}.chip.warn{border-color:#5b4b16;color:#fcd34d;background:transparent}.chip.info{border-color:#174a6b;color:#93d5ff;background:transparent}
+.pill{background:transparent;min-width:24px;height:auto;padding:0;font-size:13px;font-weight:800;color:var(--text)}
+.pill.elite{background:transparent;color:#fcd34d}.pill.good{background:transparent;color:#86efac}.pill.lo{color:var(--dim)}
+.tbl.clean td,.tbl.clean th{padding:7px 8px}
+.tbl tr.tap{cursor:pointer}.tbl tr.tap:hover td{background:rgba(125,211,252,.04)}
+.tbl td .ell{display:block}
+.score-big{font-size:30px;font-weight:900;letter-spacing:-.02em;line-height:1.05}
+.recent b{font-weight:800;margin-right:2px}
+.comm .cl{border-top:1px solid var(--line2);padding:6px 12px;font-size:12.5px;color:#cfdde7}
+.comm .cl.sys{color:var(--muted);font-weight:600;font-style:italic;background:transparent}
+.comm .cl.w{color:#fecaca;background:transparent;font-weight:700}.comm .cl.b{background:transparent;color:#bbf7d0}
+.comm .cl.s{color:var(--accent);background:transparent}
+.livebar.three{grid-template-columns:1fr 1.6fr 1.4fr}
+@media (min-width:900px){.livebar.three{grid-template-columns:repeat(3,minmax(0,220px))}}
+.livebar select.skip{width:100%;height:100%;font-weight:700;font-size:var(--fs-s)}
+.row{padding:9px 12px}
+.ph h3{color:var(--muted)}
+.panel .ph h3{letter-spacing:.07em}
 </style>
 </head>
 <body>
@@ -246,7 +271,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.5.0', title: 'Dressing Room & World', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.5.1', title: 'Cleaner Match Centre', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_';
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
@@ -2743,13 +2768,15 @@ function tdot(id) { const t = teamDef(id); return t ? `<span class="dot" style="
 function av(p) { return `<span class="av">${p.first[0]}${p.last[0]}</span>`; }
 function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${esc(txt || pname(p))}</span>` : '–'; }
 function natTag(p) { return p.nat !== 'AUS' ? ' ' + chip('os', p.nat) : ''; }
+// Status is plain coloured text, and nothing at all when the player is fit and available.
 function statusChip(p) {
-  if (p.retired) return chip('', 'Retired');
-  if (p.injury) return chip('bad', `Inj ${Math.max(1, Math.ceil((p.injury.until - game.day) / 7))}w`);
-  if (p.natDuty) return chip('info', 'AUS');
+  if (p.retired) return '<span class="tag">Retired</span>';
+  if (p.injury) return `<span class="tag bad">Injured ${Math.max(1, Math.ceil((p.injury.until - game.day) / 7))}w</span>`;
+  if (p.natDuty) return '<span class="tag info">Australia</span>';
   const f = Math.round(p.fitness);
-  return chip(f >= 85 ? 'good' : f >= 72 ? 'warn' : 'bad', f + '%');
+  return f >= 88 ? '' : `<span class="tag ${f >= 75 ? 'warn' : 'bad'}">${f}%</span>`;
 }
+function fitText(p) { if (p.injury) return '<span class="loss">Inj</span>'; if (p.natDuty) return '<span class="info-t">AUS</span>'; const f = Math.round(p.fitness); return `<span class="${f >= 88 ? 'dim' : f >= 75 ? 'draw' : 'loss'}">${f}</span>`; }
 function formArrow(f) { return f >= 66 ? '<span class="win" title="Hot form">▲▲</span>' : f >= 55 ? '<span class="win" title="Good form">▲</span>' : f >= 44 ? '<span class="dim">–</span>' : f >= 33 ? '<span class="loss">▼</span>' : '<span class="loss">▼▼</span>'; }
 function compName(f) { return COMPS[FMT_COMP[f]].short; }
 function fmtSeg(active, fn) { return seg(FMT_LIST.map(f => [f, compName(f)]), active, fn); }
@@ -2900,7 +2927,7 @@ function renderHome() {
   return `<div class="grid">
     ${panel(`${me.nick} · ${game.season.label}`, hero, { end: form ? `<span class="flex" style="gap:3px">${form}</span>` : '' })}
     ${kpis}
-    ${alerts.length ? `<div class="alerts">${alerts.join('')}</div>` : ''}
+    ${alerts.length ? panel('Needs your attention', `<div class="rows">${alerts.map(a => a.replace(/<span class="chip (\w+) btn-chip" onclick="([^"]*)">([^<]*)<\/span>/, (m, c, on, t) => `<div class="row tap" onclick="${on}"><span class="dot" style="background:var(--${c === 'bad' ? 'bad' : c === 'info' ? 'cyan' : 'warn'})"></span><div class="grow s">${t.replace(' ▸', '')}</div><span class="dim">›</span></div>`)).join('')}</div>`, { flush: true }) : ''}
     <div class="grid g2">
       ${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}
       <div class="grid">
@@ -2935,9 +2962,9 @@ function playerRow(p, o) {
   o = o || {};
   const f = o.fmt || ui.listFmt;
   const sub = o.sub || `${ROLES[p.role].label} · ${p.age}${canBowl(p) && group(p) !== 'BAT' ? ' · ' + BOWL_TYPES[p.bowlType].label : ''}`;
-  return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}${av(p)}
-    <div class="stack"><div class="main-t ell">${esc(pname(p))}${natTag(p)}${p.id === game.captain && p.teamId === U() ? ' ' + chip('', 'C') : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
-    <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? chip('bad', p.wantsOut ? 'Wants out' : 'Unhappy') : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
+  return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}
+    <div class="stack"><div class="main-t ell">${esc(pname(p))}${p.nat !== 'AUS' && !(p.teamId || '').startsWith('X_') ? ` <span class="dim xs">${p.nat}</span>` : ''}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
+    <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? `<span class="tag bad">${p.wantsOut ? 'Wants out' : 'Unhappy'}</span>` : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
 }
 
 // §18 OFF-SEASON ------------------------------------------------------------------
@@ -3007,8 +3034,10 @@ function renderSquadList() {
   if (ui.squadGroup !== 'ALL') sq = sq.filter(p => group(p) === ui.squadGroup);
   sq = sortPlayers(sq, ui.squadSort, ui.listFmt);
   const tools = `<div class="flex wrap">${fmtSeg(ui.listFmt, 'setListFmt')}<span class="grow"></span>${sel(GROUP_OPTS, ui.squadGroup, "ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']], ui.squadSort, "ui.squadSort=this.value;render()")}</div>`;
-  return `${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${sq.map(p => playerRow(p, { all: true, sub: `${ROLES[p.role].short} · ${p.age} · ${formArrow(p.form)} · ${money(p.contract.salary)}×${p.contract.years}` })).join('') || '<div class="empty">No players.</div>'}</div>`, { flush: true })}
-    <div class="xs dim" style="margin-top:6px">Tap a player for the full profile. <span class="hide-m">Ratings shown: Shield · One-Day · T20.</span></div>`;
+  const f = ui.listFmt;
+  return `${tools}<div style="height:8px"></div><div class="panel"><div class="tbl-wrap"><table class="tbl clean"><thead><tr><th>Player</th><th>Age</th><th class="hide-m">Shield</th><th class="hide-m">1-Day</th><th class="hide-m">T20</th><th class="hide-d">${compName(f)}</th><th>Form</th><th>Fit</th></tr></thead><tbody>
+    ${sq.map(p => `<tr class="tap" onclick="showPlayer('${p.id}')"><td class="l"><div class="b ell" style="max-width:170px">${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}${p.nat !== 'AUS' ? ` <span class="dim xs">${p.nat}</span>` : ''}</div><div class="xs dim">${ROLES[p.role].short}${p.morale < 45 ? ' · <span class="loss">' + (p.wantsOut ? 'wants out' : 'unhappy') + '</span>' : ''}${p.focus && p.focus !== 'none' ? ' · ' + DEV_FOCUS[p.focus].label.toLowerCase() : ''}</div></td><td>${p.age}</td><td class="hide-m">${pill(overall(p, 'FC'))}</td><td class="hide-m">${pill(overall(p, 'OD'))}</td><td class="hide-m">${pill(overall(p, 'T20'))}</td><td class="hide-d">${pill(overall(p, f))}</td><td>${formArrow(p.form)}</td><td>${fitText(p)}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="xs dim" style="margin-top:6px">Tap a player for the full profile.</div>`;
 }
 function setListFmt(f) { ui.listFmt = f; render(); }
 
@@ -3105,8 +3134,8 @@ function wormSvg(innings, fmt) {
   const W = 600, H = 90, x = o => 4 + o / maxO * (W - 8), y = r => H - 4 - r / maxR * (H - 12);
   return `<svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="0" y1="${H - 4}" x2="${W}" y2="${H - 4}" stroke="#1f3d53"/>${lines.map((l, k) => `<polyline fill="none" stroke="${teamDef(innings[k].bat).color}" stroke-width="2.2" vector-effect="non-scaling-stroke" points="${l.map((r, o) => x(o) + ',' + y(r)).join(' ')}"/>`).join('')}</svg>`;
 }
-function innLabel(S, k) { const inn = S.innings[k]; const n = S.innings.filter((x, j) => j <= k && x.bat === inn.bat).length; return `${inn.bat}${S.fmt === 'FC' ? ' ' + ordinal(n) : ''} ${inn.runs}${inn.allOut ? '' : '/' + inn.wkts}`; }
-function scorecardHtml(S, k, fnName) {
+function innLabel(S, k) { return `Inn ${k + 1}`; }
+function scorecardHtml(S, k, fnName, noWorm) {
   if (!S.innings.length) return '<div class="empty">No play.</div>';
   k = k == null || k >= S.innings.length ? S.innings.length - 1 : k;
   const inn = S.innings[k];
@@ -3116,8 +3145,8 @@ function scorecardHtml(S, k, fnName) {
   const tabs = S.innings.length > 1 ? seg(S.innings.map((x, j) => [String(j), innLabel(S, j)]), String(k), fnName) : '';
   return `${S.result ? `<div class="note ${S.result.winner === U() ? 'good' : S.result.winner && (S.home === U() || S.away === U()) ? 'bad' : ''}"><b>${esc(S.result.text)}</b>${S.potm ? ` · POTM ${plink(P(S.potm))}` : ''}</div>` : ''}
     <div class="xs muted" style="margin:6px 0 8px">${teamDef(S.venue).ground}${S.toss && S.toss.decision ? ` · ${teamDef(S.toss.winner).nick} won the toss, chose to ${S.toss.decision}` : ''}${S.condText ? ' · ' + esc(S.condText) : ''}${S.overs ? ` · ${S.overs} overs a side` : ''}</div>
-    ${wormSvg(S.innings, S.fmt)}${tabs}
-    <div class="panel" style="margin-top:8px"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>${teamName(inn.bat)}${inn.followOn ? ' (f/o)' : ''}</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>
+    ${noWorm ? '' : wormSvg(S.innings, S.fmt)}${tabs}
+    <div class="panel" style="margin-top:8px"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>${teamName(inn.bat)}${S.fmt === 'FC' ? ' · ' + ordinal(S.innings.filter((x, j) => j <= k && x.bat === inn.bat).length) + ' inns' : ''}${inn.followOn ? ' (f/o)' : ''}</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>
       ${batted.map(c => `<tr><td class="l" style="white-space:normal">${plink(P(c.id), pshort(P(c.id)))}<div class="xs dim">${esc(dismissText(c.out))}</div></td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td><td class="dim">${c.b ? (c.r / c.b * 100).toFixed(0) : '–'}</td></tr>`).join('')}
       <tr><td class="l">Extras <span class="xs dim">w${inn.ext.w} nb${inn.ext.nb} b${inn.ext.b} lb${inn.ext.lb}</span></td><td>${ext}</td><td colspan="4"></td></tr>
       <tr><td class="l b">Total <span class="xs dim">${oversStr(inn.balls)} ov</span></td><td class="b">${inn.runs}${inn.allOut ? '' : '/' + inn.wkts}${inn.declared ? 'd' : ''}</td><td colspan="4"></td></tr></tbody></table></div>
@@ -3329,7 +3358,7 @@ function renderMatchday() {
   const me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home, v = teamDef(fx.venue || fx.home);
   const mine = selectXI(me, fmt), theirs = selectXI(opp, fmt);
   const pre = previewConditions(fx), pt = PITCHES[pre.cond.pitch];
-  const xi = s => `<div class="rows">${s.order.map((id, i) => { const p = P(id); return `<div class="row tap" style="padding:5px 12px" onclick="showPlayer('${id}')"><span class="n">${i + 1}</span><div class="grow ell s">${esc(pshort(p))}${id === s.captain ? ' <span class="dim">(c)</span>' : ''}${id === s.keeper ? ' <span class="dim">†</span>' : ''}</div><span class="xs dim">${ROLES[p.role].short}</span>${pill(overall(p, fmt))}</div>`; }).join('')}</div>`;
+  const xi = s => `<table class="tbl clean"><tbody>${s.order.map((id, i) => { const p = P(id); return `<tr class="tap" onclick="showPlayer('${id}')"><td class="l"><span class="dim xs" style="display:inline-block;width:16px">${i + 1}</span>${esc(pshort(p))}${id === s.captain ? ' <span class="dim xs">(c)</span>' : ''}${id === s.keeper ? ' <span class="dim xs">wk</span>' : ''}</td><td class="dim xs hide-m">${ROLES[p.role].short}</td><td>${overall(p, fmt)}</td></tr>`; }).join('')}</tbody></table>`;
   const avgO = s => Math.round(mean(s.order.map(id => overall(P(id), fmt))));
   const scouted = game.scoutedFx[fx.id];
   const wx = pre.cond.days.map((d, i) => chip(d.sky === 'rain' || d.sky === 'showers' ? 'warn' : d.sky === 'overcast' ? 'info' : '', `${fmt === 'FC' ? 'D' + (i + 1) + ' ' : ''}${SKIES[d.sky].label}${d.lost ? ' −' + d.lost : ''}`)).join(' ');
@@ -3337,10 +3366,10 @@ function renderMatchday() {
   return `${pageTitle('Match day', `${COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
     ${panel('', `<div class="hero">${badge(fx.home, true)}<div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div>${badge(fx.away, true)}</div>
-      <div class="flex wrap" style="margin-top:10px;gap:5px"><span class="chip">${pt.label}</span>${wx}</div>
-      <div class="xs muted" style="margin-top:6px">${pt.note}</div>
-      ${pre.notes.length ? `<div class="note warn" style="margin-top:8px">${pre.notes.map(esc).join(' ')}</div>` : ''}
-      ${mine.replaced && mine.replaced.length ? `<div class="note" style="margin-top:8px">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</div>` : ''}
+      <table class="tbl clean" style="margin-top:10px"><tbody><tr><td class="l muted">Pitch</td><td class="l" style="white-space:normal"><b>${pt.label}</b>. ${pt.note}</td></tr>
+        <tr><td class="l muted">Forecast</td><td class="l" style="white-space:normal">${pre.cond.days.map((d, i) => `${fmt === 'FC' ? 'Day ' + (i + 1) + ': ' : ''}${SKIES[d.sky].label}${d.lost ? ` (about ${d.lost} overs lost)` : ''}`).join(fmt === 'FC' ? '<br>' : '')}</td></tr>
+        ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
+        ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       <label class="lbl" style="margin-top:12px">Match brief to the coach${hc ? ` · ${esc(hc.first + ' ' + hc.last)} (${COACH_STYLES[hc.style]})` : ''}</label>${tacticGrid(fmt)}
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button>${me === 'AUS' ? `<button class="btn" onclick="go('natsel')" disabled>Squad locked</button>` : `<button class="btn" onclick="ui.squadTab='xi';ui.xiFmt='${fmt}';go('squad')">Edit XI</button>`}</div>
       <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Watch live ▸</button>`}</div>`)}
@@ -3387,22 +3416,45 @@ function startLive() {
 }
 function liveStep(mode) {
   const M = game.live; if (!M || M.done || !M.toss.decision) return;
+  if (curInn(M).closed && mode !== 'match') return;
   let guard = 0, legal = 0;
   const target = { over: 6, five: 30, session: 180 }[mode] || 1e9;
-  const startN = M.innings.length;
-  while (!M.done && guard++ < 6000) {
+  while (!M.done && guard++ < 8000) {
+    const inn0 = curInn(M);
+    if (inn0.closed && mode !== 'match') break;
     const ev = simBall(M);
-    if (M.innings.length > startN && mode !== 'match') { M.briefPrompt = true; break; }
     if (!ev) continue;
     if (ev.legal) legal++;
     const inn = curInn(M);
+    if (inn.closed && mode !== 'match') break;
     if (mode === 'wicket' && ev.wkt) break;
-    if ((mode === 'over' || mode === 'five' || mode === 'session') && ((inn.overBalls === 0 && legal >= target) || inn.closed)) break;
-    if (mode === 'innings' && inn.closed) break;
+    if ((mode === 'over' || mode === 'five' || mode === 'session') && inn.overBalls === 0 && legal >= target) break;
   }
   if (M.done && !M.log.some(e => e.cls === 's')) M.log.unshift({ cls:'s', text: `RESULT: ${M.result.text}.` + (M.potm ? ` Player of the match: ${pname(P(M.potm))}.` : '') });
   ui.liveInn = null;
   autosave(); render();
+}
+function liveSkip(v) { if (v) liveStep(v); }
+function startNextInnings() {
+  const M = game.live; if (!M || M.done) return;
+  const before = M.innings.length;
+  nextInnings(M);
+  if (M.done) { M.log.unshift({ cls:'s', text: `RESULT: ${M.result.text}.` + (M.potm ? ` Player of the match: ${pname(P(M.potm))}.` : '') }); }
+  else if (M.innings.length > before) { M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) }); M.briefPrompt = true; }
+  autosave(); render();
+}
+function inningsSummary(M, inn) {
+  const nm = teamName(inn.bat);
+  const how = inn.declared ? `declared on ${inn.runs}/${inn.wkts}` : inn.allOut ? `all out for ${inn.runs}` : `${inn.runs}/${inn.wkts}`;
+  let t = `${nm} ${how} in ${oversStr(inn.balls)} overs.`;
+  const n = M.innings.length;
+  if (M.fmt !== 'FC' && n === 1) t += ` ${teamName(inn.bowl)} need ${inn.runs + 1} to win from ${mOvers(M)} overs.`;
+  if (M.fmt === 'FC') {
+    const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
+    if (n >= 2) t += ` ${teamName(lead >= 0 ? inn.bat : inn.bowl)} ${n === 3 ? 'lead' : 'lead'} by ${Math.abs(lead)}.`;
+    if (n === 2 && M.innings[0].runs - inn.runs >= 200) t += ' The follow-on is available.';
+  }
+  return t;
 }
 function finishLive() {
   const M = game.live; if (!M || !M.done) return;
@@ -3444,31 +3496,39 @@ function sendBrief(now) {
 }
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
-  if (!inn) return `${pageTitle('Live', 'Waiting for the toss')}<div class="empty">Starting.</div>`;
+  if (!inn) return `${pageTitle('Live', 'Starting')}<div class="empty">Starting.</div>`;
   if (M.briefPrompt && !M.done && !inn.closed) { M.briefPrompt = false; setTimeout(() => briefSheet(true), 0); }
+  const me = liveMyTeam(M), b = M.brief[me] || game.tactics[M.fmt];
   const sc = inn.card[inn.striker], ns = inn.card[inn.non];
   const bw = inn.curBowler || inn.lastBowler, bf = bw ? inn.bw[bw] : null;
-  let line2 = `${oversStr(inn.balls)}${M.overs ? '/' + M.overs : F.overs ? '/' + F.overs : ''} ov · RR ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
-  let line3 = '';
-  if (inn.target) { const need = inn.target - inn.runs; line3 = `Need ${Math.max(0, need)}`; if (F.overs) { const bl = mOvers(M) * 6 - inn.balls; line3 += ` from ${bl} · RRR ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; } }
-  if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); line3 = `Day ${fcDay(M)} · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} ov left` + (M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} ${Math.abs(lead)}` : '') + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)}` : ''); }
-  const prev = M.innings.slice(0, -1).map(i => `${teamDef(i.bat).short || i.bat} ${inningsLine(i, M.fmt)}`).join(' · ');
-  const cls = s => s === 'W' ? 'w' : s === '4' ? 'b4' : s === '6' ? 'b6' : /wd|nb|lb|b/.test(s) ? 'x' : '';
-  const bat = (c, on) => { if (!c) return '<div></div>'; const p = P(c.id); return `<div class="${on ? 'on' : ''}" onclick="showPlayer('${c.id}')"><div class="k">${on ? 'Striker' : 'Non-striker'}</div><div class="v ell">${esc(p.last)} ${c.r}<span class="dim xs"> (${c.b})</span></div></div>`; };
-  const scoreS = Object.assign(compactScorecard(M), { result: M.done ? M.result : null });
-  const me = liveMyTeam(M), b = M.brief[me] || game.tactics[M.fmt];
-  const briefLine = inn.bat === me ? `Batting: ${TACTICS.bat[b.bat].label}` : `Bowling: ${TACTICS.field[b.field].label} · ${TACTICS.bowl[b.bowl].label}`;
-  const body = ui.liveTab === 'card' ? scorecardHtml(scoreS, ui.liveInn, 'setLiveInn') : `<div class="panel"><div class="comm">${M.log.slice(0, 60).map(e => `<div class="cl ${e.cls || ''}">${e.o != null ? `<span class="o">${e.o}.${Math.min(6, e.b)}</span>` : ''}${esc(e.o != null ? e.text.replace(/^\d+\.\d+ /, '') : e.text || '')}</div>`).join('')}</div></div>`;
-  const bar = M.done
-    ? `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish · full scorecard ▸</button>`
-    : `<button class="btn" onclick="liveStep('over')">Over</button><button class="btn" onclick="liveStep('${M.fmt === 'FC' ? 'session' : 'five'}')">${M.fmt === 'FC' ? '30 ov' : '5 ov'}</button><button class="btn" onclick="liveStep('wicket')">Wicket</button><button class="btn" onclick="liveStep('innings')">Innings</button><button class="btn" onclick="liveStep('match')">Result</button><button class="btn pri" onclick="briefSheet(false)">Brief</button>`;
+  // Situation sentence
+  let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
+  if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
+  if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); sit = `Day ${fcDay(M)} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
+  const prev = M.innings.slice(0, -1).map(i => `${teamDef(i.bat).short || i.bat} ${inningsLine(i, M.fmt)}`).join(', ');
+  const crease = M.done || inn.closed ? '' : `<table class="tbl clean" style="margin-top:10px"><thead><tr><th>Batting</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>
+      ${[[sc, true], [ns, false]].map(([c, on]) => c ? `<tr class="tap" onclick="showPlayer('${c.id}')"><td class="l">${esc(P(c.id).last)}${on ? ' *' : ''}</td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td></tr>` : '').join('')}</tbody></table>
+    <table class="tbl clean"><thead><tr><th>Bowling</th><th>O</th><th>M</th><th>R</th><th>W</th></tr></thead><tbody>${bw ? `<tr class="tap" onclick="showPlayer('${bw}')"><td class="l">${esc(P(bw).last)}</td><td>${bf ? oversStr(bf.balls) : 0}</td><td>${bf ? bf.m : 0}</td><td>${bf ? bf.r : 0}</td><td class="b">${bf ? bf.w : 0}</td></tr>` : '<tr><td class="l dim" colspan="5">New over</td></tr>'}</tbody></table>
+    <div class="xs muted" style="margin:8px 12px 0">Recent: <span class="recent">${inn.recent.slice(-12).map(s => `<b class="${s === 'W' ? 'loss' : s === '4' || s === '6' ? 'win' : ''}">${s}</b>`).join(' ')}</span></div>`;
+  let stateBox = '';
+  if (M.done) stateBox = `<div class="note good" style="margin:10px 12px 0"><b>${esc(M.result.text)}</b>${M.potm ? `<br><span class="s">Player of the match: ${plink(P(M.potm))}</span>` : ''}</div>`;
+  else if (inn.closed) stateBox = `<div class="note" style="margin:10px 12px 0"><b>Innings complete.</b> ${esc(inningsSummary(M, inn))}</div>`;
+  const body = ui.liveTab === 'card'
+    ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
+    : `<div class="panel"><div class="comm">${M.log.slice(0, 40).map(e => `<div class="cl ${e.cls || ''}">${e.o != null ? `<span class="o">${e.o}.${Math.min(6, e.b)}</span>` : ''}${esc(e.o != null ? e.text.replace(/^\d+\.\d+ /, '') : e.text || '')}</div>`).join('')}</div></div>`;
+  let bar;
+  if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
+  else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
+  else bar = `<button class="btn" onclick="briefSheet(false)">Brief</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
+    <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option><option value="${M.fmt === 'FC' ? 'session' : 'five'}">${M.fmt === 'FC' ? '30 overs' : '5 overs'}</option><option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   return `<div class="grid">
-    ${panel(`${COMPS[M.comp].short} · ${teamDef(M.venue).ground}`, `<div class="score-strip">${badge(inn.bat, true)}<div class="grow"><div class="big">${inn.runs}/${inn.wkts}</div><div class="ov">${line2}</div></div><div class="right"><div class="s b">${esc(line3)}</div><div class="xs muted">${esc(prev)}</div><div class="xs muted">P'ship ${inn.part.r} (${inn.part.b})</div></div></div>
-      ${M.done ? `<div class="note good" style="margin-top:10px"><b>${esc(M.result.text)}</b>${M.potm ? ` · POTM ${plink(P(M.potm))}` : ''}</div>` : `<div class="crease">${bat(sc, true)}${bat(ns, false)}<div class="bowl" ${bw ? `onclick="showPlayer('${bw}')"` : ''}><div class="k">Bowler</div><div class="v ell">${bw ? esc(P(bw).last) : '–'} <span class="dim xs">${bf ? `${oversStr(bf.balls)}-${bf.m}-${bf.r}-${bf.w}` : ''}</span></div></div></div>`}
-      <div class="balls">${inn.recent.map(s => `<span class="ball ${cls(s)}">${s}</span>`).join('')}</div>${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg(M.innings, M.fmt)}</div>` : ''}
-      ${M.done ? '' : `<div class="xs muted" style="margin-top:8px">Your brief · ${esc(briefLine)}${M.pendingBrief ? ' · <span class="draw">new message waiting for drinks</span>' : ''}</div>`}`, { end: `<span class="xs dim">${esc(skyOf(M).label)}</span>` })}
+    <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
+      <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
+        <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
+        ${!M.done ? `<div class="xs dim" style="margin-top:6px">Your brief: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ' · <span class="draw">message waiting for drinks</span>' : ''}</div>` : ''}</div>
+      ${crease}${stateBox}<div style="height:12px"></div></section>
     ${seg([['comm','Commentary'],['card','Scorecard']], ui.liveTab, 'setLiveTab')}${body}
-  </div><div class="livebar">${bar}</div>`;
+  </div><div class="livebar three">${bar}</div>`;
 }
 
 // §24b NATIONAL SELECTION + STAFF ----------------------------------------------------------
