@@ -246,6 +246,18 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .fow{display:inline-block;margin-right:8px;font-weight:700;font-size:11.5px}
 .wagon{width:100%;max-width:300px;height:auto;display:block;margin:0 auto}
 @media (max-width:420px){.hide-xs{display:none}}
+
+.plan-row{display:flex;align-items:center;gap:10px;margin-top:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--s2);cursor:pointer}
+.break-brief{margin:10px 12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--s2)}
+
+/* ---------- v0.6 profiles, club, records ---------- */
+.prof-band{height:4px;border-radius:4px;background:var(--tc);margin:-4px 0 12px;opacity:.85}
+.team-hero{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:linear-gradient(90deg,color-mix(in srgb,var(--tc) 22%,transparent),transparent);border-left:4px solid var(--tc)}
+.mhead{padding:10px 12px 4px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);font-weight:800;border-top:1px solid var(--line2)}
+.rows .mhead:first-child{border-top:0}
+.tbl.rec td{padding:9px 8px;border-bottom:1px solid var(--line2)}.tbl.rec td.big{font-size:16px;text-align:right}.tbl.rec .n2{width:22px;color:var(--dim);font-weight:800;text-align:left;padding-left:12px}
+.neglog{margin-top:10px;display:flex;flex-direction:column;gap:6px}.neglog div{padding:8px 10px;border-radius:10px;background:var(--s2);font-size:12.5px;line-height:1.45;max-width:88%}.neglog div.me{align-self:flex-end;background:#173a2a;color:#d9f7e6}
+.inbox-item{border-left:3px solid var(--accent)}
 </style>
 </head>
 <body>
@@ -296,7 +308,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.5.2', title: 'Match Centre', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.6.0', title: 'Club, Profiles & Records', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_';
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
@@ -693,7 +705,7 @@ function squadOf(teamId) {
   if (teamId === 'AUS') { const w = activeWindow(); return w ? w.squad.map(P).filter(p => p && !p.retired) : []; }
   return Object.values(game.players).filter(p => p.teamId === teamId && !p.retired);
 }
-function isAvailable(p) { return !p.injury && !p.natDuty && !p.retired; }
+function isAvailable(p) { return !p.injury && !p.natDuty && !p.retired && !p.rest; }
 function availablePlayers(teamId) { return teamId === 'AUS' ? squadOf('AUS').filter(p => !p.injury) : squadOf(teamId).filter(isAvailable); }
 
 function fitAdj(p) { return (p.fitness < 82 ? -(82 - p.fitness) * 0.45 : 0) + formMod(p) * 0.6; }
@@ -998,6 +1010,7 @@ function dismissal(M, inn, bowler, sc, mix) {
   if (how !== 'run out') bowlerFig(inn, bowler.id).w++;
   inn.wkts++;
   inn.fow.push({ w: inn.wkts, r: inn.runs, ov: oversStr(inn.balls), id: sc.id });
+  (inn.parts = inn.parts || []).push({ r: inn.part.r, w: inn.wkts, a: sc.id, o: inn.card[inn.non].id });
   inn.lastPart = inn.part;
   inn.part = { r:0, b:0 };
   if (inn.wkts < inn.card.length - 1 && inn.next < inn.card.length) {
@@ -1465,6 +1478,8 @@ function migrateGame(g) {
   const prev = game; game = g;
   if (!g.staff) { g.staff = {}; ensureStaff(); }
   if (!g.nation) g.nation = { gm: false, conf: 60, rankings: initRankings(), history: [] };
+  if (!g.fin) g.fin = initFinances();
+  if (!g.inbox) g.inbox = [];
   Object.values(g.staff).forEach(ensureStaffAttrs);
   applyTeamEdits();
   g.season.windows.forEach(w => { if (!w.fx) w.fx = []; });
@@ -1885,6 +1900,281 @@ function editorCreatePlayer(teamId) {
   game.edited = true;
   return p;
 }
+// §8e CLUB BUSINESS: FINANCES, FACILITIES, INBOX, NEGOTIATION, ACADEMY -------------------
+// Money is tracked for the user's club only; AI clubs are assumed solvent.
+
+const FACILITIES = {
+  training: { label:'High performance centre', desc:'Faster player development.', eff: l => `+${(l - 1) * 5}% development` },
+  medical:  { label:'Medical and recovery',    desc:'Fewer injuries and quicker recovery.', eff: l => `−${(l - 1) * 6}% injury risk` },
+  academy:  { label:'Youth academy',           desc:'More and better homegrown graduates each off-season.', eff: l => `${1 + Math.floor(l / 2)} graduate${1 + Math.floor(l / 2) > 1 ? 's' : ''} a year` },
+  stadium:  { label:'Stadium and members',     desc:'Bigger crowds and gate takings.', eff: l => `${(12 + (l - 1) * 6)}k capacity` }
+};
+const TICKET = { low:{ label:'Low prices', demand:1.15, price:0.75, fans:+1 }, standard:{ label:'Standard', demand:1, price:1, fans:0 }, premium:{ label:'Premium', demand:0.85, price:1.35, fans:-1 } };
+const FIN = { tv: 1100000, sponsorBase: 700000, upkeep: 60000, prize: { SHIELD:300000, T20C:250000, ODC:150000 }, finalBonus: 50000 };
+function blankLedger() { return { gate:0, sponsor:0, tv:0, prize:0, other:0, wages:0, staff:0, upkeep:0, upgrades:0, events:0, months:0 }; }
+function initFinances() { return { cash: 1000000, ticket: 'standard', fans: 60, fac: { training:1, medical:1, academy:1, stadium:1 }, ledger: blankLedger(), history: [] }; }
+function facLevel(k) { return game.fin ? game.fin.fac[k] : 1; }
+function upgradeCost(k) { return facLevel(k) * 400000; }
+function income(L) { return L.gate + L.sponsor + L.tv + L.prize + L.other; }
+function spend(L) { return L.wages + L.staff + L.upkeep + L.upgrades + L.events; }
+function finBook(key, amt) { const f = game.fin; f.ledger[key] += Math.abs(amt); f.cash += (['gate','sponsor','tv','prize','other'].includes(key) ? 1 : -1) * Math.abs(amt); }
+function sponsorRate() { return FIN.sponsorBase * (0.6 + game.gm.rep / 100) * (0.7 + game.fin.fans / 150); }
+function payMonth() {
+  const f = game.fin; if (!f || f.ledger.months >= 6) return;
+  f.ledger.months++;
+  finBook('tv', FIN.tv / 6);
+  finBook('sponsor', sponsorRate() / 6);
+  finBook('wages', payroll(U()) / 6);
+  finBook('staff', staffPayroll(U()) / 6);
+}
+function settleSeasonFinances() {
+  const f = game.fin; if (!f) return;
+  while (f.ledger.months < 6) payMonth();
+  finBook('upkeep', Object.values(f.fac).reduce((a, l) => a + l * FIN.upkeep, 0));
+  const L = f.ledger;
+  f.history.unshift({ year: game.year, income: Math.round(income(L)), spend: Math.round(spend(L)), profit: Math.round(income(L) - spend(L)), cash: Math.round(f.cash), fans: f.fans });
+}
+// Gate takings for the user's home matches.
+function gateTakings(M) {
+  const f = game.fin; if (!f || M.home !== U() || COMPS[M.comp].intl) return 0;
+  const cap = (12 + (facLevel('stadium') - 1) * 6) * 1000;
+  const base = { T20: 0.45, OD: 0.2, FC: 0.08 }[M.fmt];
+  const price = { T20: 32, OD: 24, FC: 14 }[M.fmt] * TICKET[f.ticket].price;
+  const days = M.fmt === 'FC' ? Math.max(1, Math.ceil(M.balls / (FORMATS.FC.oversPerDay * 6))) : 1;
+  const opp = 0.9 + (teamStrength(M.away) - 65) / 60;
+  const rain = M.abandoned ? 0.1 : M.cond && M.cond.days.some(d => d.sky === 'rain') ? 0.7 : 1;
+  const big = M.stage !== 'league' ? 1.5 : 1;
+  const crowd = Math.round(Math.min(cap, cap * base * TICKET[f.ticket].demand * (0.5 + f.fans / 100) * opp * rain * big) * days);
+  const take = Math.round(crowd * price);
+  finBook('gate', take);
+  M.crowd = crowd;
+  return take;
+}
+function weeklyFans() {
+  const f = game.fin; if (!f) return;
+  const recent = game.season.fixtures.filter(x => x.result && (x.home === U() || x.away === U()) && x.day > game.day - 7 && x.day <= game.day);
+  const w = recent.filter(x => x.result.winner === U()).length, l = recent.filter(x => x.result.winner && x.result.winner !== U()).length;
+  const stars = squadOf(U()).filter(p => peakOvr(p) >= 80).length;
+  f.fans = clamp(Math.round(f.fans + (w - l) * 1.5 + TICKET[f.ticket].fans + (stars - 2) * 0.3 + (60 - f.fans) * 0.03), 5, 100);
+}
+function upgradeFacility(k) {
+  const f = game.fin, cost = upgradeCost(k);
+  if (f.fac[k] >= 5) return { ok: false, reason: 'Already at the highest level.' };
+  if (f.cash < cost) return { ok: false, reason: `You need ${money(cost)} in the bank.` };
+  finBook('upgrades', cost); f.fac[k]++;
+  addNews('Club', `${FACILITIES[k].label} upgraded`, `Now level ${f.fac[k]}: ${FACILITIES[k].eff(f.fac[k])}.`);
+  logTx(`Upgraded ${FACILITIES[k].label.toLowerCase()} to level ${f.fac[k]} (${money(cost)}).`);
+  return { ok: true };
+}
+
+// ---- GM inbox: situations that need a decision ----
+// Each event builder returns null if it does not fit the current state.
+const EVENTS = {
+  sponsor() {
+    const amt = randInt(12, 30) * 10000, cap = P(game.captain);
+    const brand = pick(['Southern Cross Energy', 'Harbourline Insurance', 'Outback Motors', 'Coastal Bank', 'Summit Telecom', 'Redgum Brewing']);
+    return { title: `${brand} offer a sponsorship`, body: `${brand} will pay ${money(amt)} for a sleeve deal. They want ${cap ? cap.last : 'your captain'} at three promotional events during the season.`,
+      choices: [['Accept the deal', { cash: amt, morale: cap ? { id: cap.id, v: -4 } : null, fans: 0 }], ['Decline', {}]] };
+  },
+  rest() {
+    const p = squadOf(U()).filter(x => isPace(x) && !x.injury && !x.natDuty && x.fitness < 82).sort((a, b) => a.fitness - b.fitness)[0];
+    if (!p) return null;
+    return { title: `${pname(p)} asks to be rested`, body: `Your quick is at ${Math.round(p.fitness)}% fitness and feels a niggle. He would like to sit out the next match.`, pid: p.id,
+      choices: [['Rest him', { rest: p.id, morale: { id: p.id, v: 5 } }], ['He plays', { morale: { id: p.id, v: -6 }, fitness: { id: p.id, v: -5 } }]] };
+  },
+  discipline() {
+    const p = squadOf(U()).filter(x => ensurePersona(x) === 'volatile' || x.morale < 50)[0];
+    if (!p) return null;
+    return { title: `${pname(p)} late for training again`, body: 'The coaching staff want to know how you will handle it. The rest of the squad is watching.', pid: p.id,
+      choices: [['Fine him', { morale: { id: p.id, v: -8 }, team: 1 }], ['Quiet word', { morale: { id: p.id, v: 2 } }], ['Let it go', { team: -1 }]] };
+  },
+  media() {
+    const p = squadOf(U()).filter(x => x.form < 40 && peakOvr(x) >= 70)[0];
+    if (!p) return null;
+    return { title: `Media question ${pname(p)}'s form`, body: `A columnist says ${p.last} is out of form and out of his depth. Reporters want a response.`, pid: p.id,
+      choices: [['Back him publicly', { morale: { id: p.id, v: 8 }, form: { id: p.id, v: 3 } }], ['Say he must improve', { morale: { id: p.id, v: -6 }, form: { id: p.id, v: ensurePersona(p) === 'professional' || p.persona === 'ambitious' ? 6 : -3 } }], ['No comment', {}]] };
+  },
+  community() {
+    return { title: 'Board asks for a regional clinics tour', body: 'Running junior clinics across the state would cost $60k and take some players away for a day, but it would grow the fan base.',
+      choices: [['Fund the tour', { cash: -60000, fans: 6 }], ['Not this year', { fans: -1 }]] };
+  },
+  grant() {
+    return { title: 'Government infrastructure grant', body: 'The state government will put $300k toward one facility if you match half of it ($150k).',
+      choices: [['Stadium', { cash: -150000, fac: 'stadium' }], ['Academy', { cash: -150000, fac: 'academy' }], ['Decline', {}]] };
+  },
+  rival() {
+    const p = squadOf(U()).filter(x => x.age <= 24 && x.pot >= 78 && x.contract && x.contract.years <= 1)[0];
+    if (!p) return null;
+    const rival = pick(TEAM_DEFS.filter(t => t.id !== U()));
+    return { title: `${rival.nick} chasing ${pname(p)}`, body: `${rival.name} have been in touch with ${p.last}'s agent. His deal runs out at the end of the season.`, pid: p.id,
+      choices: [['Open contract talks', { negotiate: p.id }], ['Ignore it', { morale: { id: p.id, v: -3 } }]] };
+  }
+};
+function maybeEvent() {
+  if (game.phase !== 'season' || rand() > 0.045) return false;
+  if ((game.inbox || []).filter(m => !m.done).length >= 3) return false;
+  const keys = shuffle(Object.keys(EVENTS));
+  for (const k of keys) {
+    const e = EVENTS[k](); if (!e) continue;
+    game.inbox = game.inbox || [];
+    game.inbox.unshift(Object.assign({ id: 'm' + game.day + k, kind: k, day: game.day, expires: game.day + 10, done: false }, e));
+    if (game.inbox.length > 30) game.inbox.length = 30;
+    return true;
+  }
+  return false;
+}
+function resolveEvent(id, idx) {
+  const m = (game.inbox || []).find(x => x.id === id); if (!m || m.done) return null;
+  const [label, eff] = m.choices[idx]; m.done = true; m.choice = label;
+  if (eff.cash) { if (eff.cash > 0) finBook('other', eff.cash); else finBook('events', -eff.cash); }
+  if (eff.fans) game.fin.fans = clamp(game.fin.fans + eff.fans, 5, 100);
+  if (eff.morale && P(eff.morale.id)) P(eff.morale.id).morale = clamp(P(eff.morale.id).morale + eff.morale.v, 5, 100);
+  if (eff.form && P(eff.form.id)) P(eff.form.id).form = clamp(P(eff.form.id).form + eff.form.v, 15, 92);
+  if (eff.fitness && P(eff.fitness.id)) P(eff.fitness.id).fitness = clamp(P(eff.fitness.id).fitness + eff.fitness.v, 35, 100);
+  if (eff.team) squadOf(U()).forEach(p => p.morale = clamp(p.morale + eff.team, 5, 100));
+  if (eff.rest && P(eff.rest)) P(eff.rest).rest = true;
+  if (eff.fac) { game.fin.fac[eff.fac] = Math.min(5, game.fin.fac[eff.fac] + 1); addNews('Club', `${FACILITIES[eff.fac].label} upgraded with grant funding`, `Now level ${game.fin.fac[eff.fac]}.`); }
+  logTx(`Inbox: ${m.title} · ${label}.`);
+  return eff;
+}
+function expireInbox() { (game.inbox || []).forEach(m => { if (!m.done && game.day > m.expires) { m.done = true; m.choice = 'No response (default)'; } }); }
+
+// ---- Contract negotiation with agents ----
+const AGENT_STYLES = { tough:{ label:'Hard-nosed', mult:1.12, patience:2 }, fair:{ label:'Straight shooter', mult:1.0, patience:3 }, friendly:{ label:'Easy to deal with', mult:0.96, patience:4 } };
+function agentOf(p) { if (!p.agent) { const nm = genName('AUS'); p.agent = { name: nm[0] + ' ' + nm[1], style: weightedPick(Object.keys(AGENT_STYLES), k => ({ tough:2, fair:3, friendly:1.5 })[k]) }; } return p.agent; }
+function prefYears(p) { return p.age <= 25 ? 3 : p.age <= 30 ? 2 : 1; }
+function startNegotiation(id, mode) {
+  const p = P(id), ag = agentOf(p), per = ensurePersona(p);
+  if (p.noTalksUntil && game.day < p.noTalksUntil && game.phase === 'season') return { ok: false, reason: `${p.last}'s camp is not taking calls right now.` };
+  if (mode === 'extend' && p.wantsOut) return { ok: false, reason: `${p.last} has asked for a trade and will not discuss a new deal.` };
+  const own = p.teamId === U();
+  let ask = askingSalary(p) * AGENT_STYLES[ag.style].mult * (per === 'ambitious' ? 1.08 : 1) * (per === 'loyal' && own ? 0.9 : 1) * (own && p.morale < 45 ? 1.12 : 1) * (1 - (game.gm.rep - 40) / 500);
+  if (mode === 'resign' && game.offseason) { const e = game.offseason.expiring.find(x => x.id === id); if (e) ask = Math.max(ask, e.ask * 0.95); }
+  ask = Math.max(MIN_SALARY, Math.round(ask / 5000) * 5000);
+  game.neg = { id, mode, ask, years: prefYears(p), patience: AGENT_STYLES[ag.style].patience, log: [`${ag.name} (${AGENT_STYLES[ag.style].label.toLowerCase()}): "We are looking for ${money(ask)} a season over ${prefYears(p)} year${prefYears(p) > 1 ? 's' : ''}."`], done: false };
+  return { ok: true };
+}
+function negotiationOffer(salary, years) {
+  const n = game.neg; if (!n || n.done) return;
+  const p = P(n.id), ag = agentOf(p);
+  salary = Math.round(salary / 5000) * 5000;
+  const yAdj = years === n.years ? 1 : 1 + Math.abs(years - n.years) * 0.05;
+  const target = n.ask * yAdj;
+  const capRoom = n.mode === 'sign' ? capSpace(U()) : capSpace(U()) + (p.contract ? p.contract.salary : 0);
+  n.log.push(`You: ${money(salary)} × ${years} yr${years > 1 ? 's' : ''}.`);
+  if (salary > capRoom) { n.log.push('Your list manager: that would take us over the salary cap.'); return; }
+  if (salary >= target * 0.98) { n.done = 'agreed'; n.final = { salary, years }; n.log.push(`${ag.name}: "Done. We have a deal."`); return; }
+  if (salary >= target * 0.85) {
+    n.patience--;
+    const give = ag.style === 'tough' ? 0.3 : ag.style === 'fair' ? 0.5 : 0.6;
+    n.ask = Math.round((target - (target - salary) * give) / yAdj / 5000) * 5000;
+    if (n.patience <= 0) { n.done = 'walked'; n.log.push(`${ag.name}: "We are too far apart. We will look elsewhere."`); }
+    else n.log.push(`${ag.name}: "Closer. ${money(n.ask)} and we can sign today."`);
+    return;
+  }
+  n.patience -= 2;
+  if (p.teamId === U()) p.morale = clamp(p.morale - 3, 5, 100);
+  if (n.patience <= 0) { n.done = 'walked'; n.log.push(`${ag.name}: "That is insulting. We are done here."`); }
+  else n.log.push(`${ag.name}: "That is well short. ${money(n.ask)} is the number."`);
+}
+function closeNegotiation() {
+  const n = game.neg; if (!n) return null;
+  const p = P(n.id);
+  let msg = null;
+  if (n.done === 'agreed') {
+    const { salary, years } = n.final;
+    if (n.mode === 'sign') {
+      if (squadOf(U()).length >= SQUAD_MAX) msg = `Squad is full (${SQUAD_MAX}).`;
+      else if (p.nat !== 'AUS' && overseasCount(U()) >= OVERSEAS_MAX) msg = `You already have ${OVERSEAS_MAX} overseas players.`;
+      else { p.teamId = U(); p.contract = { salary, years }; logTx(`Signed ${pname(p)} (${money(salary)} × ${years}).`); addNews('Signing', `${pname(p)} signs with ${teamName(U())}`, `${ROLES[p.role].label}, ${p.age}. ${money(salary)} a season for ${years} year${years > 1 ? 's' : ''}.`); msg = 'Signed.'; }
+    } else if (n.mode === 'extend') { p.contract = { salary, years: p.contract.years + years }; p.morale = clamp(p.morale + 6, 5, 100); logTx(`Extended ${pname(p)} (${money(salary)}).`); msg = 'Extension agreed.'; }
+    else if (n.mode === 'resign') { const e = game.offseason.expiring.find(x => x.id === n.id); p.contract = { salary, years }; if (e) e.status = 'signed'; logTx(`Re-signed ${pname(p)} (${money(salary)} × ${years}).`); msg = 'Re-signed.'; }
+  } else if (n.done === 'walked') {
+    p.noTalksUntil = game.day + 30;
+    if (p.teamId === U()) p.morale = clamp(p.morale - 6, 5, 100);
+    if (n.mode === 'resign') { const e = game.offseason.expiring.find(x => x.id === n.id); if (e) e.status = 'released'; }
+    msg = `${p.last} walked away from talks.`;
+  }
+  game.neg = null;
+  return msg;
+}
+
+// ---- Youth academy ----
+function academyIntake() {
+  const lvl = facLevel('academy'), n = 1 + Math.floor(lvl / 2);
+  const ids = [];
+  for (let i = 0; i < n; i++) {
+    const p = makeProspect();
+    p.prospect = false; p.academy = true;
+    const boost = (lvl - 1) * 2;
+    Object.keys(p.sk).forEach(k => p.sk[k] = clamp(p.sk[k] + boost * 0.5, 15, 99));
+    p.pot = clamp(p.pot + boost, 55, 94);
+    ids.push(p.id);
+  }
+  return ids;
+}
+function signAcademy(id) {
+  const p = P(id); if (!p || p.teamId) return;
+  if (squadOf(U()).length >= SQUAD_MAX) { flash('Squad is full.'); return; }
+  p.teamId = U(); p.contract = { salary: ROOKIE_SALARY, years: 3 }; p.academy = false;
+  logTx(`Signed academy graduate ${pname(p)} (${money(ROOKIE_SALARY)} × 3).`);
+  addNews('Academy', `${pname(p)} signs from the academy`, `${ROLES[p.role].label}, ${p.age}. Potential ${potGrade(p)}.`);
+}
+// §8e RECORDS BOOK + PLAYER MATCH LOG -------------------------------------------------
+// Records are kept as small top-10 lists with names stored as text, so they survive
+// retirements and season rollovers. Keys are scope_format, e.g. dom_FC or intl_T20.
+
+function recKey(M) { return (COMPS[M.comp].intl ? 'intl_' : 'dom_') + M.fmt; }
+function topPush(list, item, better, n) {
+  list.push(item); list.sort(better); if (list.length > (n || 10)) list.length = n || 10;
+}
+function recordMatch(M) {
+  if (M.abandoned) return;
+  const R = game.records = game.records || { hs:{}, bb:{}, th:{}, tl:{}, pt:{} };
+  const k = recKey(M), y = game.year;
+  ['hs','bb','th','tl','pt'].forEach(t => R[t][k] = R[t][k] || []);
+  const sn = t => teamDef(t) ? (teamDef(t).short || teamDef(t).id) : t;
+  M.innings.forEach(inn => {
+    const opp = sn(inn.bowl), team = sn(inn.bat);
+    topPush(R.th[k], { t: team, opp, r: inn.runs, w: inn.wkts, y }, (a, b) => b.r - a.r);
+    if (inn.allOut) topPush(R.tl[k], { t: team, opp, r: inn.runs, y }, (a, b) => a.r - b.r);
+    inn.card.forEach(c => { if (c.in && c.r >= 50) topPush(R.hs[k], { id: c.id, n: pname(P(c.id)), t: team, r: c.r, b: c.b, no: !c.out, opp, y }, (a, b) => b.r - a.r || (b.no ? 1 : 0) - (a.no ? 1 : 0)); });
+    Object.keys(inn.bw).forEach(id => { const b = inn.bw[id]; if (b.w >= 3) topPush(R.bb[k], { id, n: pname(P(id)), t: sn(inn.bowl), w: b.w, r: b.r, opp: team, y }, (a, b2) => b2.w - a.w || a.r - b2.r); });
+    const parts = (inn.parts || []).slice();
+    if (inn.part && inn.part.r > 0 && !inn.allOut) parts.push({ r: inn.part.r, w: inn.wkts + 1, a: inn.card[inn.striker].id, o: inn.card[inn.non].id, unb: true });
+    parts.forEach(pt => { if (pt.r >= 80) topPush(R.pt[k], { a: pname(P(pt.a)), b: pname(P(pt.o)), t: team, r: pt.r, w: pt.w, unb: !!pt.unb, opp, y }, (a, b) => b.r - a.r); });
+  });
+}
+// Rolling log of each player's last 15 matches: [fmt, runs, wickets, opponent, intl].
+function logMatchForPlayers(M) {
+  if (M.abandoned) return;
+  const intl = COMPS[M.comp].intl ? 1 : 0;
+  [M.home, M.away].forEach(t => {
+    const opp = M.home === t ? M.away : M.home;
+    const os = teamDef(opp) ? (teamDef(opp).short || teamDef(opp).id) : opp;
+    M.xi[t].forEach(id => {
+      const p = P(id);
+      if (!p || (p.teamId && p.teamId.startsWith('X_'))) return;
+      let r = 0, w = 0, batted = false;
+      M.innings.forEach(inn => { const c = inn.card.find(x => x.id === id && x.in); if (c) { r += c.r; batted = true; } if (inn.bw[id]) w += inn.bw[id].w; });
+      p.log = p.log || [];
+      p.log.push([M.fmt, batted ? r : -1, w, os, intl]);
+      if (p.log.length > 15) p.log.shift();
+    });
+  });
+}
+function careerLeaders(fmt, scope, stat, n) {
+  const ps = Object.values(game.players).filter(p => !(p.teamId || '').startsWith('X_') || scope === 'intl');
+  const src = p => scope === 'intl' ? (p.stats.intl ? p.stats.intl[fmt] : null) : p.stats.career[fmt];
+  const val = { runs: s => s.r, wkts: s => s.w, avg: s => s.inn >= 20 ? batAvgOf(s) : -1, bavg: s => s.w >= 30 ? -bowlAvgOf(s) : -999, m: s => s.m, c100: s => s.c100 }[stat];
+  return ps.map(p => ({ p, s: src(p) })).filter(x => x.s && x.s.m > 0 && val(x.s) > -1 && val(x.s) > -999).sort((a, b) => val(b.s) - val(a.s)).slice(0, n || 10);
+}
+function teamHonours(teamId) {
+  const out = { SHIELD:0, ODC:0, T20C:0 };
+  (game.history || []).forEach(h => COMP_ORDER.forEach(c => { if (h.champions[c] === teamId) out[c]++; }));
+  COMP_ORDER.forEach(c => { if (game.phase === 'season' && game.season.champions[c] === teamId) out[c]++; });
+  return out;
+}
 // §9 NEW GAME + APPLYING RESULTS ---------------------------------------------
 let game = null;
 
@@ -1907,6 +2197,7 @@ function createGame(gmName, teamId, year, nationGm) {
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
   game.nation.rankings = initRankings();
+  game.fin = initFinances(); game.inbox = [];
   // Squads
   TEAM_DEFS.forEach(t => {
     const base = 64 + randInt(0, 5);
@@ -1944,7 +2235,7 @@ function fixtureById(id) { return game.season.fixtures.find(f => f.id === id); }
 
 function compactScorecard(M) {
   return {
-    condText: condSummary(M), overs: M.overs || null,
+    condText: condSummary(M), overs: M.overs || null, crowd: M.crowd || null, crowd: M.crowd || null,
     comp: M.comp, fmt: M.fmt, home: M.home, away: M.away, venue: M.venue, stage: M.stage, toss: M.toss, result: M.result, potm: M.potm, xi: M.xi,
     innings: M.innings.map(i => ({ maxOvers: M.overs || null, bat: i.bat, bowl: i.bowl, runs: i.runs, wkts: i.wkts, balls: i.balls, ext: i.ext, declared: i.declared, allOut: i.allOut, followOn: i.followOn, target: i.target,
       card: i.card.map(c => ({ id: c.id, r: c.r, b: c.b, f4: c.f4, f6: c.f6, out: c.out, in: c.in, shots: c.shots })),
@@ -1993,6 +2284,7 @@ function applyIntlMatch(M) {
   });
   learnFromMatch(M);
   matchWear(M, inXI);
+  recordMatch(M); logMatchForPlayers(M);
   fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
   if (/^wc(semi|final)/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
@@ -2014,6 +2306,7 @@ function matchWear(M, inXI) {
     let risk = 0.004 + Math.max(0, 78 - p.fitness) * 0.0016 + (isPace(p) ? overs * (fmt === 'FC' ? 0.0005 : 0.0015) : 0);
     if (cond && p.teamId === U()) risk *= 0.75;
     risk *= 1.3 - staffRating(p.teamId, 'physio') / 200;
+    if (p.teamId === U()) risk *= 1 - (facLevel('medical') - 1) * 0.06;
     if (!p.injury && rand() < risk) injure(p);
     p.form = clamp(Math.round(p.form * 0.75 + matchPerformance(M, id) * 0.25), 15, 92);
   });
@@ -2026,6 +2319,7 @@ function applyMatch(M) {
   inXI.forEach(id => addStat(P(id), fmt, s => s.m++));
   learnFromMatch(M);
   trackSelection(M);
+  recordMatch(M); logMatchForPlayers(M);
   M.innings.forEach(inn => {
     inn.card.forEach(c => {
       if (!c.in) return;
@@ -2067,7 +2361,9 @@ function applyMatch(M) {
     });
   }
   fx.result = { winner: res.winner, draw: !!res.draw && !res.advanced, tie: !!res.tie, noResult: !!res.noResult && !res.advanced, text: res.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
+  gateTakings(M);
   if (M.home === U() || M.away === U() || fx.stage !== 'league') game.scorecards[fx.id] = compactScorecard(M);
+  if (M.home === U() || M.away === U()) squadOf(U()).forEach(p => { p.rest = false; });
 
   matchWear(M, inXI);
 
@@ -2108,7 +2404,8 @@ function updateFinals(comp) {
     const w = fin.result.winner;
     game.season.champions[comp] = w;
     addNews(COMPS[comp].short, `${teamName(w)} win the ${COMPS[comp].name}`, fin.result.text + '.');
-    if (w === U()) { game.gm.titles.push({ comp, year: game.year }); game.gm.rep = clamp(game.gm.rep + 3, 0, 100); }
+    if (w === U()) { game.gm.titles.push({ comp, year: game.year }); game.gm.rep = clamp(game.gm.rep + 3, 0, 100); finBook('prize', FIN.prize[comp]); game.fin.fans = clamp(game.fin.fans + 10, 5, 100); }
+    else if (fin.home === U() || fin.away === U()) finBook('prize', FIN.finalBonus);
   }
 }
 
@@ -2137,6 +2434,7 @@ function nextDay() {
   let stop = false;
   const rec = game.training === 'fitness' ? 1.25 : 1;
   const phys = {}; TEAM_DEFS.forEach(t => phys[t.id] = 0.85 + staffRating(t.id, 'physio') / 300);
+  phys[U()] *= 1 + (facLevel('medical') - 1) * 0.04;
   for (const p of Object.values(game.players)) {
     if (p.retired) continue;
     if (p.injury) {
@@ -2156,6 +2454,10 @@ function nextDay() {
   if (game.day === CAL.TRADE_DEADLINE) addNews('League', 'Trade deadline passed', 'No more trades until the off-season. Free agents can still be signed.');
   game.offers = game.offers.filter(o => o.expires >= game.day);
   if (maybeAIOffer()) stop = true;
+  if (game.day % 30 === 0) payMonth();
+  if (game.day % 7 === 3) weeklyFans();
+  expireInbox();
+  if (maybeEvent()) stop = true;
   return stop;
 }
 
@@ -2286,6 +2588,13 @@ function evaluateBoard() {
   delta += trophies * 8;
   const pay = payroll(U());
   if (pay > SALARY_CAP) { delta -= 10; lines.push({ text: 'Stay under the salary cap', ok: false }); }
+  if (game.fin) {
+    const L = game.fin.ledger, profit = income(L) - spend(L);
+    const ok = profit >= 0;
+    delta += ok ? 5 : profit < -500000 ? -12 : -6;
+    lines.push({ text: `Run the club at a profit (${profit >= 0 ? '+' : ''}${money(Math.round(profit))})`, ok });
+    if (game.fin.cash < 0) { delta -= 15; lines.push({ text: 'Keep the club out of debt', ok: false }); }
+  }
   b.confidence = clamp(b.confidence + delta, 0, 100);
   const fired = b.confidence < 20;
   return { lines, delta, trophies, confidence: b.confidence, fired };
@@ -2315,7 +2624,7 @@ function computeAwards() {
 function payroll(teamId) { return squadOf(teamId).reduce((a, p) => a + (p.contract ? p.contract.salary : 0), 0) + (teamId === U() ? game.deadMoney : 0); }
 function capSpace(teamId) { return SALARY_CAP - payroll(teamId); }
 function overseasCount(teamId) { return squadOf(teamId).filter(p => p.nat !== 'AUS').length; }
-function freeAgents() { return Object.values(game.players).filter(p => !p.retired && !p.teamId && !p.prospect); }
+function freeAgents() { return Object.values(game.players).filter(p => !p.retired && !p.teamId && !p.prospect && !p.academy); }
 
 function groupNeeds(teamId, removeIds, addIds) {
   removeIds = removeIds || []; addIds = addIds || [];
@@ -2479,6 +2788,7 @@ function aiFreeAgency() {
 // §13 OFF-SEASON ------------------------------------------------------------------
 function endSeason() {
   game.phase = 'review';
+  settleSeasonFinances();
   const awards = computeAwards();
   const board = evaluateBoard();
   const finish = {}; COMP_ORDER.forEach(c => finish[c] = ladderPos(c, U()));
@@ -2519,6 +2829,7 @@ function developPlayer(p) {
   if (g > 0 && played >= 12) g += 0.6;
   if (p.age <= 22 && rand() < 0.06) g += 4;
   if (g > 0) g = head <= 0 ? 0 : Math.min(g, Math.max(0.3, head * 0.5));
+  if (g > 0 && p.teamId === U()) g *= 1 + (facLevel('training') - 1) * 0.05;
   let batM = 1, bowlM = 1;
   if (p.teamId && teamDef(p.teamId) && !teamDef(p.teamId).intl) {
     const hm = 0.9 + staffRating(p.teamId, 'head') / 500;
@@ -2611,6 +2922,7 @@ function finaliseExpiring() {
 }
 
 function setupDraft() {
+  game.offseason.academy = academyIntake();
   for (let i = 0; i < 18; i++) makeProspect();
   const score = id => COMP_ORDER.reduce((a, c) => a + ladderPos(c, id) + (game.season.champions[c] === id ? -2 : 0), 0);
   const order = TEAM_DEFS.map(t => t.id).sort((a, b) => score(b) - score(a));
@@ -2643,6 +2955,8 @@ function runDraftUntilUser(autoUser) {
     makeDraftPick(t, aiDraftChoice(t));
   }
   // Leftover prospects: the best few become free agents, the rest go back to club cricket.
+  (game.offseason.academy || []).forEach(id => { const p = P(id); if (p && !p.teamId) delete game.players[id]; });
+  game.offseason.academy = [];
   draftPool().sort((a, b) => b.pot - a.pot).forEach((p, i) => {
     if (i < 4) p.prospect = false; else delete game.players[p.id];
   });
@@ -2654,6 +2968,8 @@ function startNewSeason() {
   game.year++;
   game.season = buildSeason(game.year);
   game.day = 0; game.scorecards = {}; game.pendingFx = null; game.offers = []; game.live = null;
+  if (game.fin) game.fin.ledger = blankLedger();
+  Object.values(game.players).forEach(p => { p.rest = false; p.noTalksUntil = null; });
   FMT_LIST.forEach(f => game.userXI[f] = (game.userXI[f] || []).filter(id => P(id) && P(id).teamId === U()));
   if (game.captain && (!P(game.captain) || P(game.captain).teamId !== U())) game.captain = null;
   if (!game.captain) { const c = squadOf(U()).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0]; game.captain = c ? c.id : null; }
@@ -2828,6 +3144,7 @@ function statusChip(p) {
   if (p.retired) return '<span class="tag">Retired</span>';
   if (p.injury) return `<span class="tag bad">Injured ${Math.max(1, Math.ceil((p.injury.until - game.day) / 7))}w</span>`;
   if (p.natDuty) return '<span class="tag info">Australia</span>';
+  if (p.rest) return '<span class="tag info">Rested</span>';
   const f = Math.round(p.fitness);
   return f >= 88 ? '' : `<span class="tag ${f >= 75 ? 'warn' : 'bad'}">${f}%</span>`;
 }
@@ -2855,7 +3172,7 @@ const ICONS = {
 function navHtml() {
   const items = [['home','Home'],['squad','Squad'],['fixtures','Fixtures'],['league','League'],['office','Office']];
   const cur = ['matchday','live'].includes(ui.page) ? 'home' : ui.page === 'natsel' ? 'office' : ui.page;
-  return items.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="go('${k}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${l}${k === 'office' && game.offers.length ? `<span class="badge-n">${game.offers.length}</span>` : ''}</button>`).join('');
+  return items.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="go('${k}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${l}${k === 'office' && (game.offers.length + openInbox().length) ? `<span class="badge-n">${game.offers.length + openInbox().length}</span>` : ''}</button>`).join('');
 }
 function render() {
   if (!game) return;
@@ -2928,6 +3245,9 @@ function showHelp() {
     <h4>The dressing room</h4><p>Every player has a personality and a mood. Mood moves with playing time, results, pay and how well your head coach manages people. Talk to players to reassure them, promise them games or challenge them. Unhappy players lose form, refuse new contracts and eventually ask for a trade.</p>
     <h4>Development</h4><p>Put players on individual programmes (technique, power, bowling, control, variations, keeping, fitness, or learning to bowl). Your head coach decides how many programmes you can run. Programmes add monthly progress during the season and faster growth in the off-season.</p>
     <h4>World cricket</h4><p>Other nations play their own series, the rankings move with every international, and a T20 World Cup is held in odd-year seasons.</p>
+    <h4>Club business</h4><p>The Club tab in the Office shows your bank balance, gate takings, sponsorship and wages. Set ticket prices and upgrade the training centre, medical centre, youth academy and stadium. The board now judges profit and debt as well as results. Decisions also arrive in your inbox: sponsors, media, discipline and rival clubs circling your players.</p>
+    <h4>Contract talks</h4><p>Every player has an agent. Make an offer, hear a counter, and settle or walk away. Hard-nosed agents give little ground; lowball offers burn their patience.</p>
+    <h4>Records and profiles</h4><p>The League tab holds the records book (highest scores, best bowling, team totals, partnerships and career leaders). Tap a team on any ladder for its profile.</p>
     <h4>Editor</h4><p>Turn on Editor mode in the menu to edit any player or team, or create players. Edited careers are marked as edited.</p>
     <h4>Saving</h4><p>The game saves to your browser automatically. Private browsing and some file previews do not keep data; if the menu says saves are not being kept, export a save file and import it next time.</p>
     <h4>Weather and pitches</h4><p>Each match gets a pitch and a forecast. Overcast days help swing, hot days tire players, and rain costs overs or washes matches out.</p>
@@ -2971,6 +3291,8 @@ function renderHome() {
   if (inj.length) alerts.push(`<span class="chip bad btn-chip" onclick="playerListSheet('Injuries','injured')">${inj.length} injured ▸</span>`);
   if (duty.length) alerts.push(`<span class="chip info btn-chip" onclick="playerListSheet('National duty','duty')">${duty.length} with Australia ▸</span>`);
   if (tired.length) alerts.push(`<span class="chip warn btn-chip" onclick="playerListSheet('Fitness watch','tired')">${tired.length} below 75% fitness ▸</span>`);
+  const ib = openInbox().length;
+  if (ib) alerts.push(`<span class="chip warn btn-chip" onclick="ui.officeTab='inbox';go('office')">${ib} decision${ib > 1 ? 's' : ''} waiting in your inbox ▸</span>`);
   const outs = sq.filter(p => p.wantsOut);
   if (outs.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.squadTab='room';go('squad')">${outs.length} trade request${outs.length > 1 ? 's' : ''} ▸</span>`);
   const selw = game.nation.gm && game.season.windows.find(w => w.selecting);
@@ -2986,6 +3308,7 @@ function renderHome() {
     <div class="grid g2">
       ${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}
       <div class="grid">
+        ${homeExtras()}
         ${panel('News', `<div class="rows">${game.news.slice(0, 4).map(newsRow).join('') || '<div class="empty">No news yet.</div>'}</div>`, { flush: true, end: `<button class="link" onclick="newsSheet()">All news ▸</button>` })}
         ${panel('Board objectives', `<div class="rows">${game.board.objectives.map(o => `<div class="kv"><span>${o.text}</span><span>${objectiveStatus(o) ? '<span class="win">On track</span>' : '<span class="dim">Not yet</span>'}</span></div>`).join('')}</div>`, { flush: true })}
       </div>
@@ -3008,7 +3331,7 @@ function playerListSheet(title, kind) {
 function ladderTable(comp, compact) {
   const fc = COMPS[comp].fmt === 'FC';
   return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th>${fc ? '<th>D</th>' : compact ? '' : '<th>NR</th>'}<th>Pts</th><th>${fc ? 'Quot' : 'NRR'}</th></tr></thead><tbody>
-    ${sortedLadder(comp).map((r, i) => `<tr class="${r.id === U() ? 'me' : ''}"><td><span class="dim" style="display:inline-block;width:14px">${i + 1}</span>${tdot(r.id)}<span class="hide-m"> ${teamDef(r.id).nick}</span></td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td>${fc ? `<td>${r.D}</td>` : compact ? '' : `<td>${r.NR || 0}</td>`}<td class="b">${r.Pts}</td><td class="dim">${fc ? quotient(r).toFixed(2) : (nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>
+    ${sortedLadder(comp).map((r, i) => `<tr class="tap ${r.id === U() ? 'me' : ''}" onclick="showTeam('${r.id}')"><td><span class="dim" style="display:inline-block;width:14px">${i + 1}</span>${tdot(r.id)}<span class="hide-m"> ${teamDef(r.id).nick}</span></td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td>${fc ? `<td>${r.D}</td>` : compact ? '' : `<td>${r.NR || 0}</td>`}<td class="b">${r.Pts}</td><td class="dim">${fc ? quotient(r).toFixed(2) : (nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>
     ${game.season.champions[comp] ? `<div class="kv"><span>Champions</span><span>${tdot(game.season.champions[comp])} ${teamName(game.season.champions[comp])}</span></div>` : ''}`;
 }
 
@@ -3051,7 +3374,7 @@ function renderOffseason() {
   } else if (game.phase === 'contracts') {
     const ex = o.expiring;
     body = panel(`Expiring contracts · cap space ${money(capSpace(U()))}`, `<div class="rows">${ex.map(e => { const p = P(e.id); return playerRow(p, { sub: `${ROLES[p.role].short} · ${p.age} · asks ${money(e.ask)} × ${e.years}`,
-      end: e.status === 'pending' ? `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();resignExpiring('${e.id}');render()">Re-sign</button><button class="btn sm ghost" onclick="event.stopPropagation();letGoExpiring('${e.id}');render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving') }); }).join('') || '<div class="empty">No contracts expire this year.</div>'}</div>
+      end: e.status === 'pending' ? `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();negotiate('${e.id}','resign')">Negotiate</button><button class="btn sm ghost" onclick="event.stopPropagation();letGoExpiring('${e.id}');render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving') }); }).join('') || '<div class="empty">No contracts expire this year.</div>'}</div>
       <div class="pb"><div class="note">Anyone left undecided becomes a free agent.</div></div>`, { flush: true }) +
       ((o.expiringStaff || []).length ? '<div style="height:8px"></div>' + panel('Expiring staff contracts', `<div class="rows">${o.expiringStaff.map(e => { const st = game.staff[e.id]; return `<div class="row"><div class="stack"><div class="main-t">${esc(st.first + ' ' + st.last)}</div><div class="sub-t">${STAFF_ROLES[st.role].label} · asks ${money(e.ask)} × 2</div></div><div class="end">${pill(st.rating)}${e.status === 'pending' ? `<button class="btn sm pri" onclick="resignStaff('${e.id}');render()">Re-sign</button><button class="btn sm ghost" onclick="(game.offseason.expiringStaff.find(x=>x.id==='${e.id}')||{}).status='released';render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving')}</div></div>`; }).join('')}</div>`, { flush: true }) : '');
     btn = 'Rookie draft ▸';
@@ -3060,6 +3383,7 @@ function renderOffseason() {
     const pool = draftPool().sort((a, b) => b.pot - a.pot);
     body = `<div class="grid g3">${panel(clock === U() ? `On the clock · pick ${d.pick + 1}` : 'Draft pool', `<div class="rows">${pool.map(p => playerRow(p, { sub: `${ROLES[p.role].label} · ${p.age} · potential ${potGrade(p)}`, end: `${pill(peakOvr(p))}${clock === U() ? `<button class="btn sm pri" onclick="event.stopPropagation();userDraftPick('${p.id}')">Draft</button>` : ''}` })).join('') || '<div class="empty">Pool empty.</div>'}</div>
       ${clock === U() ? `<div class="pb"><div class="flex between"><span class="s muted">Rookies sign for ${money(ROOKIE_SALARY)} × 2 · squad ${squadOf(U()).length}/${SQUAD_MAX}</span><button class="btn sm ghost" onclick="userDraftPick(null)">Pass</button></div></div>` : ''}`, { flush: true })}
+      ${(o.academy || []).filter(id => P(id) && !P(id).teamId).length ? panel('Academy graduates', `<div class="rows">${o.academy.map(P).filter(p => p && !p.teamId).map(p => playerRow(p, { sub: `${ROLES[p.role].label} · ${p.age} · potential ${potGrade(p)}`, end: `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();signAcademy('${p.id}');autosave();render()">Sign</button>` })).join('')}</div><div class="pb xs muted">Homegrown players. Sign them before the draft ends or they leave. ${money(ROOKIE_SALARY)} × 3 years.</div>`, { flush: true }) : ''}
       ${panel('Picks', `<div class="rows">${d.picks.map(x => `<div class="kv"><span>${x.n}. ${tdot(x.team)}</span><span>${x.id ? plink(P(x.id)) : '<span class="dim">Pass</span>'}</span></div>`).join('') || '<div class="empty">No picks yet.</div>'}</div>`, { flush: true })}</div>`;
     btn = clock === U() ? 'Make your pick' : 'Continue draft ▸';
   } else if (game.phase === 'freeagency') {
@@ -3164,7 +3488,9 @@ function renderFixtures() {
   if (ui.fxComp !== 'ALL') fx = fx.filter(f => f.comp === ui.fxComp);
   const tools = `<div class="flex wrap">${seg([['1','My fixtures'],['0','All']], ui.fxMine ? '1' : '0', 'setFxMine')}<span class="grow"></span>${sel([['ALL','All comps'], ...COMP_ORDER.map(c => [c, COMPS[c].name])], ui.fxComp, "ui.fxComp=this.value;render()")}</div>`;
   const next = fx.findIndex(f => !f.result);
-  return `${pageTitle('Fixtures', game.season.label)}${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${fx.map((f, i) => fixtureRow(f, i === next)).join('') || '<div class="empty">No fixtures.</div>'}</div>`, { flush: true })}`;
+  let lastM = '';
+  const rows = fx.map((f, i) => { const m = dateOf(f.day).toLocaleDateString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' }); const h = m !== lastM ? `<div class="mhead">${m}</div>` : ''; lastM = m; return h + fixtureRow(f, i === next); }).join('');
+  return `${pageTitle('Fixtures', game.season.label)}${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${rows || '<div class="empty">No fixtures.</div>'}</div>`, { flush: true })}`;
 }
 function setFxMine(v) { ui.fxMine = v === '1'; render(); }
 function fixtureRow(f, isNext) {
@@ -3213,7 +3539,7 @@ function scorecardHtml(S, k, fnName, noWorm) {
       ${bw.filter(b => b.balls || b.r).map(b => `<tr><td class="l"><div class="nm">${plink(P(b.id), pshort(P(b.id)))}</div></td><td>${oversStr(b.balls)}</td><td>${b.m}</td><td>${b.r}</td><td class="b">${b.w}</td><td class="dim hide-xs">${b.balls ? (b.r / (b.balls / 6)).toFixed(2) : '–'}</td></tr>`).join('')}</tbody></table></div>
     ${!noWorm && shots.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Wagon wheel</h3></div><div class="pb center">${wagonSvg(shots, 'R')}</div></div>` : ''}
     ${!noWorm && S.fmt !== 'FC' ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Run chart</h3></div><div class="pb">${wormSvg(S.innings, S.fmt)}</div></div>` : ''}
-    <div class="panel" style="margin-top:8px"><div class="rows"><div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}</div></div>`;
+    <div class="panel" style="margin-top:8px"><div class="rows"><div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}${S.crowd ? `<div class="kv"><span>Crowd</span><span>${S.crowd.toLocaleString('en-AU')}</span></div>` : ''}</div></div>`;
 }
 let _scFx = null;
 function showScorecard(fxId, k) {
@@ -3229,8 +3555,8 @@ function scInn(k) { showScorecard(_scFx, k); }
 function setLeagueTab(t) { ui.leagueTab = t; render(); }
 function renderLeague() {
   const t = ui.leagueTab;
-  const body = t === 'leaders' ? renderLeaders() : t === 'history' ? renderHistory() : t === 'players' ? renderPlayerSearch() : t === 'world' ? renderWorld() : renderLadders();
-  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['leaders','Leaders'],['world','World'],['history','Honours'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'leaders' ? renderLeaders() : t === 'history' ? renderHistory() : t === 'players' ? renderPlayerSearch() : t === 'world' ? renderWorld() : t === 'records' ? renderRecords() : renderLadders();
+  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['leaders','Leaders'],['records','Records'],['world','World'],['history','Honours'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
 }
 function setLadComp(c) { ui.ladComp = c; render(); }
 function renderLadders() {
@@ -3282,8 +3608,9 @@ function playerSearchRows() {
 function setOfficeTab(t) { ui.officeTab = t; render(); }
 function renderOffice() {
   const t = ui.officeTab;
-  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'national' ? renderNational() : t === 'log' ? renderLog() : t === 'staff' ? renderStaff() : renderBoard();
-  return `${pageTitle('Office', teamName(U()))}${seg([['board','Board'],['staff','Staff'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['national','Australia'],['log','Log']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'national' ? renderNational() : t === 'log' ? renderLog() : t === 'staff' ? renderStaff() : t === 'club' ? renderClub() : t === 'inbox' ? renderInbox() : renderBoard();
+  const open = openInbox().length;
+  return `${pageTitle('Office', teamName(U()))}${seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['club','Club'],['staff','Staff'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['national','Australia'],['log','Log']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
 }
 function renderBoard() {
   const c = game.board.confidence;
@@ -3356,7 +3683,8 @@ function renderNational() {
 }
 function renderLog() { return panel('Transactions', `<div class="rows">${game.transactions.map(t => `<div class="kv"><span style="color:var(--text)">${esc(t.text)}</span><span>${t.year}</span></div>`).join('') || '<div class="empty">No transactions yet.</div>'}</div>`, { flush: true }); }
 
-function openContract(id, mode) {
+function openContract(id, mode) { return negotiate(id, mode); }
+function openContractSimple(id, mode) {
   const p = P(id), ask = askingSalary(p);
   const def = Math.max(MIN_SALARY, Math.round(ask / 5000) * 5000);
   sheet(mode === 'sign' ? 'Contract offer' : 'Extension', esc(pname(p)), `<p class="s muted" style="margin:0 0 10px">${p.age} · ${ROLES[p.role].label} · best ${peakOvr(p)} · potential ${potGrade(p)} · asking about <b>${money(ask)}</b>${mode === 'extend' ? ` · current ${money(p.contract.salary)}, ${p.contract.years} yr left` : ''}</p>
@@ -3382,7 +3710,8 @@ function showPlayer(id, tab) {
   tab = tab || 'over';
   const sk = p.sk, own = p.teamId === U();
   const bar = (l, v) => { v = Math.round(v); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
-  const head = `<div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
+  const tcol = teamDef(p.teamId) ? teamDef(p.teamId).color : '#3b5568';
+  const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
     <div class="ratings3">${FMT_LIST.map(f => `<div><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join('')}</div><div style="height:10px"></div>
     ${seg([['over','Overview'],['stats','Stats'],['hist','History']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
   let body;
@@ -3390,10 +3719,10 @@ function showPlayer(id, tab) {
     const t = src => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>M</th><th>Runs</th><th>Avg</th><th>SR</th><th>100/50</th><th>HS</th><th>W</th><th>Avg</th><th>Econ</th><th>BB</th><th>Ct</th></tr></thead><tbody>${FMT_LIST.map(f => { const s = src[f]; return `<tr><td>${compName(f)}</td><td>${s.m}</td><td>${s.r}</td><td>${fmtNum(batAvgOf(s))}</td><td>${fmtNum(srOf(s), 0)}</td><td>${s.c100}/${s.c50}</td><td>${hsStr(s)}</td><td>${s.w}</td><td>${fmtNum(bowlAvgOf(s))}</td><td>${fmtNum(econOf(s))}</td><td>${bbStr(s)}</td><td>${s.ct}${s.st ? '/' + s.st : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
     body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Domestic career</h3></div>${t(p.stats.career)}</div>${p.stats.intl ? `<div style="height:8px"></div><div class="panel"><div class="ph"><h3>International (in this career)</h3></div>${t(p.stats.intl).replace(/>Shield</, '>Test<').replace(/>One-Day</, '>ODI<').replace(/>T20</, '>T20I<')}</div>` : ''}`;
   } else if (tab === 'hist') {
-    body = `<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
+    body = `${careerChart(p)}<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
       <div class="kv"><span>International caps</span><span>Tests ${p.caps.FC} · ODIs ${p.caps.OD} · T20Is ${p.caps.T20}</span></div></div></div>`;
   } else {
-    body = `<div class="skills">${bar('Technique', sk.tech)}${bar('Temperament', sk.temp)}${bar('Power', sk.power)}${bar('Bowling', sk.bowl)}${bar('Accuracy', sk.acc)}${bar('Variation', sk.vari)}${bar('Fielding', sk.field)}${bar('Keeping', sk.keep)}${bar('Stamina', sk.stamina)}</div>
+    body = `${formChart(p)}<div class="skills">${bar('Technique', sk.tech)}${bar('Temperament', sk.temp)}${bar('Power', sk.power)}${bar('Bowling', sk.bowl)}${bar('Accuracy', sk.acc)}${bar('Variation', sk.vari)}${bar('Fielding', sk.field)}${bar('Keeping', sk.keep)}${bar('Stamina', sk.stamina)}</div>
       <div class="panel" style="margin-top:10px"><div class="rows">
         <div class="kv"><span>Potential</span><span class="b">${potGrade(p)}</span></div><div class="kv"><span>Form</span><span>${formArrow(p.form)} ${Math.round(p.form)}</span></div>
         <div class="kv"><span>Personality</span><span title="${esc(PERSONAS[ensurePersona(p)].desc)}">${PERSONAS[p.persona].label}</span></div>
@@ -3425,12 +3754,12 @@ function renderMatchday() {
   const hc = me === 'AUS' ? null : staffIn(me, 'head');
   return `${pageTitle('Match day', `${COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
-    ${panel('', `<div class="hero">${badge(fx.home, true)}<div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div>${badge(fx.away, true)}</div>
+    ${panel('', `<div class="hero"><span onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${FORMATS[fmt].name} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div><span onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       <table class="tbl clean" style="margin-top:10px"><tbody><tr><td class="l muted">Pitch</td><td class="l" style="white-space:normal"><b>${pt.label}</b>. ${pt.note}</td></tr>
         <tr><td class="l muted">Forecast</td><td class="l" style="white-space:normal">${pre.cond.days.map((d, i) => `${fmt === 'FC' ? 'Day ' + (i + 1) + ': ' : ''}${SKIES[d.sky].label}${d.lost ? ` (about ${d.lost} overs lost)` : ''}`).join(fmt === 'FC' ? '<br>' : '')}</td></tr>
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
-      <label class="lbl" style="margin-top:12px">Match brief to the coach${hc ? ` · ${esc(hc.first + ' ' + hc.last)} (${COACH_STYLES[hc.style]})` : ''}</label>${tacticGrid(fmt)}
+      ${gamePlanRow(fmt, hc)}
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button>${me === 'AUS' ? `<button class="btn" onclick="go('natsel')" disabled>Squad locked</button>` : `<button class="btn" onclick="ui.squadTab='xi';ui.xiFmt='${fmt}';go('squad')">Edit XI</button>`}</div>
       <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Watch live ▸</button>`}</div>`)}
     <div class="grid" style="grid-template-columns:1fr 1fr">${panel(`${teamDef(me).short || me} · ${avgO(mine)}`, xi(mine), { flush: true })}${panel(`${teamDef(opp).short || opp} · ${avgO(theirs)}`, xi(theirs), { flush: true, end: scouted ? chip('good', 'Scouted') : `<button class="link" onclick="scoutOpposition('${fx.id}','${opp}')">Scout</button>` })}</div>
@@ -3471,7 +3800,7 @@ function startLive() {
   const d = tossDecisionAI(M); setTossDecision(M, d);
   M.log.unshift({ cls:'sys', text: `${teamName(w)} won the toss and chose to ${d}.` });
   M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) });
-  M.briefPrompt = true;
+  const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: `Game plan: ${briefSummary(M.brief[me] || game.tactics[M.fmt])}.` });
   autosave(); go('live');
 }
 function liveStep(mode) {
@@ -3500,7 +3829,7 @@ function startNextInnings() {
   const before = M.innings.length;
   nextInnings(M);
   if (M.done) { M.log.unshift({ cls:'s', text: `RESULT: ${M.result.text}.` + (M.potm ? ` Player of the match: ${pname(P(M.potm))}.` : '') }); }
-  else if (M.innings.length > before) { M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) }); M.briefPrompt = true; }
+  else if (M.innings.length > before) { const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) }); M.log.unshift({ cls:'sys', text: `Game plan: ${briefSummary(M.brief[me] || game.tactics[M.fmt])}.` }); }
   autosave(); render();
 }
 function inningsSummary(M, inn) {
@@ -3539,12 +3868,12 @@ function briefSheet(atBreak) {
   const hc = me === 'AUS' ? null : staffIn(me, 'head');
   const every = drinksEvery(M.fmt);
   const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'Set the brief for this innings.' : `Your message reaches the dressing room at the next drinks break (every ${every} overs).`}</div>
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
+    <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
     <div class="panel" style="margin-top:10px"><div class="rows">
       <div class="kv"><span>${batting ? 'Opposition plan to ' : 'Analyst plan for '}${esc(striker.last)}</span><span class="s">${esc(planLabel(pl))}</span></div>
       <div class="kv"><span>Head coach</span><span>${hc ? `${esc(hc.first + ' ' + hc.last)} · ${COACH_STYLES[hc.style]} · ${hc.rating}` : me === 'AUS' ? 'National coach' : '<span class="loss">Vacant</span>'}</span></div>
       <div class="kv"><span>Conditions</span><span class="s">${esc(PITCHES[M.cond.pitch].label)} · ${esc(skyOf(M).label)}</span></div></div></div>`;
-  sheet(atBreak ? 'Start of innings' : 'Message the coach', 'Match brief', body,
+  sheet('During play', 'Message the dressing room', body,
     { foot: `<button class="btn ghost" onclick="closeModal();liveStep('match')">Sim to result</button><button class="btn pri" onclick="sendBrief(${atBreak ? 1 : 0})">${atBreak ? 'Confirm brief' : 'Send message'}</button>` });
 }
 function sendBrief(now) {
@@ -3557,7 +3886,7 @@ function sendBrief(now) {
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
   if (!inn) return `${pageTitle('Live', 'Starting')}<div class="empty">Starting.</div>`;
-  if (M.briefPrompt && !M.done && !inn.closed) { M.briefPrompt = false; setTimeout(() => briefSheet(true), 0); }
+  M.briefPrompt = false;
   const me = liveMyTeam(M), b = M.brief[me] || game.tactics[M.fmt];
   const sc = inn.card[inn.striker], ns = inn.card[inn.non];
   const bw = inn.curBowler || inn.lastBowler, bf = bw ? inn.bw[bw] : null;
@@ -3572,20 +3901,20 @@ function renderLive() {
     ${overStrip(inn)}`;
   let stateBox = '';
   if (M.done) stateBox = `<div class="note good" style="margin:10px 12px 0"><b>${esc(M.result.text)}</b>${M.potm ? `<br><span class="s">Player of the match: ${plink(P(M.potm))}</span>` : ''}</div>`;
-  else if (inn.closed) stateBox = `<div class="note" style="margin:10px 12px 0"><b>Innings complete.</b> ${esc(inningsSummary(M, inn))}</div>`;
+  else if (inn.closed) stateBox = `<div class="note" style="margin:10px 12px 0"><b>Innings complete.</b> ${esc(inningsSummary(M, inn))}</div>${breakPanel(M, inn)}`;
   const body = ui.liveTab === 'card'
     ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
     : ui.liveTab === 'wagon' ? wagonPanel(M) : commentaryHtml(M);
   let bar;
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
-  else bar = `<button class="btn" onclick="briefSheet(false)">Brief</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
+  else bar = `<button class="btn" onclick="briefSheet(false)">Message</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option><option value="${M.fmt === 'FC' ? 'session' : 'five'}">${M.fmt === 'FC' ? '30 overs' : '5 overs'}</option><option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   return `<div class="grid">
     <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
       <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
         <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
-        ${!M.done ? `<div class="xs dim" style="margin-top:6px">Your brief: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ' · <span class="draw">message waiting for drinks</span>' : ''}</div>` : ''}</div>
+        ${!M.done && !inn.closed ? `<div class="xs dim" style="margin-top:6px">Game plan: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ' · <span class="draw">message waiting for drinks</span>' : ''}</div>` : ''}</div>
       ${crease}${stateBox}<div style="height:12px"></div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
@@ -3647,6 +3976,38 @@ function wagonPanel(M) {
     <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, mode === 'part' || mode === 'inn' ? 'R' : hand)}
       <div class="flex" style="justify-content:center;gap:14px;margin-top:6px" ><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
       ${mode !== 'part' && mode !== 'inn' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}</div></div>`;
+}
+
+// ---- Game plan (the GM's brief) ----
+function briefSummary(b) { return `Bat ${TACTICS.bat[b.bat].label.toLowerCase()} · bowl ${TACTICS.field[b.field].label.toLowerCase()} · ${TACTICS.bowl[b.bowl].label.toLowerCase()}`; }
+function gamePlanRow(fmt, hc) {
+  const b = game.tactics[fmt];
+  return `<div class="plan-row" onclick="planSheet('${fmt}')"><div class="grow"><div class="lbl" style="margin:0">Game plan</div><div class="s b" style="margin-top:2px">${briefSummary(b)}</div><div class="xs dim" style="margin-top:2px">${hc ? `Carried out by ${esc(hc.first + ' ' + hc.last)}, ${COACH_STYLES[hc.style].toLowerCase()} head coach` : 'Carried out by the coaching staff'}</div></div><span class="link">Change</span></div>`;
+}
+function planSheet(fmt) {
+  sheet('Game plan', 'Brief the coach', `<p class="s muted" style="margin:0 0 10px">This is the plan your coach takes into the match. You can adjust it at each innings break, or send a message during play that reaches the players at the next drinks break.</p>
+    <div class="grid" style="gap:10px"><div><label class="lbl">When we bat</label>${tacticSel(fmt, 'bat')}</div><div><label class="lbl">When we bowl</label>${tacticSel(fmt, 'field')}</div><div><label class="lbl">Bowling attack</label>${tacticSel(fmt, 'bowl')}</div></div>`,
+    { foot: `<button class="btn pri" onclick="closeModal();render()">Done</button>` });
+}
+// Who bats next, so the innings-break panel can ask the right question.
+function predictNextBat(M) {
+  const n = M.innings.length, last = curInn(M);
+  if (M.fmt !== 'FC') return n === 1 ? last.bowl : null;
+  if (M.timeUp) return null;
+  if (n === 1) return last.bowl;
+  if (n === 2) { const lead = M.innings[0].runs - last.runs; return (lead >= 200 && mMaxBalls(M) - M.balls > 600) ? last.bat : M.innings[0].bat; }
+  if (n === 3) { const bat = last.bowl; return teamRuns(M, last.bat) - teamRuns(M, bat) + 1 > 0 ? bat : null; }
+  return null;
+}
+function setLiveBrief(key, val) { const M = game.live, me = liveMyTeam(M); M.brief[me] = Object.assign({}, M.brief[me] || game.tactics[M.fmt]); M.brief[me][key] = val; autosave(); }
+function breakPanel(M, inn) {
+  const me = liveMyTeam(M), nb = predictNextBat(M);
+  if (!nb) return '';
+  const b = M.brief[me] || game.tactics[M.fmt];
+  const opts = key => sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), b[key], `setLiveBrief('${key}',this.value)`, 'full');
+  const batting = nb === me;
+  return `<div class="break-brief"><div class="lbl">Next innings · ${batting ? 'we bat' : 'we bowl'}</div>
+    <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px;margin-top:6px">${batting ? `<div><div class="xs dim" style="margin-bottom:3px">Batting approach</div>${opts('bat')}</div>` : `<div><div class="xs dim" style="margin-bottom:3px">Bowling approach</div>${opts('field')}</div><div><div class="xs dim" style="margin-bottom:3px">Attack</div>${opts('bowl')}</div>`}</div></div>`;
 }
 // §24b NATIONAL SELECTION + STAFF ----------------------------------------------------------
 function renderNatSel() {
@@ -3722,7 +4083,7 @@ function renderWorld() {
   const intl = game.season.fixtures.filter(f => f.result && !f.result.noResult && (f.stage === 'intl' || f.stage === 'world' || f.comp === 'WC')).slice(-14).reverse();
   const nat = ui.worldNat || rk.find(n => n !== 'AUS');
   const sq = nat === 'AUS' ? [] : Object.values(game.players).filter(p => p.teamId === 'X_' + nat && !p.retired).sort((a, b) => peakOvr(b) - peakOvr(a));
-  return `<div class="grid g2">${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="setWorldNat('${n}')"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
+  return `<div class="grid g2">${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
     ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
     ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
     ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
@@ -3763,6 +4124,133 @@ function saveTeams() {
   game.edited = true; applyTeamEdits(); autosave(); closeModal(); render(); flash('Teams updated.');
 }
 
+
+// §24d CLUB, INBOX, NEGOTIATION, TEAM PROFILE, RECORDS, CHARTS ---------------------------
+function openInbox() { return (game.inbox || []).filter(m => !m.done); }
+function renderInbox() {
+  const open = openInbox(), done = (game.inbox || []).filter(m => m.done).slice(0, 8);
+  return `${open.length ? open.map(m => `<section class="panel inbox-item"><div class="pb"><div class="xs dim">${dateStr(m.day)} · reply by ${dateStr(m.expires)}</div><div class="b" style="font-size:15px;margin:3px 0 6px">${esc(m.title)}</div><p class="s" style="margin:0 0 10px;color:#d4e2ec;line-height:1.5">${esc(m.body)}</p>
+      <div class="flex wrap">${m.choices.map((c, i) => `<button class="btn ${i === 0 ? 'pri' : ''} sm" onclick="doEvent('${m.id}',${i})">${esc(c[0])}</button>`).join('')}${m.pid ? `<button class="btn ghost sm" onclick="showPlayer('${m.pid}')">View player</button>` : ''}</div></div></section>`).join('<div style="height:8px"></div>') : '<div class="empty">Nothing needs a decision right now.</div>'}
+    ${done.length ? `<div style="height:10px"></div>${panel('Recent decisions', `<div class="rows">${done.map(m => `<div class="kv"><span style="color:var(--text)">${esc(m.title)}</span><span>${esc(m.choice || '')}</span></div>`).join('')}</div>`, { flush: true })}` : ''}`;
+}
+function doEvent(id, i) { const eff = resolveEvent(id, i); if (eff && eff.negotiate) { negotiate(eff.negotiate, 'extend'); } else flash('Done.'); autosave(); render(); }
+function renderClub() {
+  const f = game.fin, L = f.ledger, prof = income(L) - spend(L);
+  const homeGames = game.season.fixtures.filter(x => x.result && x.home === U() && game.scorecards[x.id] && game.scorecards[x.id].crowd);
+  const avgCrowd = homeGames.length ? Math.round(mean(homeGames.map(x => game.scorecards[x.id].crowd)) ) : 0;
+  const row = (l, v, neg) => `<div class="kv"><span>${l}</span><span class="${neg ? 'loss' : ''}">${neg ? '−' : ''}${money(Math.round(v))}</span></div>`;
+  return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${f.cash < 0 ? 'loss' : ''}">${money(f.cash)}</div><div class="l">Bank</div></div><div class="kpi"><div class="v ${prof < 0 ? 'loss' : 'win'}">${prof >= 0 ? '+' : ''}${money(Math.round(prof))}</div><div class="l">Season to date</div></div><div class="kpi"><div class="v">${f.fans}</div><div class="l">Fan support</div></div><div class="kpi"><div class="v">${avgCrowd ? (avgCrowd / 1000).toFixed(1) + 'k' : '–'}</div><div class="l">Avg crowd</div></div></div><div style="height:8px"></div>
+    <div class="grid g2">${panel('Income', `<div class="rows">${row('Gate takings', L.gate)}${row('Sponsorship', L.sponsor)}${row('Broadcast share', L.tv)}${row('Prize money', L.prize)}${row('Other', L.other)}<div class="kv b"><span>Total</span><span>${money(Math.round(income(L)))}</span></div></div>`, { flush: true })}
+      ${panel('Spending', `<div class="rows">${row('Player wages', L.wages, 1)}${row('Staff wages', L.staff, 1)}${row('Facility upkeep', L.upkeep, 1)}${row('Upgrades', L.upgrades, 1)}${row('Other', L.events, 1)}<div class="kv b"><span>Total</span><span class="loss">−${money(Math.round(spend(L)))}</span></div></div><div class="pb xs dim">Wages are paid monthly through the season. Upkeep is charged at season end.</div>`, { flush: true })}
+      ${panel('Ticketing', `<div class="rows">${Object.keys(TICKET).map(k => `<div class="row tap ${f.ticket === k ? 'me' : ''}" onclick="game.fin.ticket='${k}';autosave();render()"><div class="stack"><div class="main-t">${TICKET[k].label}</div><div class="sub-t">${k === 'low' ? 'Bigger crowds, lower takings per head, fans warm to the club' : k === 'premium' ? 'Higher takings per head, smaller crowds, fans cool off' : 'Middle of the road'}</div></div><div class="end">${f.ticket === k ? '<span class="tag good">Active</span>' : ''}</div></div>`).join('')}</div>`, { flush: true })}
+      ${panel('Facilities', `<div class="rows">${Object.keys(FACILITIES).map(k => { const lv = f.fac[k]; return `<div class="row"><div class="stack"><div class="main-t">${FACILITIES[k].label} <span class="dim xs">level ${lv}/5</span></div><div class="sub-t">${FACILITIES[k].desc} Now: ${FACILITIES[k].eff(lv)}.</div><div class="meter" style="margin-top:5px;max-width:160px"><i style="width:${lv * 20}%"></i></div></div><div class="end">${lv < 5 ? `<button class="btn sm" onclick="doUpgrade('${k}')">Upgrade ${money(upgradeCost(k))}</button>` : '<span class="tag good">Max</span>'}</div></div>`; }).join('')}</div>`, { flush: true })}
+      ${f.history.length ? panel('Past seasons', `<table class="tbl clean"><thead><tr><th>Season</th><th>Income</th><th>Spend</th><th>Profit</th><th>Bank</th></tr></thead><tbody>${f.history.map(h => `<tr><td>${h.year}</td><td>${money(h.income)}</td><td>${money(h.spend)}</td><td class="${h.profit < 0 ? 'loss' : 'win'}">${money(h.profit)}</td><td>${money(h.cash)}</td></tr>`).join('')}</tbody></table>`, { flush: true, cls: 'span2' }) : ''}</div>
+    <div class="xs dim" style="margin-top:6px">The board judges you on profit and on staying out of debt as well as results. Fan support grows with wins, star players and cheaper tickets.</div>`;
+}
+function doUpgrade(k) { confirmSheet('Upgrade facility', `Upgrade the ${FACILITIES[k].label.toLowerCase()} to level ${facLevel(k) + 1} for ${money(upgradeCost(k))}?`, 'Upgrade', `const r=upgradeFacility('${k}');flash(r.ok?'Upgraded.':r.reason);autosave();render()`); }
+
+// Contract talks with the player's agent.
+function negotiate(id, mode) {
+  if (!game.neg || game.neg.id !== id) { const r = startNegotiation(id, mode); if (!r.ok) { flash(r.reason); return; } }
+  negSheet();
+}
+function negSheet() {
+  const n = game.neg; if (!n) return;
+  const p = P(n.id), ag = agentOf(p);
+  const body = `<div class="flex" style="margin-bottom:10px"><div class="grow"><div class="b">${esc(pname(p))}</div><div class="xs muted">${p.age} · ${ROLES[p.role].label} · best ${peakOvr(p)} · potential ${potGrade(p)} · ${PERSONAS[ensurePersona(p)].label}</div></div>${pill(peakOvr(p))}</div>
+    <div class="kv" style="padding:6px 0"><span>Agent</span><span>${esc(ag.name)} · ${AGENT_STYLES[ag.style].label}</span></div>
+    <div class="kv" style="padding:6px 0"><span>Market value</span><span>${money(askingSalary(p))}</span></div>
+    <div class="kv" style="padding:6px 0"><span>Cap space</span><span>${money(capSpace(U()) + (n.mode !== 'sign' && p.contract ? p.contract.salary : 0))}</span></div>
+    <div class="neglog">${n.log.map(l => `<div class="${l.startsWith('You:') ? 'me' : ''}">${esc(l)}</div>`).join('')}</div>
+    ${n.done ? `<div class="note ${n.done === 'agreed' ? 'good' : 'bad'}" style="margin-top:10px">${n.done === 'agreed' ? 'Agreement reached.' : 'Talks have broken down.'}</div>` : `<div class="grid" style="grid-template-columns:2fr 1fr;gap:8px;margin-top:10px"><div><label class="lbl">Your offer per season</label><input class="input" id="nSal" type="number" step="5000" value="${Math.round(n.ask * 0.9 / 5000) * 5000}"></div><div><label class="lbl">Years</label><select id="nYrs" class="full">${[1,2,3,4].map(y => `<option ${y === n.years ? 'selected' : ''}>${y}</option>`).join('')}</select></div></div>
+      <div class="xs dim" style="margin-top:6px">Patience: ${'●'.repeat(Math.max(0, n.patience))}${'○'.repeat(Math.max(0, 4 - n.patience))}. Lowball offers use up patience twice as fast.</div>`}`;
+  sheet(n.mode === 'sign' ? 'Contract talks' : n.mode === 'resign' ? 'Re-signing talks' : 'Extension talks', esc(pname(p)), body,
+    { foot: n.done ? `<button class="btn pri" onclick="finishNeg()">${n.done === 'agreed' ? 'Sign the deal' : 'Close'}</button>` : `<button class="btn ghost" onclick="game.neg=null;closeModal()">Walk away</button><button class="btn" onclick="negOffer(true)">Accept ${money(n.ask)}</button><button class="btn pri" onclick="negOffer(false)">Make offer</button>` });
+}
+function negOffer(acceptAsk) {
+  const n = game.neg; if (!n) return;
+  const sal = acceptAsk ? n.ask : +$('nSal').value || 0, yrs = acceptAsk ? n.years : +$('nYrs').value;
+  negotiationOffer(sal, yrs); negSheet();
+}
+function finishNeg() { const msg = closeNegotiation(); closeModal(); if (msg) flash(msg); autosave(); render(); }
+
+// Team profile sheet (states and nations).
+function showTeam(id) {
+  const t = teamDef(id); if (!t) return;
+  const intl = !!t.intl;
+  const sq = intl ? Object.values(game.players).filter(p => p.teamId === id && !p.retired) : squadOf(id);
+  const fmtR = f => { const xi = autoXI(id, f, sq).order; return xi.length ? Math.round(mean(xi.map(x => overall(P(x), f)))) : 0; };
+  const best = (f, key) => sq.slice().sort((a, b) => (key === 'bat' ? batRating(b, f) - batRating(a, f) : bowlRating(b, f) - bowlRating(a, f)))[0];
+  let body = `<div class="team-hero" style="--tc:${t.color}"><div class="badge lg" style="border-color:${t.color}">${t.short || t.id}</div><div><div class="b" style="font-size:18px">${esc(t.name)}</div><div class="xs muted">${esc(t.nick !== t.name ? t.nick + ' · ' : '')}${esc(t.ground)}</div></div></div>`;
+  if (!intl) {
+    const H = teamHonours(id), h = staffIn(id, 'head');
+    const recent = game.season.fixtures.filter(f => f.result && (f.home === id || f.away === id)).slice(-6).reverse();
+    const top = (f, k) => sq.filter(p => p.stats.season[f].m).sort((a, b) => b.stats.season[f][k] - a.stats.season[f][k])[0];
+    body += `<p class="s muted" style="margin:10px 0">${esc(t.pitch)}</p>
+      <div class="kpis" style="grid-template-columns:repeat(3,1fr)">${FMT_LIST.map(f => `<div class="kpi"><div class="v">${fmtR(f)}</div><div class="l">${compName(f)} XI</div></div>`).join('')}</div>
+      <div class="panel" style="margin-top:8px"><table class="tbl clean"><thead><tr><th>This season</th><th>Pos</th><th>W</th><th>L</th><th>Pts</th></tr></thead><tbody>${COMP_ORDER.map(c => { const st = game.season.standings[c][id]; return `<tr><td class="l">${COMPS[c].name}</td><td>${st.P ? ordinal(ladderPos(c, id)) : '–'}</td><td>${st.W}</td><td>${st.L}</td><td class="b">${st.Pts}</td></tr>`; }).join('')}</tbody></table></div>
+      <div class="panel" style="margin-top:8px"><div class="rows">
+        <div class="kv"><span>Honours in this career</span><span>${COMP_ORDER.map(c => `${COMPS[c].short} ${H[c]}`).join(' · ')}</span></div>
+        <div class="kv"><span>Head coach</span><span>${h ? `${esc(h.first + ' ' + h.last)} · ${COACH_STYLES[h.style]} · ${h.rating}` : 'Vacant'}</span></div>
+        <div class="kv"><span>Squad · payroll</span><span>${sq.length} players · ${money(payroll(id))}</span></div>
+        <div class="kv"><span>Best batter (Shield)</span><span>${best('FC', 'bat') ? plink(best('FC', 'bat')) : '–'}</span></div>
+        <div class="kv"><span>Best bowler (Shield)</span><span>${best('FC', 'bowl') ? plink(best('FC', 'bowl')) : '–'}</span></div>
+        ${FMT_LIST.map(f => { const r = top(f, 'r'), w = top(f, 'w'); return r || w ? `<div class="kv"><span>${compName(f)} leaders</span><span class="s">${r ? `${plink(r)} ${r.stats.season[f].r}r` : ''}${w ? ` · ${plink(w)} ${w.stats.season[f].w}w` : ''}</span></div>` : ''; }).join('')}</div></div>
+      ${recent.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Recent results</h3></div><div class="rows">${recent.map(f => { const r = f.result.winner === id ? 'W' : f.result.winner ? 'L' : 'D'; const opp = f.home === id ? f.away : f.home; return `<div class="row ${game.scorecards[f.id] ? 'tap' : ''}" ${game.scorecards[f.id] ? `onclick="showScorecard('${f.id}')"` : ''}><span class="res ${r}">${r}</span><div class="stack"><div class="main-t ell s">${chip(f.comp, COMPS[f.comp].short)} v ${teamDef(opp).nick}</div><div class="sub-t ell">${esc(f.result.summary)}</div></div></div>`; }).join('')}</div></div>` : ''}`;
+  } else {
+    const n = teamNat(id), R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]).indexOf(n) + 1;
+    body += `<div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-top:10px"><div class="kpi"><div class="v">${ordinal(rk)}</div><div class="l">World ranking</div></div>${FMT_LIST.map(f => `<div class="kpi"><div class="v">${fmtR(f)}</div><div class="l">${{ FC:'Test', OD:'ODI', T20:'T20I' }[f]} XI</div></div>`).join('')}</div>`;
+  }
+  body += `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Squad</h3></div><div class="rows">${sq.sort((a, b) => peakOvr(b) - peakOvr(a)).map(p => playerRow(p, { all: true, noStatus: intl, sub: `${ROLES[p.role].short} · ${p.age}${intl ? ` · ${p.caps.FC} Tests` : ''}` })).join('')}</div></div>`;
+  sheet(intl ? 'Nation' : 'Team profile', esc(t.name), body, { wide: true });
+}
+
+// Records book.
+function setRecScope(v) { ui.recScope = v; render(); }
+function setRecFmt(v) { ui.recFmt = v; render(); }
+function renderRecords() {
+  const scope = ui.recScope || 'dom', f = ui.recFmt || 'FC', cat = ui.recCat || 'hs';
+  const k = scope + '_' + f, R = game.records || { hs:{}, bb:{}, th:{}, tl:{}, pt:{} };
+  const fname = scope === 'intl' ? { FC:'Tests', OD:'ODIs', T20:'T20Is' }[f] : compName(f);
+  const cats = [['hs','Highest scores'],['bb','Best bowling'],['th','Highest totals'],['tl','Lowest totals'],['pt','Partnerships'],['cr','Career runs'],['cw','Career wickets'],['ch','Career hundreds'],['cm','Most matches']];
+  let rows = '';
+  const yr = y => `<span class="dim xs">${y}</span>`;
+  if (cat === 'hs') rows = (R.hs[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.r}${x.no ? '*' : ''}</td><td class="dim">${x.b}b</td></tr>`).join('');
+  if (cat === 'bb') rows = (R.bb[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.w}/${x.r}</td><td></td></tr>`).join('');
+  if (cat === 'th' || cat === 'tl') rows = (R[cat][k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${x.t}</b><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.r}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
+  if (cat === 'pt') rows = (R.pt[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> & <b>${esc(x.b)}</b><div class="xs dim">${x.t} v ${x.opp} · ${ordinal(x.w)} wicket · ${x.y}</div></td><td class="b big">${x.r}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
+  if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${s.m} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${s.m} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${s.r} runs · ${s.w} wkts`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${x.p.retired ? 'retired' : tdot(x.p.teamId)}</span><div class="xs dim">${sub}</div></td><td class="b big">${v}</td><td></td></tr>`; }).join(''); }
+  return `<div class="flex wrap">${seg([['dom','Domestic'],['intl','International']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
+    <div style="height:8px"></div>${sel(cats, cat, "ui.recCat=this.value;render()", 'full')}<div style="height:8px"></div>
+    ${panel(`${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
+    <div class="xs dim" style="margin-top:6px">${cat[0] === 'c' ? 'Career totals include matches played before your career began.' : 'Match records count from the start of your career.'}</div>`;
+}
+
+// Small SVG charts for profiles.
+function formChart(p) {
+  const log = (p.log || []).slice(-12);
+  if (!log.length) return '';
+  const max = Math.max(30, ...log.map(x => x[1]));
+  const W = 300, H = 70, bw = W / 12;
+  const bars = log.map((x, i) => { const r = Math.max(0, x[1]), h = r / max * (H - 18); const col = x[1] < 0 ? '#24465d' : r >= 100 ? '#f4c542' : r >= 50 ? '#4ade80' : '#7dd3fc'; return `<rect x="${i * bw + 3}" y="${H - 14 - h}" width="${bw - 6}" height="${Math.max(2, h)}" rx="2" fill="${col}"/>${x[2] ? `<circle cx="${i * bw + bw / 2}" cy="${H - 6}" r="${Math.min(4, 1.5 + x[2])}" fill="#fb7185"/>` : ''}`; }).join('');
+  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Last ${log.length} matches</h3><div class="end xs dim">bars runs · dots wickets</div></div><div class="pb"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:80px">${bars}</svg>
+    <div class="xs dim">${log.map(x => `${x[1] < 0 ? 'dnb' : x[1]}${x[2] ? '/' + x[2] + 'w' : ''} v ${x[3]}`).slice(-4).reverse().join(' · ')}</div></div></div>`;
+}
+function careerChart(p) {
+  const h = p.hist.slice(-10);
+  if (h.length < 1) return '';
+  const runs = h.map(x => x.FC.r + x.OD.r + x.T20.r), wk = h.map(x => x.FC.w + x.OD.w + x.T20.w);
+  const mr = Math.max(100, ...runs), mw = Math.max(10, ...wk), W = 300, H = 90, bw = W / Math.max(h.length, 5);
+  const bars = h.map((x, i) => `<rect x="${i * bw + 4}" y="${H - 16 - runs[i] / mr * (H - 26)}" width="${bw / 2 - 5}" height="${Math.max(2, runs[i] / mr * (H - 26))}" rx="2" fill="#7dd3fc"/><rect x="${i * bw + bw / 2}" y="${H - 16 - wk[i] / mw * (H - 26)}" width="${bw / 2 - 5}" height="${Math.max(2, wk[i] / mw * (H - 26))}" rx="2" fill="#fb7185"/><text x="${i * bw + bw / 2}" y="${H - 3}" font-size="9" fill="#8ea7b8" text-anchor="middle">${String(x.year).slice(2)}</text>`).join('');
+  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Season by season</h3><div class="end xs dim"><span style="color:#7dd3fc">runs</span> · <span style="color:#fb7185">wickets</span></div></div><div class="pb"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100px">${bars}</svg></div></div>`;
+}
+function homeExtras() {
+  const up = game.season.fixtures.filter(f => !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away))).slice(1, 4);
+  const sq = squadOf(U());
+  const lead = (k) => { let best = null, v = 0; sq.forEach(p => { const t = FMT_LIST.reduce((a, f) => a + p.stats.season[f][k], 0); if (t > v) { v = t; best = p; } }); return best ? `${plink(best)} <b>${v}</b>` : '–'; };
+  return `${up.length ? panel('Coming up', `<div class="rows">${up.map(f => fixtureRow(f, false)).join('')}</div>`, { flush: true }) : ''}
+    ${panel('Season leaders', `<div class="rows"><div class="kv"><span>Most runs</span><span>${lead('r')}</span></div><div class="kv"><span>Most wickets</span><span>${lead('w')}</span></div><div class="kv"><span>Team morale</span><span>${teamMorale(U())} · ${moodLabel(teamMorale(U()))}</span></div>${game.fin ? `<div class="kv"><span>Bank</span><span>${money(game.fin.cash)} · fans ${game.fin.fans}</span></div>` : ''}</div>`, { flush: true })}`;
+}
 // §25 BOOT ----------------------------------------------------------------------------------
 (async function boot() {
   $('bVer').textContent = BUILD.version; $('bTitle').textContent = BUILD.title; $('bEng').textContent = BUILD.engine;
