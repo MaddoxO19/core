@@ -294,6 +294,13 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .recap .rc-rows{background:var(--s2);border-radius:9px;margin-top:6px}.recap .rc-rows .kv{padding:7px 10px}
 .recap .rc-kpis{grid-template-columns:repeat(3,1fr);margin-top:10px}
 .recap .lbl{margin-top:2px}.recap .t{color:var(--text)}
+
+/* v0.7.4 depth chart */
+.depth-sum{display:flex;flex-wrap:wrap;gap:6px}.depth-sum span{background:var(--s2);border-radius:8px;padding:5px 9px;font-size:12px;color:var(--muted)}.depth-sum b{color:var(--text);margin-right:2px}
+.depth-sum span.thin{box-shadow:inset 0 0 0 1px rgba(245,158,11,.55);color:#fcd34d}.depth-sum span.thin b{color:#fcd34d}
+.dslot-l{color:var(--accent);font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:10px}
+.dslot.out .main-t{opacity:.55}
+.fit{color:var(--cyan);font-weight:700}.fit.start{color:var(--good)}
 </style>
 </head>
 <body>
@@ -344,7 +351,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.3', title: 'Smart Coach & Recaps', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.4', title: 'Workloads, Clashes & Depth', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -382,9 +389,9 @@ const FMT_COMP = { FC:'SHIELD', OD:'ODC', T20:'T20C' };
 // wkt = base wicket chance per legal ball when bat and ball are evenly matched.
 const FORMATS = {
   FC:  { id:'FC',  name:'First-Class', overs:null, quota:null, matchOvers:384, oversPerDay:96, baseRR:3.3,
-         ball:{ wkt:0.0127, dist:[0.70,0.165,0.045,0.010,0.049,0.004], wide:0.008, nb:0.006, bye:0.03 } },
+         ball:{ wkt:0.0138, dist:[0.70,0.165,0.045,0.010,0.049,0.004], wide:0.008, nb:0.006, bye:0.03 } },
   OD:  { id:'OD',  name:'One-Day', overs:50, quota:10, ppEnd:10, deathStart:40, baseRR:5.6,
-         ball:{ wkt:0.0225, dist:[0.50,0.315,0.068,0.010,0.066,0.013], wide:0.022, nb:0.005, bye:0.025 } },
+         ball:{ wkt:0.0231, dist:[0.50,0.315,0.068,0.010,0.066,0.013], wide:0.022, nb:0.005, bye:0.025 } },
   T20: { id:'T20', name:'T20', overs:20, quota:4, ppEnd:6, deathStart:15, baseRR:8.3,
          ball:{ wkt:0.0445, dist:[0.38,0.37,0.08,0.010,0.106,0.043], wide:0.03, nb:0.006, bye:0.02 } }
 };
@@ -956,6 +963,7 @@ function startInnings(M, bat, bowl, opts) {
     target: opts.target || null, followOn: !!opts.followOn, declared: false, closed: false, allOut: false, startBall: M.balls };
   inn.card[0].in = true; inn.card[1].in = true;
   M.innings.push(inn);
+  if (M.fmt === 'FC' && M.innings.length > 1) wlBreak(M, 'innings');
   if (M.pendingBrief) applyPendingBrief(M, 'Innings break');
   if (M.cond) coachUpdate(M, M.innings.length > 1 ? 'Innings break' : null);
   return inn;
@@ -981,6 +989,42 @@ function phaseOf(fmt, over, overs) {
 }
 function fcDay(M) { return matchDayIndex(M) + 1; }
 
+// ---- Bowling workloads (multi-day cricket) ----
+// Each bowler carries fatigue (F) through the match. Every over he bowls adds load (quicks most,
+// spinners least, scaled by stamina); every over he rests recovers some; lunch and tea recover
+// more and a night's sleep clears most of it. Fatigue blunts him and the coach rests him. Spells
+// and days also have soft caps, so the work is shared across the attack as in real Tests.
+const WL = {
+  load:  { pace: 1.0, seam: 0.85, spin: 0.5 },
+  spell: { pace: 7,   seam: 8,    spin: 15 },
+  day:   { pace: 19,  seam: 22,   spin: 28 }
+};
+function bowlKind(p) { return isSpin(p) ? 'spin' : ['RF','LF'].includes(p.bowlType) || (p.style === 'express') ? 'pace' : 'seam'; }
+function staminaF(p) { return clamp((p.sk.stamina || 70) / 72, 0.7, 1.25); }
+function wlOf(M, id) { M.wl = M.wl || {}; return M.wl[id] || (M.wl[id] = { F: 0, spell: 0, day: {}, tot: 0, last: -9 }); }
+function wlCap(p, kind) { const k = bowlKind(p); return Math.round(WL[kind][k] * staminaF(p) * (p.style === 'express' ? 0.88 : 1)); }
+// Called at the end of each over in multi-day cricket.
+function wlOver(M, inn, bowlerId) {
+  M.ovIdx = (M.ovIdx || 0) + 1;
+  const d = matchDayIndex(M);
+  M.xi[inn.bowl].forEach(id => {
+    const p = P(id), w = wlOf(M, id);
+    if (id === bowlerId) {
+      w.spell = w.last >= M.ovIdx - 2 ? w.spell + 1 : 1;
+      w.last = M.ovIdx; w.tot++; w.day[d] = (w.day[d] || 0) + 1;
+      w.F += WL.load[bowlKind(p)] / staminaF(p);
+    } else {
+      w.F = Math.max(0, w.F - 0.38 * staminaF(p));
+      if (w.last < M.ovIdx - 3) w.spell = 0;        // two clear overs off ends a spell
+    }
+  });
+}
+function wlBreak(M, type) {
+  Object.values(M.wl || {}).forEach(w => {
+    if (type === 'stumps') { w.F *= 0.15; w.spell = 0; }
+    else if (type === 'lunch' || type === 'tea' || type === 'innings') { w.F = Math.max(0, w.F - 2.5); w.spell = 0; }
+  });
+}
 function bowlerEffective(M, inn, bowler) {
   const fmt = M.fmt;
   let w = bowlRating(bowler, fmt) + formMod(bowler);
@@ -995,9 +1039,13 @@ function bowlerEffective(M, inn, bowler) {
   }
   // Death overs reward genuine death bowlers beyond what the format rating already counts.
   if (fmt !== 'FC' && canBowl(bowler) && phaseOf(fmt, inn.overNo, mOvers(M)) === 'death') w += ((bowler.sk.death || 50) - 60 - RATING_SHIFT) * 0.25;
-  const spell = inn.spell[bowler.id] || 0;
-  const lim = isSpin(bowler) ? (fmt === 'FC' ? 10 : 4) : (fmt === 'FC' ? 6 : 4);
-  w -= Math.max(0, spell - lim) * 2.2;
+  if (fmt === 'FC') {
+    const wl = wlOf(M, bowler.id), dayOv = wl.day[matchDayIndex(M)] || 0, cap = wlCap(bowler, 'day');
+    w -= Math.max(0, wl.F - 3) * 1.8 + Math.max(0, dayOv - cap) * 1.5;
+  } else {
+    const spell = inn.spell[bowler.id] || 0;
+    w -= Math.max(0, spell - 4) * 2.2;
+  }
   w -= Math.max(0, 80 - bowler.fitness) * 0.25;
   return w;
 }
@@ -1095,8 +1143,14 @@ function chooseBowler(M, inn) {
     const spell = prev2 === id ? (inn.spell[id] || 0) : 0;
     const lim = isSpin(p) ? (fmt === 'FC' ? 12 : 5) : (fmt === 'FC' ? 7 : 4);
     if (fmt === 'FC') {
-      if (prev2 === id && spell < lim) s += 6;
-      if (spell >= lim) s -= 14 + (spell - lim) * 6;
+      // Workload: the coach keeps a bowler on while he is fresh, rests him when he tires, and
+      // will not run him past his spell or daily limit. Better coaches manage this more closely.
+      const wl = wlOf(M, id), care = 0.75 + 0.25 * coachQuality(inn.bowl);
+      const dayOv = wl.day[matchDayIndex(M)] || 0, spellCap = wlCap(p, 'spell'), dayCap = wlCap(p, 'day');
+      if (wl.last === (M.ovIdx || 0) - 1 && wl.spell < spellCap && wl.F < 4) s += 6;
+      s -= wl.F * 3.2 * care;
+      if (wl.last === (M.ovIdx || 0) - 1 && wl.spell >= spellCap) s -= 45 * care;
+      if (dayOv >= dayCap) s -= (30 + (dayOv - dayCap) * 8) * care;
       if (isSpin(p) && ph === 'new') s -= 8;
       if (isPace(p) && ph === 'new') s += 5;
     } else {
@@ -1172,6 +1226,7 @@ function endOver(M, inn) {
   inn.overNo++; inn.overBalls = 0; inn.overConceded = 0;
   inn.lastBowler = id; inn.curBowler = null;
   swapStrike(inn);
+  if (M.fmt === 'FC') wlOver(M, inn, id);
   if (M.fmt === 'FC') checkBreaks(M, inn);
   else if (inn.overNo % drinksEvery(M.fmt) === 0) { if (M.pendingBrief) applyPendingBrief(M, 'Drinks'); coachUpdate(M, 'Drinks'); }
   if (M.fmt === 'FC' && !inn.closed && shouldDeclare(M, inn)) { inn.declared = true; inn.closed = true; }
@@ -1596,6 +1651,7 @@ function checkBreaks(M, inn) {
     M.breakSeq = (M.breakSeq || 0) + 1; M.lastBreak = b.type;
     const label = { drinks: 'Drinks', lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[b.type];
     if (M.pendingBrief) applyPendingBrief(M, label);
+    wlBreak(M, b.type);
     coachUpdate(M, label);
     if (b.type !== 'drinks') recordBreak(M, b, inn);
     if (M.live && b.type !== 'drinks' && !M.done) {
@@ -1737,6 +1793,11 @@ function migrateGame(g) {
   if ((g.scaleV || 1) < 3) rebalanceIntl(g);
   applyTeamEdits();
   ensureNationCoach();
+  // v0.7.4: a save loaded during a multi-day match the GM just ran picks up the clash window.
+  if (g.busy === undefined && g.season && g.phase === 'season') {
+    const last = g.season.fixtures.filter(f => f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && COMPS[f.comp].fmt === 'FC' && f.day + matchLen(f) - 1 >= g.day).sort((a, b) => b.day - a.day)[0];
+    g.busy = last ? { team: myTeamOf(last), from: last.day, until: last.day + matchLen(last) - 1, fx: last.id } : null;
+  }
   g.season.windows.forEach(w => { if (!w.fx) w.fx = []; });
   game = prev;
   g.plans = g.plans || {};
@@ -2273,6 +2334,83 @@ function editorCreatePlayer(teamId) {
   game.edited = true;
   return p;
 }
+
+// ---- Depth chart ----
+// The best XI for a format (ignoring injuries and national duty), each slot labelled by its job,
+// the best backup for every slot, who steps in for anyone unavailable, and the reserves.
+const SLOT_NAMES = { opener:'Opener', three:'No. 3', middle:'Middle order', keeper:'Keeper', allrounder:'All-rounder', quick:'Quick', spinner:'Spinner' };
+function slotFor(p, idx, keeperId) {
+  if (p.id === keeperId) return 'keeper';
+  const g = group(p);
+  if (g === 'BAT' || g === 'WK') return idx < 2 ? 'opener' : idx === 2 ? 'three' : 'middle';
+  if (g === 'AR') return idx < 2 ? 'opener' : 'allrounder';
+  return isSpin(p) ? 'spinner' : 'quick';
+}
+function naturalSlot(p) { return p.role === 'OPEN' ? 'opener' : p.role === 'WK' ? 'keeper' : group(p) === 'BAT' ? 'middle' : group(p) === 'AR' ? 'allrounder' : isSpin(p) ? 'spinner' : 'quick'; }
+function slotScore(p, slot, fmt) {
+  const g = group(p), bat = ['BAT','WK','AR'].includes(g);
+  switch (slot) {
+    case 'opener': return bat ? batRating(p, fmt) + (p.role === 'OPEN' ? OPENER_PREF : p.role === 'TOP' ? 3 : 0) : -1e9;
+    case 'three': case 'middle': return bat ? batRating(p, fmt) : -1e9;
+    case 'keeper': return p.sk.keep >= 45 ? keeperScore(p, fmt) : -1e9;
+    case 'allrounder': return g === 'AR' ? overall(p, fmt) : canBowl(p) && bat ? (batRating(p, fmt) + bowlRating(p, fmt)) / 2 - 4 : -1e9;
+    case 'quick': return canBowl(p) && isPace(p) && g !== 'BAT' && g !== 'WK' ? bowlRating(p, fmt) : -1e9;
+    case 'spinner': return canBowl(p) && isSpin(p) && g !== 'BAT' && g !== 'WK' ? bowlRating(p, fmt) : -1e9;
+  }
+  return -1e9;
+}
+function depthChart(teamId, fmt) {
+  const all = squadOf(teamId).filter(p => !p.retired);
+  if (all.length < 11) return null;
+  const ideal = autoXI(teamId, fmt, all);
+  const inXI = new Set(ideal.order);
+  const bench = all.filter(p => !inXI.has(p.id));
+  const used = new Set();
+  const best = (slot, pool, skip) => pool.filter(p => !skip.has(p.id) && slotScore(p, slot, fmt) > -1e8).sort((a, b) => slotScore(b, slot, fmt) - slotScore(a, slot, fmt))[0] || null;
+  const slots = ideal.order.map((id, i) => {
+    const p = P(id), slot = slotFor(p, i, ideal.keeper), avail = isAvailable(p);
+    const backup = best(slot, bench.filter(isAvailable), new Set());
+    let inFor = null;
+    if (!avail) { inFor = best(slot, bench.filter(isAvailable), used); if (inFor) used.add(inFor.id); }
+    return { i, p, slot, avail, backup, inFor };
+  });
+  const covers = {};
+  slots.forEach(s => { if (s.backup) (covers[s.backup.id] = covers[s.backup.id] || new Set()).add(SLOT_NAMES[s.slot]); });
+  const reserves = bench.map(p => ({ p, covers: covers[p.id] ? [...covers[p.id]] : [] }));
+  const cnt = f => all.filter(f).length;
+  const summary = [
+    ['Openers', cnt(p => p.role === 'OPEN'), 3],
+    ['Keepers', cnt(p => p.sk.keep >= 45), 2],
+    ['Quicks', cnt(p => canBowl(p) && isPace(p) && ['PACE','AR'].includes(group(p)) && bowlRating(p, fmt) >= 50), 5],
+    ['Spinners', cnt(p => canBowl(p) && isSpin(p) && ['SPIN','AR'].includes(group(p)) && bowlRating(p, fmt) >= 50), 2],
+    ['All-rounders', cnt(p => group(p) === 'AR'), 2]
+  ].map(([l, n, need]) => ({ label: l, n, thin: n < need }));
+  return { slots, reserves, summary, keeper: ideal.keeper };
+}
+// Where a player from outside the squad would fit, checked across the three formats.
+let _fitCache = null;
+function whereFits(p) {
+  const key = game.day + '|' + squadOf(U()).map(x => x.id).join(',');
+  if (!_fitCache || _fitCache.key !== key) _fitCache = { key, map: {}, charts: {} };   // kept out of the save
+  const C = _fitCache;
+  if (C.map[p.id] !== undefined) return C.map[p.id];
+  let out = null;
+  for (const fmt of ['T20', 'OD', 'FC']) {
+    const pool = squadOf(U()).filter(x => !x.retired).concat([p]);
+    const xi = autoXI(U(), fmt, pool);
+    const k = xi.order.indexOf(p.id);
+    if (k >= 0) { out = { start: true, text: `Starts No. ${k + 1} · ${COMPS[FMT_COMP[fmt]].short}` }; break; }
+  }
+  if (!out) for (const fmt of ['T20', 'OD', 'FC']) {
+    const ch = C.charts[fmt] || (C.charts[fmt] = depthChart(U(), fmt));
+    if (!ch) continue;
+    const slot = naturalSlot(p), sc = slotScore(p, slot, fmt);
+    const cur = ch.slots.filter(s => s.slot === slot).map(s => s.backup).filter(Boolean)[0];
+    if (sc > -1e8 && (!cur || sc > slotScore(cur, slot, fmt))) { out = { start: false, text: `Backup ${SLOT_NAMES[slot].toLowerCase()} · ${COMPS[FMT_COMP[fmt]].short}` }; break; }
+  }
+  C.map[p.id] = out;
+  return out;
+}
 // §8e CLUB BUSINESS: FINANCES, FACILITIES, INBOX, NEGOTIATION, ACADEMY -------------------
 // Money is tracked for the user's club only; AI clubs are assumed solvent.
 
@@ -2679,6 +2817,8 @@ function matchWear(M, inXI) {
     load += overs * (isPace(p) ? (fmt === 'FC' ? 0.32 : fmt === 'OD' ? 0.8 : 1.5) : (fmt === 'FC' ? 0.12 : 0.4));
     p.fitness = clamp(p.fitness - load * (1.15 - p.sk.stamina / 200), 35, 100);
     let risk = 0.004 + Math.max(0, 78 - p.fitness) * 0.0016 + (isPace(p) ? overs * (fmt === 'FC' ? 0.0005 : 0.0015) : 0);
+    // Overs bowled past a bowler's daily limit in a multi-day match: extra wear and injury risk.
+    if (fmt === 'FC' && M.wl && M.wl[id]) { const cap = wlCap(p, 'day'); const over = Object.values(M.wl[id].day).reduce((a, n) => a + Math.max(0, n - cap), 0); if (over) { p.fitness = clamp(p.fitness - over * 0.8, 35, 100); risk += over * (isPace(p) ? 0.004 : 0.0015); } }
     if (cond && p.teamId === U()) risk *= 0.75;
     risk *= 1.3 - staffEff(p.teamId, 'physio') / 200;
     if (p.teamId === U()) risk *= 1 - (facLevel('medical') - 1) * 0.06;
@@ -2787,7 +2927,12 @@ function updateFinals(comp) {
 }
 
 // §10 CALENDAR + CONTINUE LOOP ------------------------------------------------
-function userFixtureToday() { return game.season.fixtures.find(f => f.day === game.day && !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && (f.stage !== 'intl' || activeWindow())); }
+// The GM's match today. When both his teams play, the longer match (then the national one) comes first,
+// so the other becomes the clash his staff run.
+function userFixtureToday() {
+  const today = game.season.fixtures.filter(f => f.day === game.day && !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && (f.stage !== 'intl' || activeWindow()));
+  return today.sort((a, b) => (matchLen(b) - matchLen(a)) || ((b.stage === 'intl') - (a.stage === 'intl')))[0];
+}
 function quickPlay(fx) {
   const M = createMatch(fx);
   doToss(M); setTossDecision(M, tossDecisionAI(M));
@@ -2838,21 +2983,57 @@ function nextDay() {
   return stop;
 }
 
+// ---- Fixture clashes (the GM runs a state side and Australia) ----
+// A multi-day match occupies the GM from its first day to its last. Any match of his other team
+// that falls inside it is run by the staff, unless he has asked to choose (game.clashMode 'ask').
+function matchLen(fx) { return COMPS[fx.comp].fmt === 'FC' ? (fx.comp === 'TEST' ? 5 : 4) : 1; }
+function setBusy(fx) { if (!fx) return; game.busy = { team: myTeamOf(fx), from: fx.day, until: fx.day + matchLen(fx) - 1, fx: fx.id }; }
+function myTeamOf(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
+function isClash(fx) {
+  const b = game.busy;
+  if (!b || game.clashMode === 'ask' || !fx) return false;
+  return fx.day >= b.from && fx.day <= b.until && myTeamOf(fx) !== b.team && fx.id !== b.fx;
+}
+// Fixtures of the GM's other team that this match will clash with.
+function clashesWith(fx) {
+  const me = myTeamOf(fx), end = fx.day + matchLen(fx) - 1;
+  return game.season.fixtures.filter(f => !f.result && f.id !== fx.id && f.day >= fx.day && f.day <= end && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && myTeamOf(f) !== me && (f.stage !== 'intl' || activeWindow()));
+}
+function staffPlay(fx) {
+  const M = quickPlay(fx), team = myTeamOf(fx);
+  (game.awayLog = game.awayLog || []).push({ fx: fx.id, team, text: M.result.text, potm: M.potm || null, comp: fx.comp });
+  addNews('Staff', `Staff run ${teamDef(team).nick} v ${teamDef(team === fx.home ? fx.away : fx.home).nick}`, `${M.result.text}. You were with ${teamDef(game.busy.team).nick}.`);
+  return M;
+}
 // Main "Continue": sims forward to the next thing that needs the GM.
 function continueGame() {
   if (!game) return;
   if (game.live) { go('live'); return; }
   if (game.phase !== 'season') { offseasonContinue(); return; }
   const pend = game.pendingFx && fixtureById(game.pendingFx);
-  if (pend && !pend.result) { go('matchday'); return; }
+  if (pend && !pend.result && isClash(pend)) { staffPlay(pend); game.pendingFx = null; }
+  else if (pend && !pend.result) { go('matchday'); return; }
   game.pendingFx = null;
+  const done = page => { autosave(); go(page); showAwaySummary(); };
   for (let i = 0; i < 400; i++) {
+    if (game.busy && game.day > game.busy.until) game.busy = null;
     playAIFixturesToday();
-    const ufx = userFixtureToday();
-    if (ufx) { game.pendingFx = ufx.id; autosave(); go('matchday'); return; }
-    if (seasonDone()) { endSeason(); autosave(); go('home'); return; }
-    if (nextDay()) { autosave(); go('home'); return; }
+    let ufx, g2 = 0;
+    while ((ufx = userFixtureToday()) && isClash(ufx) && g2++ < 5) staffPlay(ufx);
+    if (ufx) { game.pendingFx = ufx.id; return done('matchday'); }
+    if (seasonDone()) { endSeason(); return done('home'); }
+    if (nextDay()) return done('home');
   }
+}
+// "While you were away": results of matches the staff ran during a clash.
+function showAwaySummary() {
+  const log = game.awayLog || [];
+  if (!log.length || typeof sheet !== 'function') return;
+  game.awayLog = [];
+  const rows = log.map(e => { const f = fixtureById(e.fx), opp = e.team === f.home ? f.away : f.home, won = f.result && f.result.winner === e.team;
+    const lad = game.season.standings[e.comp] ? ` · now ${ordinal(ladderPos(e.comp, e.team))} on the ${COMPS[e.comp].short} ladder` : '';
+    return `<div class="row tap" onclick="${game.scorecards[e.fx] ? `showScorecard('${e.fx}',0)` : ''}"><div class="stack"><div class="main-t">${chip(f.comp, COMPS[f.comp].short)} ${esc(teamDef(e.team).nick)} v ${esc(teamDef(opp).nick)} · ${dateStr(f.day)}</div><div class="sub-t" style="white-space:normal"><span class="${won ? 'win' : f.result.winner ? 'loss' : ''}">${esc(e.text)}</span>${e.potm ? ` · player of the match ${esc(pname(P(e.potm)))}` : ''}${lad}</div></div></div>`; }).join('');
+  sheet('Your staff ran these matches', 'While you were away', `<div class="rows">${rows}</div>`, { flush: true, foot: '<button class="btn pri" onclick="closeModal()">Done</button>' });
 }
 // Sim several days, auto-playing the user's matches.
 function simDays(n, untilEnd) {
@@ -3794,7 +3975,7 @@ function renderOffseason() {
   } else if (game.phase === 'draft') {
     const d = o.draft, clock = draftOnClock();
     const pool = draftPool().sort((a, b) => b.pot - a.pot);
-    body = `<div class="grid g3">${panel(clock === U() ? `On the clock · pick ${d.pick + 1}` : 'Draft pool', `<div class="rows">${pool.map(p => playerRow(p, { sub: `${ROLES[p.role].label} · ${p.age} · potential ${potGrade(p)}`, end: `${pill(peakOvr(p))}${clock === U() ? `<button class="btn sm pri" onclick="event.stopPropagation();userDraftPick('${p.id}')">Draft</button>` : ''}` })).join('') || '<div class="empty">Pool empty.</div>'}</div>
+    body = `<div class="grid g3">${panel(clock === U() ? `On the clock · pick ${d.pick + 1}` : 'Draft pool', `<div class="rows">${pool.map(p => playerRow(p, { sub: `${fitTag(p)}${ROLES[p.role].label} · ${p.age} · potential ${potGrade(p)}`, end: `${pill(peakOvr(p))}${clock === U() ? `<button class="btn sm pri" onclick="event.stopPropagation();userDraftPick('${p.id}')">Draft</button>` : ''}` })).join('') || '<div class="empty">Pool empty.</div>'}</div>
       ${clock === U() ? `<div class="pb"><div class="flex between"><span class="s muted">Rookies sign for ${money(ROOKIE_SALARY)} × 2 · squad ${squadOf(U()).length}/${SQUAD_MAX}</span><button class="btn sm ghost" onclick="userDraftPick(null)">Pass</button></div></div>` : ''}`, { flush: true })}
       ${(o.academy || []).filter(id => P(id) && !P(id).teamId).length ? panel('Academy graduates', `<div class="rows">${o.academy.map(P).filter(p => p && !p.teamId).map(p => playerRow(p, { sub: `${ROLES[p.role].label} · ${p.age} · potential ${potGrade(p)}`, end: `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();signAcademy('${p.id}');autosave();render()">Sign</button>` })).join('')}</div><div class="pb xs muted">Homegrown players. Sign them before the draft ends or they leave. ${money(ROOKIE_SALARY)} × 3 years.</div>`, { flush: true }) : ''}
       ${panel('Picks', `<div class="rows">${d.picks.map(x => `<div class="kv"><span>${x.n}. ${tdot(x.team)}</span><span>${x.id ? plink(P(x.id)) : '<span class="dim">Pass</span>'}</span></div>`).join('') || '<div class="empty">No picks yet.</div>'}</div>`, { flush: true })}</div>`;
@@ -3822,6 +4003,31 @@ function sortPlayers(arr, key, fmt) {
   return arr.slice().sort((a, b) => f(a) - f(b));
 }
 function renderSquadList() {
+  const view = ui.squadView || 'depth';
+  const toggle = seg([['depth','Depth chart'],['list','List']], view, `(v=>{ui.squadView=v;render();})`);
+  if (view === 'depth') return `${toggle}<div style="height:8px"></div>${renderDepth()}`;
+  return `${toggle}<div style="height:8px"></div>${renderPlayerList()}`;
+}
+function renderDepth() {
+  const f = ui.listFmt, ch = depthChart(U(), f);
+  const tools = `<div class="flex wrap">${fmtSeg(f, 'setListFmt')}</div>`;
+  if (!ch) return `${tools}<div class="empty">Not enough players for an XI.</div>`;
+  const sum = `<div class="depth-sum">${ch.summary.map(x => `<span class="${x.thin ? 'thin' : ''}"><b>${x.n}</b> ${x.label}</span>`).join('')}</div>`;
+  const rows = ch.slots.map(s => {
+    const p = s.p, o = overall(p, f);
+    return `<div class="row tap dslot ${s.avail ? '' : 'out'}" onclick="showPlayer('${p.id}')"><span class="n">${s.i + 1}</span>
+      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t ell">${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
+        <div class="sub-t ell">${s.avail ? (s.backup ? `Backup: ${esc(pshort(s.backup))} ${Math.round(overall(s.backup, f))}` : '<span class="draw">No backup in the squad</span>') : `${statusChip(p)} <span class="win">${s.inFor ? esc(pshort(s.inFor)) + ' plays' : 'No cover'}</span>`}</div></div>
+      <div class="end">${pill(o)}</div></div>`;
+  }).join('');
+  const groups = [['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
+  const res = groups.map(([g, l]) => { const list = ch.reserves.filter(r => group(r.p) === g).sort((a, b) => overall(b.p, f) - overall(a.p, f)); if (!list.length) return '';
+    return `<div class="lbl" style="padding:10px 14px 2px">${l}</div>${list.map(r => playerRow(r.p, { fmt: f, sub: `${identityLine(r.p)}${r.covers.length ? ` · covers ${r.covers.join(', ').toLowerCase()}` : ''}`, end: `${statusChip(r.p)}${pill(overall(r.p, f))}` })).join('')}`; }).join('');
+  return `${tools}<div style="height:8px"></div>${sum}
+    <div class="grid g2" style="margin-top:8px">${panel(`${FORMATS[f].name} XI`, `<div class="rows">${rows}</div>`, { flush: true })}${panel(`Reserves · ${ch.reserves.length}`, `<div class="rows">${res || '<div class="empty">No reserves.</div>'}</div>`, { flush: true })}</div>
+    <div class="xs dim" style="margin-top:6px">The best XI if everyone were available. Greyed players are injured or on national duty, with the player who steps in. Amber counts are thin areas to recruit.</div>`;
+}
+function renderPlayerList() {
   let sq = squadOf(U());
   if (ui.squadGroup !== 'ALL') sq = sq.filter(p => group(p) === ui.squadGroup);
   sq = sortPlayers(sq, ui.squadSort, ui.listFmt);
@@ -3832,6 +4038,7 @@ function renderSquadList() {
     <div class="xs dim" style="margin-top:6px">Tap a player for the full profile.</div>`;
 }
 function setListFmt(f) { ui.listFmt = f; render(); }
+function fitTag(p) { const w = whereFits(p); return w ? `<span class="fit ${w.start ? 'start' : ''}">${esc(w.text)}</span> · ` : ''; }
 
 function setXIFmt(f) { ui.xiFmt = f; render(); }
 function xiIssues(ids, fmt) {
@@ -4065,7 +4272,7 @@ function renderTrades() {
     <div class="end"><button class="btn sm pri" onclick="acceptOffer('${o.id}')">Accept</button><button class="btn sm ghost" onclick="declineOffer('${o.id}')">✕</button></div></div>`).join('');
   const need = groupNeeds(partner);
   const needTxt = Object.keys(need).filter(g => need[g] > 0.2).map(g => ({ BAT:'batting', WK:'keeping', AR:'all-rounders', PACE:'pace', SPIN:'spin' }[g])).join(', ') || 'nothing in particular';
-  const list = (team, selIds, fn) => sortPlayers(squadOf(team), 'ovr', 'T20').map(p => { const on = selIds.includes(p.id); return playerRow(p, { all: true, click: `${fn}('${p.id}')`, sub: `${ROLES[p.role].short} · ${p.age} · ${money(p.contract.salary)}×${p.contract.years}`, end: `${on ? chip('good', '✓') : ''}${pill(peakOvr(p))}` }).replace('class="row tap', `class="row tap ${on ? 'me' : ''}`); }).join('');
+  const list = (team, selIds, fn) => sortPlayers(squadOf(team), 'ovr', 'T20').map(p => { const on = selIds.includes(p.id); return playerRow(p, { all: true, click: `${fn}('${p.id}')`, sub: `${team !== U() ? fitTag(p) : ''}${ROLES[p.role].short} · ${p.age} · ${money(p.contract.salary)}×${p.contract.years}`, end: `${on ? chip('good', '✓') : ''}${pill(peakOvr(p))}` }).replace('class="row tap', `class="row tap ${on ? 'me' : ''}`); }).join('');
   const sum = ids => ids.map(id => pname(P(id))).join(', ') || 'nobody';
   return `${offers ? panel('Offers received', `<div class="rows">${offers}</div>`, { flush: true }) + '<div style="height:8px"></div>' : ''}
     ${open ? '' : '<div class="note warn" style="margin-bottom:8px">Trade window closed. It reopens in free agency.</div>'}
@@ -4097,7 +4304,7 @@ function renderFA() {
   const key = ui.faSort;
   fas.sort((a, b) => key === 'ask' ? askingSalary(a) - askingSalary(b) : key === 'age' ? a.age - b.age : peakOvr(b) - peakOvr(a));
   return `<div class="flex wrap"><span class="s muted">Cap space <b>${money(capSpace(U()))}</b> · squad ${squadOf(U()).length}/${SQUAD_MAX}</span><span class="grow"></span>${sel(GROUP_OPTS, ui.faGroup, "ui.faGroup=this.value;render()")}${sel([['value','Best'],['ask','Cheapest'],['age','Youngest']], key, "ui.faSort=this.value;render()")}</div><div style="height:8px"></div>
-    ${panel(`${fas.length} free agents`, `<div class="rows">${fas.map(p => playerRow(p, { all: true, sub: `${ROLES[p.role].short} · ${p.age} · pot ${potGrade(p)} · asks ${money(askingSalary(p))}`, end: `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(peakOvr(p))}</span><button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','sign')">Offer</button>` })).join('') || '<div class="empty">No free agents.</div>'}</div>`, { flush: true })}`;
+    ${panel(`${fas.length} free agents`, `<div class="rows">${fas.map(p => playerRow(p, { all: true, sub: `${fitTag(p)}${ROLES[p.role].short} · ${p.age} · pot ${potGrade(p)} · asks ${money(askingSalary(p))}`, end: `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(peakOvr(p))}</span><button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','sign')">Offer</button>` })).join('') || '<div class="empty">No free agents.</div>'}</div>`, { flush: true })}`;
 }
 function renderNational() {
   const N = game.nation;
@@ -4107,6 +4314,7 @@ function renderNational() {
   const role = N.gm
     ? `<div class="kv"><span>Your role</span><span class="win">National selector</span></div><div class="kv"><span>National board confidence</span><span class="b">${N.conf}</span></div>
        ${selw ? `<div class="pb"><button class="btn pri block" onclick="go('natsel')">Pick the ${esc(selw.label)} squad ▸</button></div>` : ''}
+       <div class="kv"><span>Clashing matches</span><span>${sel([['staff','Staff run them'],['ask','Ask me']], game.clashMode || 'staff', "game.clashMode=this.value;autosave()")}</span></div>
        <div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`
     : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
   return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
@@ -4196,6 +4404,7 @@ function renderMatchday() {
       ${pitchReport(pre, v, fmt)}
       ${forecastRow(pre, fmt, fx)}
       <table class="tbl clean" style="margin-top:6px"><tbody>
+        ${(() => { const cl = clashesWith(fx); return cl.length ? `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${cl.map(f => `${esc(teamDef(myTeamOf(f)).nick)} v ${esc(teamDef(myTeamOf(f) === f.home ? f.away : f.home).nick)} on ${dateStr(f.day)}`).join(', ')} ${game.clashMode === 'ask' ? 'falls during this match. You will be asked which to run.' : 'will be run by your staff while you are at this match.'}</td></tr>` : ''; })()}
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       ${gamePlanRow(fmt, hc, fx)}
@@ -4213,6 +4422,10 @@ const PITCH_OUTLOOK = {
   flat: 'Stays good for batting. Spin late in the match at best.',
   dry: 'Turns from day 2 and keeps turning more.',
   cracked: 'Uneven bounce now and worse every day. Spinners will dominate late.'
+};
+const PITCH_WB = {
+  standard: 'A fair surface for both sides.', green: 'Seamers will enjoy the new ball.', flat: 'Expect a big total and a fast outfield.',
+  dry: 'Slow and turning. Spinners will be hard to hit.', cracked: 'Variable bounce. Hard to time the ball.'
 };
 const PITCH_LOOK = {
   standard: { fill: '#a99a5e', stripe: '#b5a66a' }, green: { fill: '#5f8a45', stripe: '#6d9a50' },
@@ -4236,7 +4449,7 @@ function pitchReport(pre, v, fmt) {
   return `<div class="pitch-rep">${pitchSvg(key)}<div class="grow">
     <div class="flex" style="gap:6px;align-items:baseline"><b>${pt.label}</b><span class="xs muted">· ${verdict}</span></div>
     ${bar('Pace and bounce', g.pace)}${bar('Spin', g.spin)}${bar('Batting', g.bat)}
-    <div class="xs muted" style="margin-top:4px">${fmt === 'FC' ? PITCH_OUTLOOK[key] : esc(pt.note)}</div></div></div>`;
+    <div class="xs muted" style="margin-top:4px">${fmt === 'FC' ? PITCH_OUTLOOK[key] : PITCH_WB[key]}</div></div></div>`;
 }
 const SKY_ICON = {
   sunny: '<circle cx="12" cy="12" r="4.2" fill="#fbbf24"/><g stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g>',
@@ -4269,6 +4482,7 @@ function scoutOpposition(fxId, opp) {
 }
 function quickSimUser() {
   const fx = fixtureById(game.pendingFx);
+  setBusy(fx);
   const M = quickPlay(fx);
   game.pendingFx = null;
   autosave(); go('home');
@@ -4339,6 +4553,7 @@ function inningsSummary(M, inn) {
 }
 function finishLive() {
   const M = game.live; if (!M || !M.done) return;
+  setBusy(fixtureById(M.fxId));
   applyMatch(M);
   const fxId = M.fxId;
   game.live = null; game.pendingFx = null;
