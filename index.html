@@ -287,6 +287,13 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .fc{background:var(--s2);border-radius:9px;padding:6px 4px;text-align:center;min-width:0}.fc svg{width:24px;height:24px;display:block;margin:3px auto}
 .fc .s{font-size:12px;font-weight:700}.fc.wet{box-shadow:inset 0 0 0 1px rgba(245,158,11,.45)}
 .cnote.brk{font-style:normal;font-weight:800;color:var(--text);background:var(--s2);letter-spacing:.01em}
+
+/* v0.7.3 recap screens */
+.recap .rc-e{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.recap .rc-t{font-size:24px;font-weight:900;letter-spacing:-.01em;margin-top:4px;line-height:1.15}
+.recap .rc-rows{background:var(--s2);border-radius:9px;margin-top:6px}.recap .rc-rows .kv{padding:7px 10px}
+.recap .rc-kpis{grid-template-columns:repeat(3,1fr);margin-top:10px}
+.recap .lbl{margin-top:2px}.recap .t{color:var(--text)}
 </style>
 </head>
 <body>
@@ -337,7 +344,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.2', title: 'Sessions & Pitch Report', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.3', title: 'Smart Coach & Recaps', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -408,7 +415,7 @@ const IDEAL_GROUPS = { BAT:7, WK:2, AR:4, PACE:5, SPIN:2 };
 const TACTICS = {
   bat:   { defensive:{label:'Bat time', intent:-0.45}, balanced:{label:'Balanced', intent:0}, aggressive:{label:'Take it on', intent:0.45} },
   field: { defensive:{label:'Contain', wkt:0.88, bnd:0.82, single:1.12}, balanced:{label:'Balanced', wkt:1, bnd:1, single:1}, attacking:{label:'Attack', wkt:1.13, bnd:1.13, single:0.9} },
-  bowl:  { pace:{label:'Lean on pace', pace:6, spin:0}, balanced:{label:'Coach decides', pace:0, spin:0}, spin:{label:'Lean on spin', pace:0, spin:6} }
+  bowl:  { pace:{label:'Lean on pace', pace:6, spin:0}, balanced:{label:'Mixed attack', pace:0, spin:0}, spin:{label:'Lean on spin', pace:0, spin:6} }
 };
 const TRAINING = {
   balanced: { label:'Balanced',     desc:'Even development across every skill.' },
@@ -907,8 +914,7 @@ function selectXI(teamId, fmt) {
 // A match object (M) is plain data so it can live in the save while in progress.
 function tacticsFor(M, teamId) {
   if (M.brief && M.brief[teamId]) return M.brief[teamId];
-  if (isUserTeam(teamId)) return game.tactics[M.fmt];
-  return aiBrief(teamId);
+  return (M.brief[teamId] = coachBrief(M, teamId));
 }
 function createMatch(fx) {
   const fmt = COMPS[fx.comp].fmt;
@@ -922,7 +928,11 @@ function createMatch(fx) {
     M.bowlRank[t] = s.order.slice().sort((a, b) => bowlRating(P(b), fmt) - bowlRating(P(a), fmt)).slice(0, 2);
     if (t === U() && s.replaced && s.replaced.length) M.notes.push(s.replaced.map(([o, n]) => `${pname(o)} unavailable, ${pname(n)} comes in`).join('; '));
   });
-  [fx.home, fx.away].forEach(t => { if (isUserTeam(t)) M.brief[t] = Object.assign({}, game.tactics[fmt]); });
+  M.override = {};
+  [fx.home, fx.away].forEach(t => {
+    const mo = game.matchOverride;
+    if (isUserTeam(t) && mo && mo.fx === fx.id) { M.brief[t] = Object.assign({}, mo.brief); M.override[t] = { inn: 1 }; }
+  });
   rollConditions(M, fx);
   return M;
 }
@@ -947,11 +957,13 @@ function startInnings(M, bat, bowl, opts) {
   inn.card[0].in = true; inn.card[1].in = true;
   M.innings.push(inn);
   if (M.pendingBrief) applyPendingBrief(M, 'Innings break');
+  if (M.cond) coachUpdate(M, M.innings.length > 1 ? 'Innings break' : null);
   return inn;
 }
 function applyPendingBrief(M, when) {
   const pb = M.pendingBrief; if (!pb) return;
   M.brief[pb.team] = Object.assign({}, pb.brief); M.pendingBrief = null;
+  (M.override = M.override || {})[pb.team] = { inn: M.innings.length };
   if (M.live) M.log.unshift({ cls:'sys', text: `${when}: the coach passes on the GM's message. ${briefText(pb.brief)}.` });
 }
 function briefText(b) { return `Batting: ${TACTICS.bat[b.bat].label} · Bowling: ${TACTICS.field[b.field].label} · Attack: ${TACTICS.bowl[b.bowl].label}`; }
@@ -1161,7 +1173,7 @@ function endOver(M, inn) {
   inn.lastBowler = id; inn.curBowler = null;
   swapStrike(inn);
   if (M.fmt === 'FC') checkBreaks(M, inn);
-  else if (M.pendingBrief && inn.overNo % drinksEvery(M.fmt) === 0) applyPendingBrief(M, 'Drinks');
+  else if (inn.overNo % drinksEvery(M.fmt) === 0) { if (M.pendingBrief) applyPendingBrief(M, 'Drinks'); coachUpdate(M, 'Drinks'); }
   if (M.fmt === 'FC' && !inn.closed && shouldDeclare(M, inn)) { inn.declared = true; inn.closed = true; }
 }
 
@@ -1584,11 +1596,41 @@ function checkBreaks(M, inn) {
     M.breakSeq = (M.breakSeq || 0) + 1; M.lastBreak = b.type;
     const label = { drinks: 'Drinks', lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[b.type];
     if (M.pendingBrief) applyPendingBrief(M, label);
+    coachUpdate(M, label);
+    if (b.type !== 'drinks') recordBreak(M, b, inn);
     if (M.live && b.type !== 'drinks' && !M.done) {
       const last = b.day === M.cond.days.length - 1 && b.type === 'stumps';
       M.log.unshift({ cls: 'brk', text: `${last ? 'Close of play' : label}, day ${b.day + 1}: ${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts} (${oversStr(inn.balls)} ov)` });
     }
   }
+}
+// ---- Recaps: tallies across the whole match, so a session or day can be measured ----
+function matchTally(M) {
+  const t = { runs: 0, wkts: 0, balls: M.balls, bat: {}, bowl: {} };
+  M.innings.forEach(i => {
+    t.runs += i.runs; t.wkts += i.wkts;
+    i.card.forEach(c => { if (c.in) t.bat[c.id] = (t.bat[c.id] || 0) + c.r; });
+    Object.keys(i.bw).forEach(id => { const f = i.bw[id]; const o = t.bowl[id] || (t.bowl[id] = { w: 0, r: 0 }); o.w += f.w; o.r += f.r; });
+  });
+  return t;
+}
+function tallyDiff(a, b) {
+  const bat = Object.keys(b.bat).map(id => [id, b.bat[id] - (a.bat[id] || 0)]).filter(x => x[1] > 0).sort((x, y) => y[1] - x[1]);
+  const bowl = Object.keys(b.bowl).map(id => [id, b.bowl[id].w - ((a.bowl[id] || {}).w || 0), b.bowl[id].r - ((a.bowl[id] || {}).r || 0)]).filter(x => x[1] > 0).sort((x, y) => y[1] - x[1] || x[2] - y[2]);
+  return { runs: b.runs - a.runs, wkts: b.wkts - a.wkts, overs: Math.round((b.balls - a.balls) / 6), bat, bowl };
+}
+function blankTally() { return { runs: 0, wkts: 0, balls: 0, bat: {}, bowl: {} }; }
+// At lunch, tea and stumps: record the session (and day) and, in a live match, pause on a recap.
+function recordBreak(M, b, inn) {
+  const now = matchTally(M);
+  if (!M.sessT) M.sessT = M.balls < 60 ? blankTally() : now;
+  if (!M.dayT) M.dayT = M.balls < 60 ? blankTally() : now;
+  const sess = tallyDiff(M.sessT, now);
+  (M.dayBreaks = M.dayBreaks || []).push({ day: b.day, type: b.type, score: `${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}` });
+  const rec = { type: b.type, day: b.day, sess, score: `${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}`, overs: oversStr(inn.balls) };
+  if (b.type === 'stumps') { rec.dayStats = tallyDiff(M.dayT, now); rec.breaks = M.dayBreaks.filter(x => x.day === b.day); M.dayT = now; }
+  M.sessT = now;
+  if (M.live && !M.noPause && !M.done && !inn.closed) M.pause = rec;
 }
 function sessionOf(M) {
   if (M.fmt !== 'FC' || !M.cond) return null;
@@ -1701,6 +1743,9 @@ function migrateGame(g) {
   g.defaultPlan = g.defaultPlan || { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) };
   g.scout = g.scout || {};
   g.scoutedFx = g.scoutedFx || {};
+  // v0.7.3: the coach runs the plan. Turn the old standing brief into a club philosophy.
+  if (!g.philosophy) { g.philosophy = {}; ['FC','OD','T20'].forEach(f => { const t = (g.tactics || {})[f] || {}; g.philosophy[f] = t.bat === 'aggressive' || t.field === 'attacking' ? 'attacking' : t.bat === 'defensive' || t.field === 'defensive' ? 'patient' : 'balanced'; }); }
+  if (g.coachRel == null) g.coachRel = 60;
   if (g.season) COMP_ORDER.forEach(c => Object.values(g.season.standings[c]).forEach(s => { if (s.NR == null) s.NR = 0; }));
   return g;
 }
@@ -1760,6 +1805,7 @@ function hireStaff(id) {
   if (pay > STAFF_BUDGET) return { ok: false, reason: `That would take staff spending to ${money(pay)}, over the ${money(STAFF_BUDGET)} budget.` };
   if (cur) { cur.teamId = null; cur.years = randInt(1, 2); }
   s.teamId = U(); s.years = Math.max(1, s.years);
+  if (s.role === 'head') { game.coachRel = 60; game.coachRelWarned = false; }   // a new head coach starts with a fresh relationship
   logTx(`Hired ${s.first} ${s.last} as ${STAFF_ROLES[s.role].label.toLowerCase()} (${money(s.salary)}).`);
   addNews('Staff', `${s.first} ${s.last} joins as ${STAFF_ROLES[s.role].label.toLowerCase()}`, `Rated ${s.rating}.${cur ? ` ${cur.first} ${cur.last} has left the club.` : ''}`);
   return { ok: true };
@@ -1781,6 +1827,7 @@ function staffOffseason() {
     if (!s.teamId) return;
     s.years--;
     if (s.years > 0) return;
+    if (s.teamId === U() && s.role === 'head' && (game.coachRel != null ? game.coachRel : 60) < 25) { s.teamId = null; addNews('Club', `${s.first} ${s.last} walks out`, 'Your head coach has left, saying his plans were overruled too often. Hire a replacement before the season.'); return; }
     if (s.teamId === U()) { game.offseason.expiringStaff = game.offseason.expiringStaff || []; game.offseason.expiringStaff.push({ id: s.id, ask: staffAsk(s), status: 'pending' }); return; }
     if (rand() < 0.75 && s.age < 66) { s.salary = staffAsk(s); s.years = randInt(1, 3); } else s.teamId = null;
   });
@@ -1816,6 +1863,79 @@ function analystPlan(fmt, bowlTeam, batterId, death, key) {
 
 // ---- Match brief: what the GM tells the dressing room ----
 function isUserTeam(t) { return t === U() || (t === 'AUS' && game.nation && game.nation.gm); }
+// ---- The head coach runs the match plan ----
+// The GM sets a club philosophy for each format. The head coach turns it into a plan for every
+// innings and re-reads the match at each break: chases, collapses, declarations and conditions.
+// Better coaches read the game more reliably; the coach's own style colours every decision.
+const PHILOSOPHY = {
+  patient:   { label:'Patient',   lean:-0.45, desc:'Value wickets, grind the opposition down, bowl dry.' },
+  balanced:  { label:'Balanced',  lean:0,     desc:'Play to the conditions and the match situation.' },
+  attacking: { label:'Attacking', lean:0.45,  desc:'Take the game on with bat and ball, accept some risk.' }
+};
+const STYLE_LEAN = { aggressive: 0.3, balanced: 0, cautious: -0.3 };
+function coachQuality(teamId) {
+  const rel = isUserTeam(teamId) ? (game.coachRel != null ? game.coachRel : 60) : 60;
+  return clamp(0.45 + staffEff(teamId, 'head') / 180, 0.5, 0.95) * (rel < 35 ? 0.8 : 1);
+}
+// Returns { bat, field, bowl } for teamId at this moment of match M (M may be a pre-match stub).
+function coachBrief(M, teamId) {
+  const fmt = M.fmt, F = FORMATS[fmt], h = staffIn(teamId, 'head');
+  const phil = isUserTeam(teamId) ? PHILOSOPHY[(game.philosophy || {})[fmt] || 'balanced'] : PHILOSOPHY.balanced;
+  const base = phil.lean + STYLE_LEAN[h ? h.style : 'balanced'];
+  const q = coachQuality(teamId);
+  const read = v => v * (q >= 0.8 ? 1 : q >= 0.65 ? 0.7 : 0.45);   // how fully the coach responds to the situation
+  let bat = base, fld = base;
+  const inn = M.innings && M.innings.length ? M.innings[M.innings.length - 1] : null;
+  if (inn && !inn.closed) {
+    const batting = inn.bat === teamId;
+    if (fmt !== 'FC' && inn.target) {
+      const bl = mOvers(M) * 6 - inn.balls, need = inn.target - inn.runs, req = need / Math.max(1, bl) * 6;
+      const press = (req - F.baseRR) / F.baseRR;
+      if (batting) bat += read(clamp(press * 1.2, -0.6, 0.9)) - (inn.wkts >= 7 && press < 0.4 ? read(0.3) : 0);
+      else fld += read(press > 0.25 ? -0.3 : press < -0.15 ? 0.5 : 0);
+    } else if (fmt === 'FC') {
+      const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl), left = (mMaxBalls(M) - M.balls) / 6, n = M.innings.length;
+      if (batting) {
+        if (n === 3 && lead > 200) bat += read(0.5);                       // set up a declaration
+        if (inn.target) { const rr = (inn.target - inn.runs) / Math.max(1, left); bat += read(rr > 4.5 ? -0.7 : rr < 3 ? 0.3 : 0); }
+        if (inn.wkts >= 5 && !inn.target) bat -= read(0.2);
+      } else {
+        if (inn.target) { const rr = (inn.target - inn.runs) / Math.max(1, left); fld += read(rr > 4.5 ? 0.6 : rr < 2.5 ? -0.3 : 0.2); }
+        if (n >= 3 && left < 90) fld += read(0.4);                         // bowl the opposition out in time
+      }
+    }
+  }
+  // Conditions decide the attack; a good coach also attacks when the surface helps the bowlers.
+  const pace = M.cond ? condFactor(M, 'pace') : 1, spin = M.cond ? condFactor(M, 'spin') : 1, batF = M.cond ? condFactor(M, 'bat') : 1;
+  const bowl = spin - pace > 0.04 ? 'spin' : pace - spin > 0.04 ? 'pace' : 'balanced';
+  fld += read(Math.max(pace, spin) > 1.06 ? 0.25 : 0) - read(batF > 1.06 ? 0.15 : 0);
+  if (fmt === 'FC' && batF < 0.96) bat -= read(0.2);
+  const pickB = v => v > 0.3 ? 'aggressive' : v < -0.3 ? 'defensive' : 'balanced';
+  const pickF = v => v > 0.3 ? 'attacking' : v < -0.3 ? 'defensive' : 'balanced';
+  return { bat: pickB(bat), field: pickF(fld), bowl };
+}
+// Refreshes the plan for both sides unless the GM has overridden it for this innings.
+function coachUpdate(M, why) {
+  [M.home, M.away].forEach(t => {
+    const ov = M.override && M.override[t];
+    if (ov && ov.inn === M.innings.length) return;
+    const prev = M.brief[t], next = coachBrief(M, t);
+    M.brief[t] = next;
+    if (M.live && isUserTeam(t) && prev && why && briefSummary(prev) !== briefSummary(next)) M.log.unshift({ cls:'sys', text: `${why}: the coach changes the plan. ${briefSummary(next)}.` });
+  });
+}
+// role: 'bat' shows only the batting part, 'bowl' only the bowling part, otherwise both.
+function briefSummary(b, role) {
+  const bat = `Batting: ${TACTICS.bat[b.bat].label}`, bowl = `Bowling: ${TACTICS.field[b.field].label} · ${TACTICS.bowl[b.bowl].label}`;
+  return role === 'bat' ? bat : role === 'bowl' ? bowl : `${bat} · ${bowl}`;
+}
+// Overruling the coach costs trust; a thriving relationship slowly rebuilds after matches.
+function overrideCost() { const h = staffIn(U(), 'head'); return h && h.rating >= 80 ? 6 : 4; }
+function noteOverride() {
+  game.coachRel = clamp((game.coachRel != null ? game.coachRel : 60) - overrideCost(), 0, 100);
+  if (game.coachRel < 30 && !game.coachRelWarned) { game.coachRelWarned = true; const h = staffIn(U(), 'head'); if (h) addNews('Club', `${h.last} frustrated`, `Your head coach feels his match plans are being overruled. His trust is low, and he may not stay.`); }
+}
+function coachRelLabel(v) { return v >= 70 ? 'Strong' : v >= 50 ? 'Good' : v >= 35 ? 'Strained' : 'Poor'; }
 function aiBrief(teamId) {
   const h = staffIn(teamId, 'head');
   const st = h ? h.style : 'balanced';
@@ -2447,6 +2567,7 @@ function createGame(gmName, teamId, year, nationGm) {
     defaultPlan: { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) },
     board: { confidence: 60, objectives: [] },
     history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1, scaleV: SCALE_VERSION,
+    philosophy: { FC:'balanced', OD:'balanced', T20:'balanced' }, coachRel: 60, matchOverride: null,
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
   game.nation.rankings = initRankings();
@@ -2566,6 +2687,8 @@ function matchWear(M, inXI) {
   });
 }
 function applyMatch(M) {
+  // Trust rebuilds a little with every match the coach runs; a used pre-match override is spent.
+  if (isUserTeam(M.home) || isUserTeam(M.away)) { game.coachRel = clamp((game.coachRel != null ? game.coachRel : 60) + 1, 0, 85); if (game.matchOverride && game.matchOverride.fx === M.fxId) game.matchOverride = null; }
   if (COMPS[M.comp].intl) return applyIntlMatch(M);
   const fx = fixtureById(M.fxId);
   const comp = COMPS[M.comp], fmt = M.fmt;
@@ -3756,7 +3879,12 @@ function tacticGrid(fmt) { return `<div class="grid" style="grid-template-column
 function renderTactics() {
   const f = ui.tacFmt;
   return `${fmtSeg(f, 'setTacFmt')}<div style="height:8px"></div><div class="grid g2">
-    ${panel('Standing match brief', `${tacticGrid(f)}<p class="xs muted" style="margin:10px 0 0;line-height:1.5">You set the brief; your head coach and captain carry it out. Bat time protects wickets, Take it on scores faster but loses wickets faster. Contain squeezes runs, Attack hunts wickets and leaks boundaries. Batters still adjust to the situation, and better head coaches read the game better. You can adjust the brief on match day and at each innings break.</p>`)}
+    ${(() => { const ph = (game.philosophy || {})[f] || 'balanced', h = staffIn(U(), 'head'), rel = game.coachRel != null ? game.coachRel : 60;
+      return panel(`${FORMATS[f].name} philosophy`, `${seg(Object.keys(PHILOSOPHY).map(k => [k, PHILOSOPHY[k].label]), ph, `(v=>setPhilosophy('${f}',v))`)}
+        <p class="s" style="margin:10px 0 4px">${PHILOSOPHY[ph].desc}</p>
+        <p class="xs muted" style="margin:0;line-height:1.5">The head coach turns the philosophy into a plan for every innings and adjusts it at each break, reading chases, collapses, declarations and conditions. A better coach reads the game more reliably, and his own style colours every call. You shape results through who you hire, sign and develop. You can still overrule the coach on match day or during play, but it costs his trust.</p>
+        ${h ? `<div class="rows" style="margin-top:10px"><div class="kv"><span>Head coach</span><span>${esc(h.first + ' ' + h.last)} · ${COACH_STYLES[h.style]} ${pill(h.rating)}</span></div><div class="kv"><span>Trust in you</span><span>${chip(rel >= 50 ? 'good' : rel >= 35 ? 'warn' : 'bad', coachRelLabel(rel))} ${rel}</span></div></div>` : '<div class="note warn" style="margin-top:10px">No head coach. The assistant staff set the plan and read the game poorly.</div>'}`);
+    })()}
     ${panel('Coaching staff', `<div class="rows">${STAFF_ORDER.slice(0, 4).map(r => { const st = staffIn(U(), r); return `<div class="kv"><span>${STAFF_ROLES[r].label}</span><span>${st ? `${esc(st.first + ' ' + st.last)} ${pill(st.rating)}` : '<span class="loss">Vacant</span>'}</span></div>`; }).join('')}</div><div class="pb"><button class="btn sm" onclick="ui.officeTab='staff';go('office')">Manage staff ▸</button></div>`, { flush: true })}
     ${panel('Captain', sel(sortPlayers(squadOf(U()), 'ovr', f).map(p => [p.id, `${pname(p)} · ${p.age} · ${ROLES[p.role].short}`]), game.captain, "game.captain=this.value;autosave()", 'full'))}</div>`;
 }
@@ -4070,7 +4198,7 @@ function renderMatchday() {
       <table class="tbl clean" style="margin-top:6px"><tbody>
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
-      ${gamePlanRow(fmt, hc)}
+      ${gamePlanRow(fmt, hc, fx)}
       <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button>${me === 'AUS' ? `<button class="btn" onclick="go('natsel')" disabled>Squad locked</button>` : `<button class="btn" onclick="ui.squadTab='xi';ui.xiFmt='${fmt}';go('squad')">Edit XI</button>`}</div>
       <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Watch live ▸</button>`}</div>`)}
     <div class="grid" style="grid-template-columns:1fr 1fr">${panel(`${teamDef(me).short || me} · ${avgO(mine)}`, xi(mine), { flush: true })}${panel(`${teamDef(opp).short || opp} · ${avgO(theirs)}`, xi(theirs), { flush: true, end: scouted ? chip('good', 'Scouted') : `<button class="link" onclick="scoutOpposition('${fx.id}','${opp}')">Scout</button>` })}</div>
@@ -4158,11 +4286,13 @@ function startLive() {
   const d = tossDecisionAI(M); setTossDecision(M, d);
   M.log.unshift({ cls:'sys', text: `${teamName(w)} won the toss and chose to ${d}.` });
   M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) });
-  const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: `Game plan: ${briefSummary(M.brief[me] || game.tactics[M.fmt])}.` });
+  const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: `Coach's plan: ${briefSummary(tacticsFor(M, me))}.` });
   autosave(); go('live');
 }
 function liveStep(mode) {
   const M = game.live; if (!M || M.done || !M.toss.decision) return;
+  if (mode === 'match') { M.pause = null; M.noPause = true; }
+  else if (M.pause) return;
   if (curInn(M).closed && mode !== 'match') return;
   let guard = 0, legal = 0;
   const target = { over: 6, five: 30, session: 180 }[mode] || 1e9;
@@ -4175,21 +4305,24 @@ function liveStep(mode) {
     if (ev.legal) legal++;
     const inn = curInn(M);
     if (inn.closed && mode !== 'match') break;
+    if (M.pause) { if ((mode === 'stumps' || mode === 'innings') && M.pause.type !== 'stumps') M.pause = null; else break; }
     if (mode === 'wicket' && ev.wkt) break;
     if ((mode === 'break' || mode === 'stumps') && (M.breakSeq || 0) > seq0 && (mode === 'stumps' ? M.lastBreak === 'stumps' : M.lastBreak !== 'drinks')) break;
     if ((mode === 'over' || mode === 'five' || mode === 'session') && inn.overBalls === 0 && legal >= target) break;
   }
+  M.noPause = false;
   ui.liveInn = null;
-  autosave(); render();
+  autosave(); render(); window.scrollTo(0, 0);
 }
 function liveSkip(v) { if (v) liveStep(v); }
+function resumeLive() { const M = game.live; if (!M) return; M.pause = null; autosave(); render(); window.scrollTo(0, 0); }
 function startNextInnings() {
   const M = game.live; if (!M || M.done) return;
   const before = M.innings.length;
   nextInnings(M);
   if (M.done) { /* the result banner above the tabs shows the result */ }
-  else if (M.innings.length > before) { const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) }); M.log.unshift({ cls:'sys', text: `Game plan: ${briefSummary(M.brief[me] || game.tactics[M.fmt])}.` }); }
-  autosave(); render();
+  else if (M.innings.length > before) { const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) }); M.log.unshift({ cls:'sys', text: `Coach's plan: ${briefSummary(tacticsFor(M, me))}.` }); }
+  autosave(); render(); window.scrollTo(0, 0);
 }
 function inningsSummary(M, inn) {
   const nm = teamName(inn.bat);
@@ -4218,7 +4351,10 @@ function liveMyTeam(M) { return isUserTeam(M.home) ? M.home : M.away; }
 // Brief sheet. At an innings break the brief applies at once; mid-innings it is relayed at the next drinks break.
 function briefSheet(atBreak) {
   const M = game.live, inn = curInn(M); if (!inn) return;
-  const me = liveMyTeam(M), batting = inn.bat === me;
+  const me = liveMyTeam(M);
+  atBreak = atBreak || inn.closed || !!M.pause;
+  const nb = inn.closed ? predictNextBat(M) : inn.bat;
+  const batting = (nb || inn.bat) === me;
   const cur = (M.pendingBrief && M.pendingBrief.brief) || M.brief[me] || game.tactics[M.fmt];
   window._brief = Object.assign({}, cur);
   const opt = (key, label) => `<div><label class="lbl">${label}</label>${sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), cur[key], `window._brief.${key}=this.value`, 'full')}</div>`;
@@ -4226,27 +4362,30 @@ function briefSheet(atBreak) {
   const pl = planFor(M, inn, striker.id);
   const hc = staffIn(me, 'head');
   const every = drinksEvery(M.fmt);
-  const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'Set the brief for this innings.' : M.fmt === 'FC' ? 'Your message reaches the dressing room at the next break: drinks, lunch, tea or stumps.' : `Your message reaches the dressing room at the next drinks break (every ${every} overs).`}</div>
+  const body = `<div class="note" style="margin-bottom:10px">${batting ? `${teamDef(me).nick} are batting.` : `${teamDef(me).nick} are bowling.`} ${atBreak ? 'This replaces the coach\'s plan for the rest of this innings' + (inn.closed ? ' (the next innings)' : '') + '.' : M.fmt === 'FC' ? 'Your instruction reaches the dressing room at the next break: drinks, lunch, tea or stumps, and stands for the rest of the innings.' : `Your instruction reaches the dressing room at the next drinks break (every ${every} overs) and stands for the rest of the innings.`} Overruling the coach costs some of his trust (now ${coachRelLabel(game.coachRel)}, ${game.coachRel}).</div>
     <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px">${batting ? opt('bat', 'Batting approach') : opt('field', 'Bowling approach') + opt('bowl', 'Attack')}</div>
     <div class="panel" style="margin-top:10px"><div class="rows">
       <div class="kv"><span>${batting ? 'Opposition plan to ' : 'Analyst plan for '}${esc(striker.last)}</span><span class="s">${esc(planLabel(pl))}</span></div>
       <div class="kv"><span>Head coach</span><span>${hc ? `${esc(hc.first + ' ' + hc.last)} · ${COACH_STYLES[hc.style]} · ${hc.rating}` : me === 'AUS' ? 'National coach' : '<span class="loss">Vacant</span>'}</span></div>
       <div class="kv"><span>Conditions</span><span class="s">${esc(PITCHES[M.cond.pitch].label)} · ${esc(skyOf(M).label)}</span></div></div></div>`;
-  sheet('During play', 'Message the dressing room', body,
-    { foot: `<button class="btn ghost" onclick="closeModal();liveStep('match')">Sim to result</button><button class="btn pri" onclick="sendBrief(${atBreak ? 1 : 0})">${atBreak ? 'Confirm brief' : 'Send message'}</button>` });
+  sheet('Override the coach', 'Your instruction', body,
+    { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="sendBrief(${atBreak ? 1 : 0})">Overrule the coach</button>` });
 }
 function sendBrief(now) {
   const M = game.live, me = liveMyTeam(M);
-  const b = Object.assign({}, M.brief[me] || game.tactics[M.fmt], window._brief);
-  if (now) { M.brief[me] = b; M.log.unshift({ cls:'sys', text: `Brief: ${briefText(b)}.` }); }
-  else { M.pendingBrief = { team: me, brief: b }; M.log.unshift({ cls:'sys', text: 'Message sent. The coach will relay it at the next drinks break.' }); }
+  const b = Object.assign({}, tacticsFor(M, me), window._brief);
+  noteOverride();
+  const inn = curInn(M);
+  M.override = M.override || {};   // matches started before v0.7.3 have no override record
+  if (now) { M.brief[me] = b; M.override[me] = { inn: inn.closed ? M.innings.length + 1 : M.innings.length }; M.log.unshift({ cls:'sys', text: `GM override: ${briefText(b)}.` }); }
+  else { M.pendingBrief = { team: me, brief: b }; M.log.unshift({ cls:'sys', text: `Instruction sent. The coach will relay it at the next ${M.fmt === 'FC' ? 'break' : 'drinks break'}.` }); }
   closeModal(); autosave(); render();
 }
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
   if (!inn) return `${pageTitle('Live', 'Starting')}<div class="empty">Starting.</div>`;
   M.briefPrompt = false;
-  const me = liveMyTeam(M), b = M.brief[me] || game.tactics[M.fmt];
+  const me = liveMyTeam(M), b = tacticsFor(M, me), overridden = M.override && M.override[me] && M.override[me].inn === M.innings.length;
   const sc = inn.card[inn.striker], ns = inn.card[inn.non];
   const bw = inn.curBowler || inn.lastBowler, bf = bw ? inn.bw[bw] : null;
   // Situation sentence
@@ -4258,27 +4397,118 @@ function renderLive() {
       ${[[sc, true], [ns, false]].map(([c, on]) => c ? `<tr class="tap" onclick="showPlayer('${c.id}')"><td class="l">${esc(P(c.id).last)}${on ? ' *' : ''}</td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td></tr>` : '').join('')}</tbody></table>
     <table class="tbl clean"><thead><tr><th>Bowling</th><th>O</th><th>M</th><th>R</th><th>W</th></tr></thead><tbody>${bw ? `<tr class="tap" onclick="showPlayer('${bw}')"><td class="l">${esc(P(bw).last)}</td><td>${bf ? oversStr(bf.balls) : 0}</td><td>${bf ? bf.m : 0}</td><td>${bf ? bf.r : 0}</td><td class="b">${bf ? bf.w : 0}</td></tr>` : '<tr><td class="l dim" colspan="5">New over</td></tr>'}</tbody></table>
     ${overStrip(inn)}`;
-  let stateBox = '';
-  if (M.done) stateBox = `<div class="note good" style="margin:10px 12px 0"><b>${esc(M.result.text)}</b>${M.potm ? `<br><span class="s">Player of the match: ${plink(P(M.potm))}</span>` : ''}</div>`;
-  else if (inn.closed) stateBox = `<div class="note" style="margin:10px 12px 0"><b>Innings complete.</b> ${esc(inningsSummary(M, inn))}</div>${breakPanel(M, inn)}`;
+  // Recap screens take over the top of the live view at every turning point.
+  const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
     ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
     : ui.liveTab === 'wagon' ? wagonPanel(M) : commentaryHtml(M);
   let bar;
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
-  else bar = `<button class="btn" onclick="briefSheet(false)">Message</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
+  else if (M.pause) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="resumeLive()">${M.pause.type === 'stumps' ? `Start day ${M.pause.day + 2}` : 'Resume play'} ▸</button>`;
+  else bar = `<button class="btn" onclick="briefSheet(false)">Override</button><button class="btn pri" onclick="liveStep('over')">Next over ▸</button>
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
+  if (recap) return `<div class="grid">${recap}
+    ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
+  </div><div class="livebar three">${bar}</div>`;
   return `<div class="grid">
     <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
       <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
         <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
-        ${!M.done && !inn.closed ? `<div class="xs dim" style="margin-top:6px">Game plan: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ` · <span class="draw">message waiting for the next ${M.fmt === 'FC' ? 'break' : 'drinks break'}</span>` : ''}</div>` : ''}</div>
-      ${crease}${stateBox}<div style="height:12px"></div></section>
+        ${!M.done && !inn.closed ? `<div class="xs dim" style="margin-top:6px">${overridden ? 'Your plan' : 'Coach\'s plan'}: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ` · <span class="draw">your instruction goes in at the next ${M.fmt === 'FC' ? 'break' : 'drinks break'}</span>` : ''}</div>` : ''}</div>
+      ${crease}<div style="height:12px"></div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
 }
 
+
+// ---- Recap screens ----
+function tShort(id) { return teamDef(id).short || id; }
+function recapShell(eyebrow, title, sub, inner) {
+  return `<section class="panel recap"><div class="pb"><div class="rc-e">${eyebrow}</div><div class="rc-t">${title}</div>${sub ? `<div class="s muted" style="margin-top:3px">${sub}</div>` : ''}${inner}</div></section>`;
+}
+function perfRows(items) { return `<div class="rows rc-rows">${items.join('')}</div>`; }
+function batRow(c, team) { return `<div class="kv tap" onclick="showPlayer('${c.id}')"><span>${esc(pshort(P(c.id)))}${team ? ` <span class="xs dim">${tShort(team)}</span>` : ''}</span><span><b>${c.r}${c.out ? '' : '*'}</b> <span class="xs dim">(${c.b})</span></span></div>`; }
+function bowlRow(id, f, team) { return `<div class="kv tap" onclick="showPlayer('${id}')"><span>${esc(pshort(P(id)))}${team ? ` <span class="xs dim">${tShort(team)}</span>` : ''}</span><span><b>${f.w}/${f.r}</b> <span class="xs dim">(${oversStr(f.balls)})</span></span></div>`; }
+function coachPlanLine(M, nextInnings, role) {
+  const me = liveMyTeam(M), ov = M.override && M.override[me];
+  const mine = ov && ov.inn === M.innings.length + (nextInnings ? 1 : 0);
+  const b = mine ? M.brief[me] : coachBrief(M, me), h = staffIn(me, 'head');
+  return `<div class="plan-row" style="margin-top:10px"><div class="grow"><div class="lbl" style="margin:0">${mine ? 'Your plan · coach overruled' : `Coach's plan${h ? ' · ' + esc(h.last) : ''}`}</div><div class="s b" style="margin-top:2px">${briefSummary(b, role)}</div></div>${mine ? '' : `<button class="link" onclick="briefSheet(true)">Override</button>`}</div>`;
+}
+function inningsRecap(M, inn) {
+  const bats = inn.card.filter(c => c.in).sort((a, b) => b.r - a.r || a.b - b.b).slice(0, 3);
+  const bowls = Object.keys(inn.bw).map(id => [id, inn.bw[id]]).filter(x => x[1].balls).sort((a, b) => b[1].w - a[1].w || a[1].r - b[1].r).slice(0, 2);
+  const parts = (inn.parts || []).concat(inn.part && inn.part.r ? [{ r: inn.part.r, w: inn.wkts + 1, live: true }] : []);
+  const best = parts.sort((a, b) => b.r - a.r)[0];
+  const n = M.innings.length, nb = predictNextBat(M);
+  let sit = '';
+  if (M.fmt !== 'FC' && n === 1) { const ov = mOvers(M); sit = `${teamName(inn.bowl)} need ${inn.runs + 1} to win from ${ov} overs, ${((inn.runs + 1) / ov).toFixed(2)} an over.`; }
+  else if (M.fmt === 'FC') {
+    const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
+    if (n === 1) sit = `First innings. ${teamName(inn.bowl)} reply next.`;
+    else if (n === 2) sit = nb === inn.bat ? `${teamName(inn.bowl)} lead by ${-lead} and enforce the follow-on.` : `${teamName(lead >= 0 ? inn.bat : inn.bowl)} lead by ${Math.abs(lead)} on first innings.`;
+    else if (n === 3) sit = nb ? `${teamName(nb)} need ${teamRuns(M, inn.bat) - teamRuns(M, nb) + 1} to win with ${Math.round((mMaxBalls(M) - M.balls) / 6)} overs left.` : '';
+  }
+  const me = liveMyTeam(M);
+  const inner = `${sit ? `<div class="note" style="margin-top:10px">${esc(sit)}</div>` : ''}
+    <div class="grid g2" style="gap:8px;margin-top:10px">
+      <div><div class="lbl">Top scorers</div>${perfRows(bats.map(c => batRow(c)))}</div>
+      <div><div class="lbl">Best bowling</div>${perfRows(bowls.map(([id, f]) => bowlRow(id, f)))}</div></div>
+    ${best ? `<div class="xs muted" style="margin-top:8px">Best partnership: <b class="t">${best.r}</b> for the ${ordinal(best.w)} wicket${best.live ? ' (unbroken)' : ''}</div>` : ''}
+    ${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg([inn], M.fmt)}</div>` : ''}
+    ${nb ? `<div class="lbl" style="margin-top:12px">Next innings · ${nb === me ? 'we bat' : 'we bowl'}</div>${coachPlanLine(M, true, nb === me ? 'bat' : 'bowl')}` : ''}`;
+  return recapShell(`Innings complete${M.fmt === 'FC' ? ' · Day ' + fcDay(M) : ''}`, `${teamName(inn.bat)} ${inn.runs}${inn.allOut ? ' all out' : '/' + inn.wkts}${inn.declared ? ' declared' : ''}`,
+    `${oversStr(inn.balls)} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`, inner);
+}
+function breakRecap(M, r) {
+  const label = { lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[r.type];
+  const inn = curInn(M);
+  const sessLine = `${r.sess.runs} run${r.sess.runs === 1 ? '' : 's'} and ${r.sess.wkts} wicket${r.sess.wkts === 1 ? '' : 's'} in ${r.sess.overs} overs`;
+  const key = [];
+  if (r.sess.bat[0]) key.push(`<div class="kv"><span>${esc(pshort(P(r.sess.bat[0][0])))}</span><span><b>${r.sess.bat[0][1]}</b> <span class="xs dim">runs this session</span></span></div>`);
+  if (r.sess.bowl[0]) key.push(`<div class="kv"><span>${esc(pshort(P(r.sess.bowl[0][0])))}</span><span><b>${r.sess.bowl[0][1]}/${r.sess.bowl[0][2]}</b> <span class="xs dim">this session</span></span></div>`);
+  const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
+  const sit = inn.target ? `${teamName(inn.bat)} need ${Math.max(0, inn.target - inn.runs)} more with ${10 - inn.wkts} wickets in hand.` : M.innings.length > 1 ? `${teamName(lead >= 0 ? inn.bat : inn.bowl)} lead by ${Math.abs(lead)}.` : '';
+  if (r.type !== 'stumps') return recapShell(`${label} · Day ${r.day + 1}`, esc(r.score), `${r.overs} overs`, `<div class="s" style="margin-top:8px">The session: ${sessLine}.</div>${key.length ? perfRows(key) : ''}${sit ? `<div class="xs muted" style="margin-top:6px">${esc(sit)}</div>` : ''}`);
+  const d = r.dayStats, nd = M.cond.days[r.day + 1];
+  const potd = (() => { const b = d.bat[0], w = d.bowl[0]; if (!b && !w) return null; if (w && (!b || w[1] * 22 >= b[1])) return `${esc(pname(P(w[0])))} · ${w[1]}/${w[2]}`; return `${esc(pname(P(b[0])))} · ${b[1]} runs`; })();
+  const trend = nd ? (r.day + 2 >= 3 ? 'The surface is wearing: spinners get more help each day, quicks a little less.' : PITCH_OUTLOOK[M.cond.pitch]) : '';
+  const inner = `<div class="kpis rc-kpis"><div class="kpi"><div class="v">${d.runs}</div><div class="l">Runs today</div></div><div class="kpi"><div class="v">${d.wkts}</div><div class="l">Wickets</div></div><div class="kpi"><div class="v">${d.overs}</div><div class="l">Overs</div></div></div>
+    <div class="rows rc-rows">${r.breaks.map(x => `<div class="kv"><span>${{ lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[x.type]}</span><span>${esc(x.score)}</span></div>`).join('')}${potd ? `<div class="kv"><span>Player of the day</span><span class="b">${potd}</span></div>` : ''}</div>
+    ${sit ? `<div class="note" style="margin-top:10px">${esc(sit)}</div>` : ''}
+    ${nd ? `<div class="flex" style="gap:10px;margin-top:10px;align-items:center"><svg viewBox="0 0 24 24" style="width:30px;height:30px;flex:none">${SKY_ICON[nd.sky]}</svg><div><div class="s b">Day ${r.day + 2}: ${SKY_SHORT[nd.sky]}${nd.lost ? ` · about ${nd.lost} overs lost` : ''}</div><div class="xs muted">${esc(trend)}</div></div></div>` : ''}
+    ${coachPlanLine(M, false, inn.bat === liveMyTeam(M) ? 'bat' : 'bowl')}`;
+  return recapShell(`Stumps · Day ${r.day + 1}`, esc(r.score), `${r.overs} overs`, inner);
+}
+function resultRecap(M) {
+  // Best innings per batter; combined match figures per bowler.
+  const bestBat = {}, fig = {};
+  M.innings.forEach(i => {
+    i.card.forEach(c => { if (c.in && (!bestBat[c.id] || c.r > bestBat[c.id][0].r)) bestBat[c.id] = [c, i.bat]; });
+    Object.keys(i.bw).forEach(id => { const f = i.bw[id]; if (!f.balls) return; const o = fig[id] || (fig[id] = [id, { w: 0, r: 0, balls: 0 }, i.bowl]); o[1].w += f.w; o[1].r += f.r; o[1].balls += f.balls; });
+  });
+  const bats = Object.values(bestBat).sort((a, b) => b[0].r - a[0].r), bowls = Object.values(fig).sort((a, b) => b[1].w - a[1].w || a[1].r - b[1].r);
+  const fx = fixtureById(M.fxId), me = liveMyTeam(M), res = M.result;
+  let impact = '';
+  if (fx && fx.stage === 'intl') {
+    const series = game.season.fixtures.filter(f => f.win === fx.win && f.comp === fx.comp && f.id !== fx.id && f.result).map(f => f.result.winner).concat([res.winner]);
+    const a = series.filter(w => w === 'AUS').length, o = series.filter(w => w && w !== 'AUS').length;
+    const sname = `${COMPS[fx.comp].short} series`;
+    const over = series.length >= game.season.fixtures.filter(f => f.win === fx.win && f.comp === fx.comp).length;
+    impact = a === o ? `${sname} ${over ? 'drawn' : 'level'} at ${a}–${o}.` : `${a > o ? 'Australia' : teamName(fx.away)} ${over ? 'win' : 'lead'} the ${sname} ${Math.max(a, o)}–${Math.min(a, o)}.`;
+  } else if (fx && fx.stage === 'league' && game.season.standings[M.comp]) {
+    const c = COMPS[M.comp], pts = res.winner === me ? c.win : res.winner ? 0 : res.tie ? c.tie : c.draw;
+    const table = Object.keys(game.season.standings[M.comp]).map(id => ({ id, p: game.season.standings[M.comp][id].Pts + (id === me ? pts : 0) })).sort((a, b) => b.p - a.p);
+    impact = `${pts ? `${pts} points` : 'No points'} for ${teamDef(me).nick}. That puts them ${ordinal(table.findIndex(x => x.id === me) + 1)} on the ${c.short} ladder with ${table.find(x => x.id === me).p}.`;
+  }
+  const inner = `${M.potm ? `<div class="s" style="margin-top:8px">Player of the match: <b>${plink(P(M.potm))}</b></div>` : ''}
+    ${impact ? `<div class="note" style="margin-top:10px">${esc(impact)}</div>` : ''}
+    <div class="grid g2" style="gap:8px;margin-top:10px"><div><div class="lbl">Standout batting</div>${perfRows(bats.slice(0, 3).map(([c, t]) => batRow(c, t)))}</div>
+      <div><div class="lbl">Standout bowling</div>${perfRows(bowls.slice(0, 3).map(([id, f, t]) => bowlRow(id, f, t)))}</div></div>`;
+  const won = res.winner && isUserTeam(res.winner);
+  return recapShell(`Result${M.fmt === 'FC' ? ' · Day ' + fcDay(M) : ''}`, `<span class="${won ? 'win' : res.winner ? 'loss' : ''}">${esc(res.text)}</span>`, M.innings.map(i => `${tShort(i.bat)} ${inningsLine(i, M.fmt)}`).join(' · '), inner);
+}
 
 // ---- Live presentation helpers ----
 function ballSym(s) { const c = s === 'W' ? 'w' : s === '4' ? 'b4' : s === '6' ? 'b6' : /wd|nb|lb|b/.test(s) ? 'x' : s === '•' ? 'dot' : ''; return `<span class="bs ${c}">${s === '•' ? '·' : s}</span>`; }
@@ -4338,16 +4568,28 @@ function wagonPanel(M) {
 }
 
 // ---- Game plan (the GM's brief) ----
-function briefSummary(b) { return `Bat ${TACTICS.bat[b.bat].label.toLowerCase()} · bowl ${TACTICS.field[b.field].label.toLowerCase()} · ${TACTICS.bowl[b.bowl].label.toLowerCase()}`; }
-function gamePlanRow(fmt, hc) {
-  const b = game.tactics[fmt];
-  return `<div class="plan-row" onclick="planSheet('${fmt}')"><div class="grow"><div class="lbl" style="margin:0">Game plan</div><div class="s b" style="margin-top:2px">${briefSummary(b)}</div><div class="xs dim" style="margin-top:2px">${hc ? `Carried out by ${esc(hc.first + ' ' + hc.last)}, ${COACH_STYLES[hc.style].toLowerCase()} head coach` : 'Carried out by the coaching staff'}</div></div><span class="link">Change</span></div>`;
+// Pre-match view of the coach's plan, built from the conditions on a stub match.
+function previewCoachBrief(fx, team) {
+  const pre = previewConditions(fx);
+  const stub = { fmt: COMPS[fx.comp].fmt, comp: fx.comp, venue: fx.venue || fx.home, cond: pre.cond, innings: [], balls: 0, brief: {} };
+  return coachBrief(stub, team);
 }
-function planSheet(fmt) {
-  sheet('Game plan', 'Brief the coach', `<p class="s muted" style="margin:0 0 10px">This is the plan your coach takes into the match. You can adjust it at each innings break, or send a message during play that reaches the players at the next drinks break.</p>
-    <div class="grid" style="gap:10px"><div><label class="lbl">When we bat</label>${tacticSel(fmt, 'bat')}</div><div><label class="lbl">When we bowl</label>${tacticSel(fmt, 'field')}</div><div><label class="lbl">Bowling attack</label>${tacticSel(fmt, 'bowl')}</div></div>`,
-    { foot: `<button class="btn pri" onclick="closeModal();render()">Done</button>` });
+function gamePlanRow(fmt, hc, fx) {
+  const me = fx ? myTeamIn(fx) : U();
+  const mo = game.matchOverride && fx && game.matchOverride.fx === fx.id ? game.matchOverride.brief : null;
+  const b = mo || (fx ? previewCoachBrief(fx, me) : game.tactics[fmt]);
+  const ph = PHILOSOPHY[(game.philosophy || {})[fmt] || 'balanced'];
+  return `<div class="plan-row"><div class="grow"><div class="lbl" style="margin:0">${mo ? 'Your plan · coach overruled' : `Coach's plan · ${ph.label} philosophy`}</div><div class="s b" style="margin-top:2px">${briefSummary(b)}</div><div class="xs dim" style="margin-top:2px">${hc ? `${esc(hc.first + ' ' + hc.last)}, ${COACH_STYLES[hc.style].toLowerCase()} head coach, adjusts it at every break` : 'The coaching staff adjust it at every break'}</div></div>${fx ? (mo ? `<button class="link" onclick="game.matchOverride=null;autosave();render()">Restore</button>` : `<button class="link" onclick="preOverrideSheet('${fx.id}')">Override</button>`) : ''}</div>`;
 }
+function preOverrideSheet(fxId) {
+  const fx = fixtureById(fxId), fmt = COMPS[fx.comp].fmt, cur = previewCoachBrief(fx, myTeamIn(fx));
+  window._brief = Object.assign({}, cur);
+  const opt = (key, label) => `<div><label class="lbl">${label}</label>${sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), cur[key], `window._brief.${key}=this.value`, 'full')}</div>`;
+  sheet('Override the coach', 'Your plan for the first innings', `<p class="s muted" style="margin:0 0 10px">The coach has set the plan from the conditions and the club philosophy. Your plan stands for the first innings, then the coach takes over again. Overruling him costs some of his trust (now ${coachRelLabel(game.coachRel)}, ${game.coachRel}).</p>
+    <div class="grid" style="gap:10px">${opt('bat', 'When we bat')}${opt('field', 'When we bowl')}${opt('bowl', 'Bowling attack')}</div>`,
+    { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="game.matchOverride={fx:'${fxId}',brief:Object.assign({},window._brief)};noteOverride();closeModal();autosave();render()">Overrule the coach</button>` });
+}
+function setPhilosophy(fmt, v) { game.philosophy = game.philosophy || {}; game.philosophy[fmt] = v; autosave(); render(); }
 // Who bats next, so the innings-break panel can ask the right question.
 function predictNextBat(M) {
   const n = M.innings.length, last = curInn(M);
@@ -4357,16 +4599,6 @@ function predictNextBat(M) {
   if (n === 2) { const lead = M.innings[0].runs - last.runs; return (lead >= 200 && mMaxBalls(M) - M.balls > 600) ? last.bat : M.innings[0].bat; }
   if (n === 3) { const bat = last.bowl; return teamRuns(M, last.bat) - teamRuns(M, bat) + 1 > 0 ? bat : null; }
   return null;
-}
-function setLiveBrief(key, val) { const M = game.live, me = liveMyTeam(M); M.brief[me] = Object.assign({}, M.brief[me] || game.tactics[M.fmt]); M.brief[me][key] = val; autosave(); }
-function breakPanel(M, inn) {
-  const me = liveMyTeam(M), nb = predictNextBat(M);
-  if (!nb) return '';
-  const b = M.brief[me] || game.tactics[M.fmt];
-  const opts = key => sel(Object.keys(TACTICS[key]).map(k => [k, TACTICS[key][k].label]), b[key], `setLiveBrief('${key}',this.value)`, 'full');
-  const batting = nb === me;
-  return `<div class="break-brief"><div class="lbl">Next innings · ${batting ? 'we bat' : 'we bowl'}</div>
-    <div class="grid" style="grid-template-columns:${batting ? '1fr' : '1fr 1fr'};gap:8px;margin-top:6px">${batting ? `<div><div class="xs dim" style="margin-bottom:3px">Batting approach</div>${opts('bat')}</div>` : `<div><div class="xs dim" style="margin-bottom:3px">Bowling approach</div>${opts('field')}</div><div><div class="xs dim" style="margin-bottom:3px">Attack</div>${opts('bowl')}</div>`}</div></div>`;
 }
 // §24b NATIONAL SELECTION + STAFF ----------------------------------------------------------
 function renderNatSel() {
