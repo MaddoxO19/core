@@ -354,7 +354,7 @@ button{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.6', title: 'Coach Autonomy & Leadership', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.7', title: 'International Priority & Form Charts', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1884,6 +1884,7 @@ function migrateGame(g) {
   // v0.7.3: the coach runs the plan. Turn the old standing brief into a club philosophy.
   if (!g.philosophy) { g.philosophy = {}; ['FC','OD','T20'].forEach(f => { const t = (g.tactics || {})[f] || {}; g.philosophy[f] = t.bat === 'aggressive' || t.field === 'attacking' ? 'attacking' : t.bat === 'defensive' || t.field === 'defensive' ? 'patient' : 'balanced'; }); }
   if (g.coachRel == null) g.coachRel = 60;
+  if (g.clashMode === 'staff' || g.clashMode == null) g.clashMode = 'intl';   // v0.7.7: international matches first by default
   if (g.season) COMP_ORDER.forEach(c => Object.values(g.season.standings[c]).forEach(s => { if (s.NR == null) s.NR = 0; }));
   return g;
 }
@@ -2743,10 +2744,11 @@ function logMatchForPlayers(M) {
     M.xi[t].forEach(id => {
       const p = P(id);
       if (!p || (p.teamId && p.teamId.startsWith('X_'))) return;
-      let r = 0, w = 0, batted = false;
-      M.innings.forEach(inn => { const c = inn.card.find(x => x.id === id && x.in); if (c) { r += c.r; batted = true; } if (inn.bw[id]) w += inn.bw[id].w; });
+      let r = 0, w = 0, batted = false; const inns = [];
+      M.innings.forEach(inn => { const c = inn.card.find(x => x.id === id && x.in); if (c) { r += c.r; batted = true; inns.push(c.r + (c.out ? '' : '*')); } if (inn.bw[id]) w += inn.bw[id].w; });
       p.log = p.log || [];
-      p.log.push([M.fmt, batted ? r : -1, w, os, intl]);
+      // [format, match runs (-1 did not bat), wickets, opponent, international, day, innings scores]
+      p.log.push([M.fmt, batted ? r : -1, w, os, intl, game.day, inns]);
       if (p.log.length > 15) p.log.shift();
     });
   });
@@ -2782,7 +2784,7 @@ function createGame(gmName, teamId, year, nationGm) {
     defaultPlan: { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) },
     board: { confidence: 60, objectives: [] },
     history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1, scaleV: SCALE_VERSION,
-    philosophy: { FC:'balanced', OD:'balanced', T20:'balanced' }, coachRel: 60, matchOverride: null,
+    philosophy: { FC:'balanced', OD:'balanced', T20:'balanced' }, coachRel: 60, matchOverride: null, clashMode: 'intl',
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
   game.nation.rankings = initRankings();
@@ -3008,7 +3010,8 @@ function updateFinals(comp) {
 // so the other becomes the clash his staff run.
 function userFixtureToday() {
   const today = game.season.fixtures.filter(f => f.day === game.day && !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && (f.stage !== 'intl' || activeWindow()));
-  return today.sort((a, b) => (matchLen(b) - matchLen(a)) || ((b.stage === 'intl') - (a.stage === 'intl')))[0];
+  const dom = clashMode() === 'domestic';
+  return today.sort((a, b) => dom ? ((matchLen(b) - matchLen(a)) || ((a.stage === 'intl') - (b.stage === 'intl'))) : (((b.stage === 'intl') - (a.stage === 'intl')) || (matchLen(b) - matchLen(a))))[0];
 }
 function quickPlay(fx) {
   const M = createMatch(fx);
@@ -3066,9 +3069,14 @@ function nextDay() {
 function matchLen(fx) { return COMPS[fx.comp].fmt === 'FC' ? (fx.comp === 'TEST' ? 5 : 4) : 1; }
 function setBusy(fx) { if (!fx) return; game.busy = { team: myTeamOf(fx), from: fx.day, until: fx.day + matchLen(fx) - 1, fx: fx.id }; }
 function myTeamOf(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
+// game.clashMode: 'intl' (default) internationals take priority, 'domestic' the state side does,
+// 'ask' the GM chooses on match day. Whichever match he runs, the other is run by the staff.
+function clashMode() { const m = game.clashMode; return m === 'domestic' || m === 'ask' ? m : 'intl'; }
+// International-first: a state match that overlaps one of Australia's is handed to the staff.
+function yieldsToIntl(fx) { return clashMode() === 'intl' && fx && fx.stage !== 'intl' && clashesWith(fx).some(f => f.stage === 'intl'); }
 function isClash(fx) {
   const b = game.busy;
-  if (!b || game.clashMode === 'ask' || !fx) return false;
+  if (!b || !fx) return false;
   return fx.day >= b.from && fx.day <= b.until && myTeamOf(fx) !== b.team && fx.id !== b.fx;
 }
 // Fixtures of the GM's other team that this match will clash with.
@@ -3076,12 +3084,14 @@ function clashesWith(fx) {
   const me = myTeamOf(fx), end = fx.day + matchLen(fx) - 1;
   return game.season.fixtures.filter(f => !f.result && f.id !== fx.id && f.day >= fx.day && f.day <= end && f.home && (isUserTeam(f.home) || isUserTeam(f.away)) && myTeamOf(f) !== me && (f.stage !== 'intl' || activeWindow()));
 }
-function staffPlay(fx) {
+function staffPlay(fx, why) {
   const M = quickPlay(fx), team = myTeamOf(fx);
-  (game.awayLog = game.awayLog || []).push({ fx: fx.id, team, text: M.result.text, potm: M.potm || null, comp: fx.comp });
-  addNews('Staff', `Staff run ${teamDef(team).nick} v ${teamDef(team === fx.home ? fx.away : fx.home).nick}`, `${M.result.text}. You were with ${teamDef(game.busy.team).nick}.`);
+  const reason = why || (game.busy ? `You were with ${teamDef(game.busy.team).nick}.` : '');
+  (game.awayLog = game.awayLog || []).push({ fx: fx.id, team, text: M.result.text, potm: M.potm || null, comp: fx.comp, why: reason });
+  addNews('Staff', `Staff run ${teamDef(team).nick} v ${teamDef(team === fx.home ? fx.away : fx.home).nick}`, `${M.result.text}. ${reason}`);
   return M;
 }
+function intlReason(fx) { const f = clashesWith(fx).find(x => x.stage === 'intl'); return f ? `You were freed up for Australia v ${teamDef(f.away).nick} (${COMPS[f.comp].short}, ${dateStr(f.day)}).` : ''; }
 // Main "Continue": sims forward to the next thing that needs the GM.
 function continueGame() {
   if (!game) return;
@@ -3089,6 +3099,7 @@ function continueGame() {
   if (game.phase !== 'season') { offseasonContinue(); return; }
   const pend = game.pendingFx && fixtureById(game.pendingFx);
   if (pend && !pend.result && isClash(pend)) { staffPlay(pend); game.pendingFx = null; }
+  else if (pend && !pend.result && yieldsToIntl(pend)) { staffPlay(pend, intlReason(pend)); game.pendingFx = null; }
   else if (pend && !pend.result) { go('matchday'); return; }
   game.pendingFx = null;
   const done = page => { autosave(); go(page); showAwaySummary(); };
@@ -3096,7 +3107,11 @@ function continueGame() {
     if (game.busy && game.day > game.busy.until) game.busy = null;
     playAIFixturesToday();
     let ufx, g2 = 0;
-    while ((ufx = userFixtureToday()) && isClash(ufx) && g2++ < 5) staffPlay(ufx);
+    while ((ufx = userFixtureToday()) && g2++ < 6) {
+      if (isClash(ufx)) staffPlay(ufx);
+      else if (yieldsToIntl(ufx)) staffPlay(ufx, intlReason(ufx));
+      else break;
+    }
     if (ufx) { game.pendingFx = ufx.id; return done('matchday'); }
     if (seasonDone()) { endSeason(); return done('home'); }
     if (nextDay()) return done('home');
@@ -3109,7 +3124,7 @@ function showAwaySummary() {
   game.awayLog = [];
   const rows = log.map(e => { const f = fixtureById(e.fx), opp = e.team === f.home ? f.away : f.home, won = f.result && f.result.winner === e.team;
     const lad = game.season.standings[e.comp] ? ` · now ${ordinal(ladderPos(e.comp, e.team))} on the ${COMPS[e.comp].short} ladder` : '';
-    return `<div class="row tap" onclick="${game.scorecards[e.fx] ? `showScorecard('${e.fx}',0)` : ''}"><div class="stack"><div class="main-t">${chip(f.comp, COMPS[f.comp].short)} ${esc(teamDef(e.team).nick)} v ${esc(teamDef(opp).nick)} · ${dateStr(f.day)}</div><div class="sub-t" style="white-space:normal"><span class="${won ? 'win' : f.result.winner ? 'loss' : ''}">${esc(e.text)}</span>${e.potm ? ` · player of the match ${esc(pname(P(e.potm)))}` : ''}${lad}</div></div></div>`; }).join('');
+    return `<div class="row tap" onclick="${game.scorecards[e.fx] ? `showScorecard('${e.fx}',0)` : ''}"><div class="stack"><div class="main-t">${chip(f.comp, COMPS[f.comp].short)} ${esc(teamDef(e.team).nick)} v ${esc(teamDef(opp).nick)} · ${dateStr(f.day)}</div><div class="sub-t" style="white-space:normal"><span class="${won ? 'win' : f.result.winner ? 'loss' : ''}">${esc(e.text)}</span>${e.potm ? ` · player of the match ${esc(pname(P(e.potm)))}` : ''}${lad}</div>${e.why ? `<div class="xs dim" style="margin-top:2px">${esc(e.why)}</div>` : ''}</div></div>`; }).join('');
   sheet('Your staff ran these matches', 'While you were away', `<div class="rows">${rows}</div>`, { flush: true, foot: '<button class="btn pri" onclick="closeModal()">Done</button>' });
 }
 // Sim several days, auto-playing the user's matches.
@@ -4392,7 +4407,7 @@ function renderNational() {
   const role = N.gm
     ? `<div class="kv"><span>Your role</span><span class="win">National selector</span></div><div class="kv"><span>National board confidence</span><span class="b">${N.conf}</span></div>
        ${selw ? `<div class="pb"><button class="btn pri block" onclick="go('natsel')">Pick the ${esc(selw.label)} squad ▸</button></div>` : ''}
-       <div class="kv"><span>Clashing matches</span><span>${sel([['staff','Staff run them'],['ask','Ask me']], game.clashMode || 'staff', "game.clashMode=this.value;autosave()")}</span></div>
+       <div class="kv"><span>When matches clash</span><span>${sel([['intl','International first'],['domestic','Domestic first'],['ask','Ask me']], clashMode(), "game.clashMode=this.value;autosave()")}</span></div>
        <div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`
     : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
   return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
@@ -4482,7 +4497,10 @@ function renderMatchday() {
       ${pitchReport(pre, v, fmt)}
       ${forecastRow(pre, fmt, fx)}
       <table class="tbl clean" style="margin-top:6px"><tbody>
-        ${(() => { const cl = clashesWith(fx); return cl.length ? `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${cl.map(f => `${esc(teamDef(myTeamOf(f)).nick)} v ${esc(teamDef(myTeamOf(f) === f.home ? f.away : f.home).nick)} on ${dateStr(f.day)}`).join(', ')} ${game.clashMode === 'ask' ? 'falls during this match. You will be asked which to run.' : 'will be run by your staff while you are at this match.'}</td></tr>` : ''; })()}
+        ${(() => { const cl = clashesWith(fx); if (!cl.length) return '';
+          const names = cl.map(f => `${esc(teamDef(myTeamOf(f)).nick)} v ${esc(teamDef(myTeamOf(f) === f.home ? f.away : f.home).nick)} (${COMPS[f.comp].short}, ${dateStr(f.day)})`).join(', ');
+          if (clashMode() === 'ask') return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${names} falls during this match. Run this one and your staff take the other, or hand this match to your staff.<div style="margin-top:6px"><button class="btn sm" onclick="handToStaff('${fx.id}')">Let staff run this match</button></div></td></tr>`;
+          return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${names} will be run by your staff while you are at this match.</td></tr>`; })()}
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       ${gamePlanRow(fmt, hc, fx)}
@@ -4557,6 +4575,13 @@ function scoutOpposition(fxId, opp) {
   const step = staffEff(U(), 'analyst') >= 75 ? 2 : 1;
   squadOf(opp).forEach(p => raiseScout(p.id, Math.min(2, scoutLevel(p) + step)));
   flash(`Scouting reports on ${teamDef(opp).nick} are in.`); autosave(); render();
+}
+// Ask-me mode: the GM hands this match to the staff and takes the one it clashes with.
+function handToStaff(fxId) {
+  const fx = fixtureById(fxId); if (!fx || fx.result) return;
+  const other = clashesWith(fx)[0];
+  staffPlay(fx, other ? `You chose ${teamDef(myTeamOf(other)).nick} v ${teamDef(myTeamOf(other) === other.home ? other.away : other.home).nick} (${COMPS[other.comp].short}, ${dateStr(other.day)}).` : '');
+  game.pendingFx = null; continueGame();
 }
 function quickSimUser() {
   const fx = fixtureById(game.pendingFx);
@@ -5102,22 +5127,60 @@ function renderRecords() {
 }
 
 // Small SVG charts for profiles.
+// ---- Form and career charts ----
+// Batters: bars are runs per match with guide lines at 50 and 100 and a dashed average.
+// Bowlers: bars are wickets per match with guide lines at 3 and 5 and a dashed average.
+// A letter under each bar gives the format (gold for internationals); tap a bar for the match.
+const FMT_LETTER = { FC: 'S', OD: 'O', T20: 'T' }, INTL_LETTER = { FC: 'Test', OD: 'ODI', T20: 'T20I' };
+function isBowlerProfile(p) { return ['PACE', 'SPIN'].includes(group(p)) || p.role === 'BWAR'; }
 function formChart(p) {
   const log = (p.log || []).slice(-12);
   if (!log.length) return '';
-  const max = Math.max(30, ...log.map(x => x[1]));
-  const W = 300, H = 70, bw = W / 12;
-  const bars = log.map((x, i) => { const r = Math.max(0, x[1]), h = r / max * (H - 18); const col = x[1] < 0 ? '#24465d' : r >= 100 ? '#f4c542' : r >= 50 ? '#4ade80' : '#7dd3fc'; return `<rect x="${i * bw + 3}" y="${H - 14 - h}" width="${bw - 6}" height="${Math.max(2, h)}" rx="2" fill="${col}"/>${x[2] ? `<circle cx="${i * bw + bw / 2}" cy="${H - 6}" r="${Math.min(4, 1.5 + x[2])}" fill="#fb7185"/>` : ''}`; }).join('');
-  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Last ${log.length} matches</h3><div class="end xs dim">bars runs · dots wickets</div></div><div class="pb"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:80px">${bars}</svg>
-    <div class="xs dim">${log.map(x => `${x[1] < 0 ? 'dnb' : x[1]}${x[2] ? '/' + x[2] + 'w' : ''} v ${x[3]}`).slice(-4).reverse().join(' · ')}</div></div></div>`;
+  const bowler = isBowlerProfile(p);
+  const W = 320, H = 118, L = 24, top = 8, base = H - 22, bw = (W - L) / 12;
+  const val = x => bowler ? x[2] : Math.max(0, x[1]);
+  const guides = bowler ? [3, 5] : [50, 100];
+  // Batting scale tops out at 160 so the 50 and 100 lines stay readable; taller bars are labelled.
+  const max = bowler ? Math.max(6, ...log.map(val)) : clamp(Math.max(...log.map(val)), 110, 160);
+  const y = v => base - Math.min(v, max) / max * (base - top);
+  const counted = bowler ? log : log.filter(x => x[1] >= 0);
+  const avg = counted.length ? counted.reduce((a, x) => a + val(x), 0) / counted.length : 0;
+  const tip = x => { const inns = (x[6] && x[6].length) ? x[6].join(' & ') : x[1] < 0 ? 'did not bat' : String(x[1]);
+    return `${inns}${x[2] ? `, ${x[2]} wkt${x[2] > 1 ? 's' : ''}` : ''} v ${x[3]} · ${x[4] ? { FC: 'Test', OD: 'ODI', T20: 'T20I' }[x[0]] : COMPS[FMT_COMP[x[0]]].short}${x[5] != null ? ' · ' + dateStr(x[5]) : ''}`; };
+  const grid = guides.filter(g => g <= max).map(g => `<line x1="${L}" x2="${W}" y1="${y(g)}" y2="${y(g)}" stroke="#2a465c" stroke-width="1"/><text x="${L - 4}" y="${y(g) + 3}" font-size="8" fill="#6f8aa0" text-anchor="end">${g}${bowler ? 'w' : ''}</text>`).join('');
+  const bars = log.map((x, i) => {
+    const v = val(x), h = Math.max(2, base - y(v)), xx = L + i * bw + 3;
+    const best = Math.max(0, ...(x[6] || []).map(t => parseInt(t, 10) || 0), bowler ? 0 : x[1]);
+    const col = bowler ? (x[2] >= 5 ? '#f4c542' : x[2] >= 3 ? '#4ade80' : '#fb7185') : x[1] < 0 ? '#24465d' : best >= 100 ? '#f4c542' : best >= 50 ? '#4ade80' : '#7dd3fc';
+    return `<g class="tap" onclick="flash('${esc(tip(x).replace(/\\/g, '').replace(/'/g, "\\'"))}')"><rect x="${xx - 3}" y="${top}" width="${bw}" height="${H - top}" fill="transparent"/>
+      <rect x="${xx}" y="${base - h}" width="${bw - 6}" height="${h}" rx="2" fill="${col}"/>
+      ${!bowler && v > max ? `<text x="${xx + (bw - 6) / 2}" y="${base - h + 9}" font-size="7.5" font-weight="700" fill="#0d1b26" text-anchor="middle">${v}</text>` : ''}
+      ${!bowler && x[2] ? `<circle cx="${xx + (bw - 6) / 2}" cy="${Math.max(top + 3, base - h - 5)}" r="${Math.min(3.5, 1.5 + x[2] * 0.6)}" fill="#fb7185"/>` : ''}
+      <text x="${xx + (bw - 6) / 2}" y="${H - 8}" font-size="${x[4] ? 6.5 : 8}" fill="${x[4] ? '#f4c542' : '#6f8aa0'}" text-anchor="middle">${x[4] ? INTL_LETTER[x[0]] : FMT_LETTER[x[0]]}</text></g>`; }).join('');
+  const avgTxt = `avg ${bowler ? avg.toFixed(1) + 'w' : Math.round(avg)}`, ay = Math.max(top + 9, y(avg) - 4);
+  const avgLine = avg > 0 ? `<line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#f4c542" stroke-width="1.2" stroke-dasharray="4 3"/><rect x="${W - avgTxt.length * 5 - 6}" y="${ay - 8}" width="${avgTxt.length * 5 + 6}" height="11" rx="3" fill="#0d1b26" fill-opacity="0.9"/><text x="${W - 3}" y="${ay}" font-size="8.5" fill="#f4c542" text-anchor="end">${avgTxt}</text>` : '';
+  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Last ${log.length} matches</h3><div class="end xs dim">${bowler ? 'wickets per match' : 'runs per match · dots wickets'}</div></div><div class="pb">
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:128px">${grid}${bars}${avgLine}</svg>
+    <div class="xs dim">S Shield · O One-Day · T T20 · <span style="color:#f4c542">Test, ODI, T20I</span> for Australia · tap a bar for the match</div></div></div>`;
 }
 function careerChart(p) {
   const h = p.hist.slice(-10);
   if (h.length < 1) return '';
   const runs = h.map(x => x.FC.r + x.OD.r + x.T20.r), wk = h.map(x => x.FC.w + x.OD.w + x.T20.w);
-  const mr = Math.max(100, ...runs), mw = Math.max(10, ...wk), W = 300, H = 90, bw = W / Math.max(h.length, 5);
-  const bars = h.map((x, i) => `<rect x="${i * bw + 4}" y="${H - 16 - runs[i] / mr * (H - 26)}" width="${bw / 2 - 5}" height="${Math.max(2, runs[i] / mr * (H - 26))}" rx="2" fill="#7dd3fc"/><rect x="${i * bw + bw / 2}" y="${H - 16 - wk[i] / mw * (H - 26)}" width="${bw / 2 - 5}" height="${Math.max(2, wk[i] / mw * (H - 26))}" rx="2" fill="#fb7185"/><text x="${i * bw + bw / 2}" y="${H - 3}" font-size="9" fill="#8ea7b8" text-anchor="middle">${String(x.year).slice(2)}</text>`).join('');
-  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Season by season</h3><div class="end xs dim"><span style="color:#7dd3fc">runs</span> · <span style="color:#fb7185">wickets</span></div></div><div class="pb"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100px">${bars}</svg></div></div>`;
+  const bowler = isBowlerProfile(p);
+  const series = bowler ? wk : runs, unit = bowler ? 'wickets' : 'runs';
+  const W = 320, H = 112, L = 30, top = 8, base = H - 18, bw = (W - L) / Math.max(h.length, 5);
+  const max = Math.max(bowler ? 20 : 500, ...series);
+  const y = v => base - v / max * (base - top);
+  const guides = (bowler ? [20, 40, 60] : [500, 1000, 1500]).filter(g => g <= max * 1.05);
+  const avg = series.reduce((a, b) => a + b, 0) / series.length;
+  const grid = guides.map(g => `<line x1="${L}" x2="${W}" y1="${y(g)}" y2="${y(g)}" stroke="#2a465c"/><text x="${L - 4}" y="${y(g) + 3}" font-size="8" fill="#6f8aa0" text-anchor="end">${g >= 1000 ? g / 1000 + 'k' : g}</text>`).join('');
+  const bars = h.map((x, i) => { const v = series[i], xx = L + i * bw + 4, other = bowler ? runs[i] : wk[i];
+    return `<g class="tap" onclick="flash('${x.year}–${String(x.year + 1).slice(2)}: ${runs[i]} runs, ${wk[i]} wickets')"><rect x="${xx}" y="${y(v)}" width="${bw - 8}" height="${Math.max(2, base - y(v))}" rx="2" fill="${bowler ? '#fb7185' : '#7dd3fc'}"/>
+      <text x="${xx + (bw - 8) / 2}" y="${H - 5}" font-size="8.5" fill="#8ea7b8" text-anchor="middle">${String(x.year).slice(2)}</text></g>`; }).join('');
+  const at = `avg ${Math.round(avg)} ${unit}`, ay = Math.max(top + 9, y(avg) - 4);
+  const avgLine = `<line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#f4c542" stroke-width="1.2" stroke-dasharray="4 3"/><rect x="${W - at.length * 5 - 6}" y="${ay - 8}" width="${at.length * 5 + 6}" height="11" rx="3" fill="#0d1b26" fill-opacity="0.9"/><text x="${W - 3}" y="${ay}" font-size="8.5" fill="#f4c542" text-anchor="end">${at}</text>`;
+  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Season by season</h3><div class="end xs dim">${unit} per season, all formats</div></div><div class="pb"><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:120px">${grid}${bars}${avgLine}</svg><div class="xs dim">Tap a season for runs and wickets.</div></div></div>`;
 }
 function homeExtras() {
   const up = game.season.fixtures.filter(f => !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away))).slice(1, 4);
