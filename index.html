@@ -221,6 +221,31 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .row{padding:9px 12px}
 .ph h3{color:var(--muted)}
 .panel .ph h3{letter-spacing:.07em}
+
+/* ---------- v0.5.2 commentary, scorecard, wagon wheel ---------- */
+.overs{margin:10px 12px 0;display:flex;flex-direction:column;gap:6px}
+.overs>div{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.overs .lab{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);font-weight:700;width:74px;flex:none}
+.bs{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 4px;border-radius:6px;font-size:11px;font-weight:800;color:#cfdde7;background:#15293a}
+.bs.dot{color:var(--dim);background:transparent;border:1px solid var(--line2)}
+.bs.w{background:#7f1d1d;color:#fff}.bs.b4{background:#14532d;color:#bbf7d0}.bs.b6{background:#5b4708;color:#fde68a}.bs.x{background:transparent;border:1px solid #2c4a60;color:#93d5ff;font-size:10px}
+.comm2 .ov{padding:10px 12px;border-top:1px solid var(--line2)}.comm2 .ov:first-child{border-top:0}
+.ovh{display:flex;align-items:center;gap:8px}.ovn{font-weight:800;font-size:12.5px;width:62px;flex:none}.ovb{display:flex;gap:3px;flex-wrap:wrap;flex:1}.ovr{font-size:11.5px;color:var(--muted);font-weight:700;white-space:nowrap}
+.ovsub{font-size:11px;color:var(--dim);margin:2px 0 0 70px}
+.cball{display:flex;gap:8px;font-size:12.5px;line-height:1.45;margin-top:6px;padding-left:70px;color:#d7e3ec}
+.cball .o{color:var(--dim);font-weight:700;font-size:11px;width:30px;flex:none;margin-left:-38px}
+.cball.w{color:#fecaca;font-weight:700}.cball.b{color:#bbf7d0}
+.cnote{padding:8px 12px;border-top:1px solid var(--line2);font-size:12px;color:var(--muted);font-style:italic}.cnote.res{color:var(--accent);font-style:normal;font-weight:800}
+.sc-result{padding:10px 12px;border-radius:10px;background:var(--s2);font-weight:800;font-size:13.5px;margin-bottom:10px}
+.sc-result span{display:block;font-weight:600;font-size:12px;color:var(--muted);margin-top:2px}.sc-result.win{color:#bbf7d0}.sc-result.loss{color:#fecaca}
+.sc-head{display:flex;justify-content:space-between;align-items:flex-end;margin:12px 2px 8px}
+.sc-team{font-weight:850;font-size:16px}.sc-total{font-weight:900;font-size:22px;line-height:1}
+.tbl.sc td,.tbl.sc th{padding:8px 8px;border-bottom:1px solid var(--line2)}
+.tbl.sc .nm{font-weight:700;font-size:13px}.tbl.sc .how{font-size:11.5px;color:var(--muted);margin-top:1px;white-space:normal}.tbl.sc .how.no{color:var(--good)}
+.sc-foot{padding:8px 12px;font-size:12px;border-top:1px solid var(--line2);line-height:1.6}
+.fow{display:inline-block;margin-right:8px;font-weight:700;font-size:11.5px}
+.wagon{width:100%;max-width:300px;height:auto;display:block;margin:0 auto}
+@media (max-width:420px){.hide-xs{display:none}}
 </style>
 </head>
 <body>
@@ -271,7 +296,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.5.1', title: 'Cleaner Match Centre', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.5.2', title: 'Match Centre', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_';
 const SAVE_SLOTS = 5;
 const SALARY_CAP = 3000000;
@@ -1049,6 +1074,7 @@ function simBall(M) {
       } else {
         ev.bat = br; ev.runs = br; conceded = br;
         sc.r += br; if (br === 4) sc.f4++; if (br === 6) sc.f6++;
+        if (br > 0) { ev.zone = pickZone(br); (sc.shots = sc.shots || []).push([zoneAngle(ev.zone, batter), br, inn.wkts]); }
         ev.sym = br === 0 ? '•' : String(br);
       }
     }
@@ -1060,11 +1086,15 @@ function simBall(M) {
   const ran = ev.extra === 'wd' ? 0 : ev.extra === 'nb' ? ev.bat : ev.runs;
   if (!ev.wkt && ran % 2 === 1) swapStrike(inn);
   inn.recent.push(ev.sym); if (inn.recent.length > 12) inn.recent.shift();
+  (inn.thisOver = inn.thisOver || []).push(ev.sym);
   const overEnded = inn.overBalls >= 6;
+  if (overEnded) { inn.lastOver = { syms: inn.thisOver, runs: inn.overTally || 0, bowler: bowler.id, no: inn.overNo + 1 }; inn.thisOver = []; }
   checkInningsEnd(M, inn);
   if (overEnded) endOver(M, inn);
   if (M.live) {
     ev.text = commentary(M, inn, ev, bowler, batter, sc);
+    ev.short = shortComm(M, inn, ev, bowler, batter, sc);
+    ev.inn = M.innings.length; ev.score = `${inn.runs}/${inn.wkts}`; ev.bn = bowler.last;
     ev.cls = ev.wkt ? 'w' : (ev.bat === 4 || ev.bat === 6) ? 'b' : '';
     M.log.unshift(ev);
     if (overEnded && !inn.closed) M.log.unshift({ cls:'sys', text: overSummary(M, inn) });
@@ -1172,6 +1202,31 @@ const COMM = {
   4: ['FOUR! Driven through the covers.', 'FOUR! Pulled hard in front of square.', 'FOUR! Edged, and it flies past slip.', 'FOUR! Cut fiercely past point.', 'FOUR! Flicked off the pads to fine leg.', 'FOUR! Lofted over mid-off, one bounce.'],
   6: ['SIX! Launched over long-on.', 'SIX! Huge hit over midwicket.', 'SIX! Lofted straight back over the bowler.', 'SIX! Swept into the stands.', 'SIX! Ramped over fine leg.']
 };
+// Shot zones for commentary and the wagon wheel. Angles are degrees clockwise from
+// straight down the ground, for a right-hander (mirrored for left-handers).
+const ZONES = {
+  straight: { a:0,   w:[6,10],  txt:['straight down the ground','back past the bowler'] },
+  longoff:  { a:28,  w:[10,12], txt:['driven past mid-off','lofted over mid-off'] },
+  cover:    { a:62,  w:[14,8],  txt:['driven through the covers','punched through cover'] },
+  point:    { a:96,  w:[10,3],  txt:['cut past point','slashed behind point'] },
+  third:    { a:140, w:[9,2],   txt:['steered down to third man','edged past the slips'] },
+  fine:     { a:205, w:[9,6],   txt:['glanced fine','flicked off the pads to fine leg'] },
+  square:   { a:255, w:[10,10], txt:['swept behind square','tucked to square leg'] },
+  mid:      { a:295, w:[14,18], txt:['pulled through midwicket','whipped through midwicket'] },
+  longon:   { a:334, w:[12,20], txt:['driven past mid-on','lofted over long-on'] }
+};
+function pickZone(runs) { const k = runs >= 6 ? 1 : 0; return weightedPick(Object.keys(ZONES), z => ZONES[z].w[k]); }
+function zoneAngle(z, batter) { const a = ZONES[z].a + (rand() * 22 - 11); return Math.round(batter.hand === 'L' ? (360 - a) % 360 : (a + 360) % 360); }
+function shortComm(M, inn, ev, bowler, batter, sc) {
+  if (ev.wkt) return `${batter.last} ${dismissText(sc.out)} ${sc.r} (${sc.b})`;
+  if (ev.extra === 'wd') return ev.runs > 1 ? 'Wide, runs away for five' : 'Wide';
+  if (ev.extra === 'nb') return 'No-ball' + (ev.bat ? `, ${ev.bat} off the bat` : '');
+  if (ev.extra === 'b' || ev.extra === 'lb') return `${ev.runs} ${ev.extra === 'b' ? 'bye' : 'leg-bye'}${ev.runs > 1 ? 's' : ''}`;
+  let t = ev.bat === 0 ? `${batter.last}, ${pick(['defended','left alone','beaten outside off','no run','played and missed'])}` : `${batter.last}, ${pick(ZONES[ev.zone || 'cover'].txt)}`;
+  if (sc.r >= 100 && sc.r - ev.bat < 100) t += `. Hundred for ${batter.last}`;
+  else if (sc.r >= 50 && sc.r - ev.bat < 50) t += `. Fifty for ${batter.last}`;
+  return t;
+}
 function commentary(M, inn, ev, bowler, batter, sc) {
   const head = `${ev.o}.${Math.min(6, ev.b)} ${bowler.last} to ${batter.last}: `;
   if (ev.wkt) return head + `OUT! ${batter.last} ${dismissText(sc.out)} for ${sc.r} (${sc.b}). ${inn.runs}/${inn.wkts}.`;
@@ -1892,7 +1947,7 @@ function compactScorecard(M) {
     condText: condSummary(M), overs: M.overs || null,
     comp: M.comp, fmt: M.fmt, home: M.home, away: M.away, venue: M.venue, stage: M.stage, toss: M.toss, result: M.result, potm: M.potm, xi: M.xi,
     innings: M.innings.map(i => ({ maxOvers: M.overs || null, bat: i.bat, bowl: i.bowl, runs: i.runs, wkts: i.wkts, balls: i.balls, ext: i.ext, declared: i.declared, allOut: i.allOut, followOn: i.followOn, target: i.target,
-      card: i.card.map(c => ({ id: c.id, r: c.r, b: c.b, f4: c.f4, f6: c.f6, out: c.out, in: c.in })),
+      card: i.card.map(c => ({ id: c.id, r: c.r, b: c.b, f4: c.f4, f6: c.f6, out: c.out, in: c.in, shots: c.shots })),
       bw: Object.keys(i.bw).map(id => Object.assign({ id }, i.bw[id])), fow: i.fow, overRuns: i.overRuns }))
   };
 }
@@ -3142,18 +3197,23 @@ function scorecardHtml(S, k, fnName, noWorm) {
   const bw = Array.isArray(inn.bw) ? inn.bw : Object.keys(inn.bw).map(id => Object.assign({ id }, inn.bw[id]));
   const batted = inn.card.filter(c => c.in), dnb = inn.card.filter(c => !c.in);
   const ext = inn.ext.w + inn.ext.nb + inn.ext.b + inn.ext.lb;
+  const nth = S.innings.filter((x, j) => j <= k && x.bat === inn.bat).length;
   const tabs = S.innings.length > 1 ? seg(S.innings.map((x, j) => [String(j), innLabel(S, j)]), String(k), fnName) : '';
-  return `${S.result ? `<div class="note ${S.result.winner === U() ? 'good' : S.result.winner && (S.home === U() || S.away === U()) ? 'bad' : ''}"><b>${esc(S.result.text)}</b>${S.potm ? ` · POTM ${plink(P(S.potm))}` : ''}</div>` : ''}
-    <div class="xs muted" style="margin:6px 0 8px">${teamDef(S.venue).ground}${S.toss && S.toss.decision ? ` · ${teamDef(S.toss.winner).nick} won the toss, chose to ${S.toss.decision}` : ''}${S.condText ? ' · ' + esc(S.condText) : ''}${S.overs ? ` · ${S.overs} overs a side` : ''}</div>
-    ${noWorm ? '' : wormSvg(S.innings, S.fmt)}${tabs}
-    <div class="panel" style="margin-top:8px"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>${teamName(inn.bat)}${S.fmt === 'FC' ? ' · ' + ordinal(S.innings.filter((x, j) => j <= k && x.bat === inn.bat).length) + ' inns' : ''}${inn.followOn ? ' (f/o)' : ''}</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>
-      ${batted.map(c => `<tr><td class="l" style="white-space:normal">${plink(P(c.id), pshort(P(c.id)))}<div class="xs dim">${esc(dismissText(c.out))}</div></td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td><td class="dim">${c.b ? (c.r / c.b * 100).toFixed(0) : '–'}</td></tr>`).join('')}
-      <tr><td class="l">Extras <span class="xs dim">w${inn.ext.w} nb${inn.ext.nb} b${inn.ext.b} lb${inn.ext.lb}</span></td><td>${ext}</td><td colspan="4"></td></tr>
-      <tr><td class="l b">Total <span class="xs dim">${oversStr(inn.balls)} ov</span></td><td class="b">${inn.runs}${inn.allOut ? '' : '/' + inn.wkts}${inn.declared ? 'd' : ''}</td><td colspan="4"></td></tr></tbody></table></div>
-      ${dnb.length ? `<div class="kv"><span>Did not bat</span><span class="ell">${dnb.map(c => pshort(P(c.id))).join(', ')}</span></div>` : ''}
-      ${inn.fow.length ? `<div class="kv" style="display:block"><span class="xs">FoW </span><span class="xs">${inn.fow.map(f => `${f.r}-${f.w} (${esc(P(f.id).last)}, ${f.ov})`).join(', ')}</span></div>` : ''}</div>
-    <div class="panel" style="margin-top:8px"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bowling</th><th>O</th><th>M</th><th>R</th><th>W</th><th>Econ</th></tr></thead><tbody>
-      ${bw.filter(b => b.balls || b.r).map(b => `<tr><td class="l">${plink(P(b.id), pshort(P(b.id)))}</td><td>${oversStr(b.balls)}</td><td>${b.m}</td><td>${b.r}</td><td class="b">${b.w}</td><td class="dim">${b.balls ? (b.r / (b.balls / 6)).toFixed(2) : '–'}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const shots = []; inn.card.forEach(c => (c.shots || []).forEach(s => shots.push(s)));
+  return `${S.result ? `<div class="sc-result ${S.result.winner === U() ? 'win' : S.result.winner && (S.home === U() || S.away === U()) ? 'loss' : ''}">${esc(S.result.text)}${S.potm ? `<span>Player of the match · ${plink(P(S.potm))}</span>` : ''}</div>` : ''}
+    ${tabs}
+    <div class="sc-head"><div><div class="sc-team">${teamName(inn.bat)}</div><div class="xs dim">${S.fmt === 'FC' ? ordinal(nth) + ' innings' : 'Innings'}${inn.followOn ? ' · following on' : ''}${inn.target ? ' · target ' + inn.target : ''}</div></div>
+      <div class="right"><div class="sc-total">${inn.runs}${inn.allOut ? '' : '/' + inn.wkts}${inn.declared ? 'd' : ''}</div><div class="xs dim">${oversStr(inn.balls)} overs · RR ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}</div></div></div>
+    <div class="panel"><table class="tbl sc"><thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th class="hide-xs">SR</th></tr></thead><tbody>
+      ${batted.map(c => `<tr><td class="l"><div class="nm">${plink(P(c.id), pshort(P(c.id)))}</div><div class="how ${c.out ? '' : 'no'}">${esc(dismissText(c.out))}</div></td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td><td class="dim hide-xs">${c.b ? (c.r / c.b * 100).toFixed(0) : '–'}</td></tr>`).join('')}</tbody></table>
+      <div class="sc-foot"><span>Extras <b>${ext}</b> <span class="dim">(w ${inn.ext.w}, nb ${inn.ext.nb}, b ${inn.ext.b}, lb ${inn.ext.lb})</span></span></div>
+      ${dnb.length ? `<div class="sc-foot"><span class="dim">Yet to bat / did not bat</span> ${dnb.map(c => esc(pshort(P(c.id)))).join(', ')}</div>` : ''}
+      ${inn.fow.length ? `<div class="sc-foot"><span class="dim">Fall of wickets</span> ${inn.fow.map(f => `<span class="fow">${f.r}-${f.w}</span>`).join(' ')}</div>` : ''}</div>
+    <div class="panel" style="margin-top:8px"><table class="tbl sc"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th class="hide-xs">Econ</th></tr></thead><tbody>
+      ${bw.filter(b => b.balls || b.r).map(b => `<tr><td class="l"><div class="nm">${plink(P(b.id), pshort(P(b.id)))}</div></td><td>${oversStr(b.balls)}</td><td>${b.m}</td><td>${b.r}</td><td class="b">${b.w}</td><td class="dim hide-xs">${b.balls ? (b.r / (b.balls / 6)).toFixed(2) : '–'}</td></tr>`).join('')}</tbody></table></div>
+    ${!noWorm && shots.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Wagon wheel</h3></div><div class="pb center">${wagonSvg(shots, 'R')}</div></div>` : ''}
+    ${!noWorm && S.fmt !== 'FC' ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Run chart</h3></div><div class="pb">${wormSvg(S.innings, S.fmt)}</div></div>` : ''}
+    <div class="panel" style="margin-top:8px"><div class="rows"><div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}</div></div>`;
 }
 let _scFx = null;
 function showScorecard(fxId, k) {
@@ -3509,13 +3569,13 @@ function renderLive() {
   const crease = M.done || inn.closed ? '' : `<table class="tbl clean" style="margin-top:10px"><thead><tr><th>Batting</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>
       ${[[sc, true], [ns, false]].map(([c, on]) => c ? `<tr class="tap" onclick="showPlayer('${c.id}')"><td class="l">${esc(P(c.id).last)}${on ? ' *' : ''}</td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td></tr>` : '').join('')}</tbody></table>
     <table class="tbl clean"><thead><tr><th>Bowling</th><th>O</th><th>M</th><th>R</th><th>W</th></tr></thead><tbody>${bw ? `<tr class="tap" onclick="showPlayer('${bw}')"><td class="l">${esc(P(bw).last)}</td><td>${bf ? oversStr(bf.balls) : 0}</td><td>${bf ? bf.m : 0}</td><td>${bf ? bf.r : 0}</td><td class="b">${bf ? bf.w : 0}</td></tr>` : '<tr><td class="l dim" colspan="5">New over</td></tr>'}</tbody></table>
-    <div class="xs muted" style="margin:8px 12px 0">Recent: <span class="recent">${inn.recent.slice(-12).map(s => `<b class="${s === 'W' ? 'loss' : s === '4' || s === '6' ? 'win' : ''}">${s}</b>`).join(' ')}</span></div>`;
+    ${overStrip(inn)}`;
   let stateBox = '';
   if (M.done) stateBox = `<div class="note good" style="margin:10px 12px 0"><b>${esc(M.result.text)}</b>${M.potm ? `<br><span class="s">Player of the match: ${plink(P(M.potm))}</span>` : ''}</div>`;
   else if (inn.closed) stateBox = `<div class="note" style="margin:10px 12px 0"><b>Innings complete.</b> ${esc(inningsSummary(M, inn))}</div>`;
   const body = ui.liveTab === 'card'
     ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
-    : `<div class="panel"><div class="comm">${M.log.slice(0, 40).map(e => `<div class="cl ${e.cls || ''}">${e.o != null ? `<span class="o">${e.o}.${Math.min(6, e.b)}</span>` : ''}${esc(e.o != null ? e.text.replace(/^\d+\.\d+ /, '') : e.text || '')}</div>`).join('')}</div></div>`;
+    : ui.liveTab === 'wagon' ? wagonPanel(M) : commentaryHtml(M);
   let bar;
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
@@ -3527,10 +3587,67 @@ function renderLive() {
         <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
         ${!M.done ? `<div class="xs dim" style="margin-top:6px">Your brief: ${esc(inn.bat === me ? 'batting ' + TACTICS.bat[b.bat].label.toLowerCase() : 'bowling ' + TACTICS.field[b.field].label.toLowerCase() + ', ' + TACTICS.bowl[b.bowl].label.toLowerCase())}${M.pendingBrief ? ' · <span class="draw">message waiting for drinks</span>' : ''}</div>` : ''}</div>
       ${crease}${stateBox}<div style="height:12px"></div></section>
-    ${seg([['comm','Commentary'],['card','Scorecard']], ui.liveTab, 'setLiveTab')}${body}
+    ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
 }
 
+
+// ---- Live presentation helpers ----
+function ballSym(s) { const c = s === 'W' ? 'w' : s === '4' ? 'b4' : s === '6' ? 'b6' : /wd|nb|lb|b/.test(s) ? 'x' : s === '•' ? 'dot' : ''; return `<span class="bs ${c}">${s === '•' ? '·' : s}</span>`; }
+function overStrip(inn) {
+  const cur = inn.thisOver || [], last = inn.lastOver;
+  return `<div class="overs"><div><span class="lab">This over</span>${cur.length ? cur.map(ballSym).join('') : '<span class="dim xs">New over</span>'}</div>
+    ${last ? `<div><span class="lab">Over ${last.no}</span>${last.syms.map(ballSym).join('')}<span class="dim xs" style="margin-left:6px">${last.runs} run${last.runs === 1 ? '' : 's'} · ${esc(P(last.bowler).last)}</span></div>` : ''}</div>`;
+}
+function setCommAll(v) { ui.commAll = v === '1'; render(); }
+// Commentary grouped by over, newest first. Lean mode shows only notable balls.
+function commentaryHtml(M) {
+  const groups = []; let cur = null;
+  M.log.forEach(e => {
+    if (e.o == null) { groups.push({ note: e }); cur = null; return; }
+    const key = (e.inn || 0) + ':' + e.o;
+    if (!cur || cur.key !== key) { cur = { key, o: e.o, balls: [], bn: e.bn }; groups.push(cur); }
+    cur.balls.push(e);
+  });
+  const all = !!ui.commAll;
+  const html = groups.slice(0, 24).map(g => {
+    if (g.note) { if (/^End of over/.test(g.note.text)) return ''; return `<div class="cnote ${g.note.cls === 's' ? 'res' : ''}">${esc(g.note.text)}</div>`; }
+    const balls = g.balls.slice().reverse();
+    const runs = balls.reduce((a, b) => a + (b.runs || 0), 0);
+    const last = g.balls[0];
+    const shown = all ? balls : balls.filter(b => b.wkt || b.bat >= 4 || /Fifty|Hundred/.test(b.short || ''));
+    return `<div class="ov"><div class="ovh"><span class="ovn">Over ${g.o + 1}</span><span class="ovb">${balls.map(b => ballSym(b.sym)).join('')}</span><span class="ovr">${runs} · ${esc(last.score || '')}</span></div>
+      <div class="ovsub">${esc(g.bn || '')}</div>
+      ${shown.map(b => `<div class="cball ${b.wkt ? 'w' : b.bat >= 4 ? 'b' : ''}"><span class="o">${b.o}.${Math.min(6, b.b)}</span><span>${esc(b.short || b.text)}</span></div>`).join('')}</div>`;
+  }).join('');
+  return `<div style="margin:0 0 6px">${seg([['0','Key moments'],['1','Every ball']], all ? '1' : '0', 'setCommAll')}</div><div class="panel comm2">${html || '<div class="empty">The first ball is yet to be bowled.</div>'}</div>`;
+}
+function wagonSvg(shots, hand) {
+  const C = 110, R = 98;
+  const lines = shots.map(([a, r]) => { const len = r >= 6 ? R + 6 : r === 4 ? R : 26 + r * 20; const rad = a * Math.PI / 180; const x = C + Math.sin(rad) * len, y = C - Math.cos(rad) * len; const col = r >= 6 ? '#f4c542' : r === 4 ? '#4ade80' : '#7dd3fc'; return `<line x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="${r >= 4 ? 1.8 : 1.1}" stroke-opacity="${r >= 4 ? 0.95 : 0.6}"/>`; }).join('');
+  const offRight = hand !== 'L';
+  return `<svg viewBox="0 0 220 220" class="wagon"><circle cx="${C}" cy="${C}" r="${R}" fill="#0f2a1e" stroke="#1f4d36"/><circle cx="${C}" cy="${C}" r="54" fill="none" stroke="#1f4d36" stroke-dasharray="3 3"/>
+    <rect x="${C - 4}" y="${C - 22}" width="8" height="30" fill="#3d4a2a" rx="1"/>${lines}
+    <text x="${offRight ? 200 : 20}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Off</text><text x="${offRight ? 20 : 200}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Leg</text></svg>`;
+}
+function setWagon(m) { ui.wagon = m; render(); }
+function wagonPanel(M) {
+  const inn = ui.liveInn != null && M.innings[ui.liveInn] ? M.innings[ui.liveInn] : curInn(M);
+  const mode = ui.wagon || 'part';
+  const sc = inn.card[inn.striker], ns = inn.card[inn.non];
+  let shots = [], label = '', hand = 'R';
+  if (mode === 'striker' && sc) { shots = sc.shots || []; label = `${P(sc.id).last} ${sc.r} (${sc.b})`; hand = P(sc.id).hand; }
+  else if (mode === 'non' && ns) { shots = ns.shots || []; label = `${P(ns.id).last} ${ns.r} (${ns.b})`; hand = P(ns.id).hand; }
+  else if (mode === 'part') { [sc, ns].forEach(c => c && (c.shots || []).forEach(s => { if (s[2] === inn.wkts) shots.push(s); })); label = `Partnership ${inn.part.r} (${inn.part.b})`; }
+  else { inn.card.forEach(c => (c.shots || []).forEach(s => shots.push(s))); label = `${teamDef(inn.bat).short || inn.bat} innings ${inn.runs}/${inn.wkts}`; }
+  const count = r => shots.filter(s => (r === 1 ? s[1] < 4 : s[1] === r)).length;
+  const runs = shots.reduce((a, s) => a + s[1], 0);
+  const offR = shots.filter(s => (hand === 'L' ? s[0] > 180 : s[0] < 180) && s[0] !== 0).reduce((a, s) => a + s[1], 0);
+  return `${seg([['part','Partnership'],['striker','Striker'],['non','Non-striker'],['inn','Innings']], mode, 'setWagon')}
+    <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, mode === 'part' || mode === 'inn' ? 'R' : hand)}
+      <div class="flex" style="justify-content:center;gap:14px;margin-top:6px" ><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
+      ${mode !== 'part' && mode !== 'inn' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}</div></div>`;
+}
 // §24b NATIONAL SELECTION + STAFF ----------------------------------------------------------
 function renderNatSel() {
   const w = game.season.windows.find(x => x.selecting) || game.season.windows.find(x => !x.squad.length);
