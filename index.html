@@ -492,6 +492,13 @@ button,select,[onclick]{touch-action:manipulation}
 .broadcast-panel .broadcast-metrics span{font-size:10px;letter-spacing:.035em}
 .broadcast-panel .broadcast-metrics b{font-size:17px}
 @media(max-width:360px){.broadcast-panel .broadcast-match{gap:5px}.broadcast-panel .broadcast-total{font-size:16px}.broadcast-panel .broadcast-name{font-size:10px}}
+
+/* Build 008 — keep home team identity and recent form independent of fixture order. */
+.home-recent-form{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border:1px solid var(--line);border-radius:11px;background:var(--s1)}
+.home-recent-form>span{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--muted);letter-spacing:.065em;white-space:nowrap}
+.home-form-results{display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.home-form-results .res{width:25px;height:25px;font-size:11px}
+@media(max-width:370px){.home-form-results{gap:3px}.home-form-results .res{width:23px;height:23px}}
 </style>
 </head>
 <body>
@@ -544,7 +551,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 007', title: 'Live Scoreboard Refinement', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 008', title: 'Partnership & Contextual Form', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4804,9 +4811,9 @@ function showHelp() {
 
 // §17 HOME -------------------------------------------------------------------------
 function nextUserFx() { return game.season.fixtures.find(f => !f.result && f.home && (isUserTeam(f.home) || isUserTeam(f.away))); }
-function recentForm(n) {
-  return game.season.fixtures.filter(f => f.result && (f.home === U() || f.away === U())).slice(-n).map(f => {
-    const r = f.result.winner === U() ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D';
+function recentForm(n, team = U()) {
+  return game.season.fixtures.filter(f => f.result && (f.home === team || f.away === team)).sort((a,b) => a.day-b.day).slice(-n).map(f => {
+    const r = f.result.winner === team ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D';
     return `<span class="res ${r}" title="${esc(f.result.text)}">${r}</span>`;
   }).join('');
 }
@@ -4904,7 +4911,9 @@ function renderHome() {
     hero = `<div class="hero"><div class="mid"><div class="comp">Season</div><div class="vs">No fixtures left for ${me.nick}</div><div class="meta">Remaining matches play out before the review.</div></div></div>`;
     acts = `<button class="btn pri block home-acts" onclick="continueGame()">Continue ▸</button>`;
   }
-  const form = recentForm(5);
+  const form = recentForm(5, homeNation ? 'AUS' : U());
+  const formLine = `<div class="home-recent-form"><span>Recent form</span><div class="home-form-results">${form || '<span class="dim xs">No completed matches</span>'}</div></div>`;
+  const contextName = homeNation ? 'Australia' : me.nick;
   const homeSwitch = `<div class="home-mode"><button class="${homeNation?'':'on'}" onclick="ui.homeMode='club';render()">Club</button><button class="${homeNation?'on':''}" onclick="ui.homeMode='nation';render()">Nation</button></div>`;
   const nationRankings = `<div class="rows">${worldHomeRankings()}</div>`;
   const pos = c => game.season.standings[c][U()].P ? ordinal(ladderPos(c, U())) : '–';
@@ -4922,9 +4931,10 @@ function renderHome() {
   // The home ladder only shows domestic competitions; an international fixture next falls back to the Shield.
   const hc = COMP_ORDER.includes(ui.homeComp) ? ui.homeComp : fx && COMP_ORDER.includes(fx.comp) ? fx.comp : 'SHIELD';
   return `<div class="grid">
-    ${panel(`${me.nick} · ${game.season.label}`, hero, { end: form ? `<span class="flex" style="gap:3px">${form}</span>` : '' })}
+    ${panel(`${contextName} · ${game.season.label}`, hero)}
     ${homeSwitch}
     ${homeNation ? nationHomeKpis() : kpis}
+    ${formLine}
     ${attention}
     <div class="grid g2">
       <div class="grid">${homeNation ? panel('World rankings', nationRankings, {flush:true}) : panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
@@ -5759,8 +5769,9 @@ function broadcastMetrics(M, inn) {
   const rate = inn.balls ? inn.runs * 6 / inn.balls : 0;
   const target = M.fmt !== 'FC' && inn.target;
   const rr = target ? Math.max(0, inn.target - inn.runs) * 6 / Math.max(1, mOvers(M) * 6 - inn.balls) : null;
-  const partnership = inn.partnership && Number.isFinite(Number(inn.partnership.runs)) ? Number(inn.partnership.runs) : 0;
-  const items = target ? [['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)], ['Partnership', partnership]] : [['Run rate', rate.toFixed(2)], ['Partnership', partnership]];
+  const partnership = inn.part && Number.isFinite(Number(inn.part.r)) ? Number(inn.part.r) : 0;
+  const partnershipBalls = inn.part && Number.isFinite(Number(inn.part.b)) ? Number(inn.part.b) : 0;
+  const items = target ? [['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)], ['Partnership', `${partnership} (${partnershipBalls})`]] : [['Run rate', rate.toFixed(2)], ['Partnership', `${partnership} (${partnershipBalls})`]];
   return `<div class="broadcast-metrics">${items.map(([k,v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
 }
 function broadcastCrease(M, inn) {
