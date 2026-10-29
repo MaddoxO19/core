@@ -455,6 +455,26 @@ button,select,[onclick]{touch-action:manipulation}
 .broadcast-innings-head .badge{flex:none;border:0!important;background:transparent!important;box-shadow:none!important;width:28px;height:22px;font-size:11px}
 .broadcast-innings-head>b{flex:none}
 @media(max-width:390px){.broadcast-match{gap:5px;grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr)}.broadcast-identity{gap:4px}.broadcast-team .broadcast-total{font-size:16px}.broadcast-innings-head{gap:5px}.broadcast-innings-head>span{flex-basis:100px}}
+
+/* Build 004: reusable, font-independent flag sizing across result panels.
+   England and West Indies stay self-contained vector flags (no network requests). */
+.broadcast-recap .broadcast-result-meta{margin:9px 0 2px;line-height:1.45}
+.broadcast-innings-head .nat-flag{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:19px;font-size:19px;line-height:1;vertical-align:middle;overflow:hidden}
+.broadcast-innings-head .nat-flag .cricket-flag-svg{display:block!important;flex:none;width:28px!important;max-width:28px;height:17px!important;max-height:17px;object-fit:contain;vertical-align:middle}
+.broadcast-innings-head .badge.nation-badge,.broadcast-innings-head .team-flag{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:19px;padding:0;border:0;background:none;box-shadow:none}
+.broadcast-identity>.nat-flag .cricket-flag-svg{width:28px!important;height:17px!important;max-width:28px;max-height:17px;display:block}
+
+/* Build 006: common national flag scale, contextual home, mobile-safe decisions */
+.badge.nation-badge,.badge.nation-badge.lg{border:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;width:43px!important;height:34px!important;padding:0!important;display:inline-flex;align-items:center;justify-content:center}
+.badge.nation-badge .team-flag{display:inline-flex;align-items:center;justify-content:center;font-size:32px;line-height:1;width:42px;height:32px}
+.badge.nation-badge .cricket-flag-svg{width:40px!important;height:25px!important;max-width:100%;display:block}
+.clash-option{border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0;display:grid;gap:10px}.clash-option strong{font-size:13px;line-height:1.4;overflow-wrap:anywhere}.clash-option .btn{white-space:normal;min-height:45px}
+.sheet-f .btn{white-space:normal;max-width:100%}
+.home-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--s1);border:1px solid var(--line);padding:4px;border-radius:12px}.home-mode button{border:0;background:transparent;color:var(--muted);padding:10px;border-radius:9px;font-weight:800}.home-mode button.on{background:var(--s2);color:var(--text)}
+.nation-home-kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important}.nation-home-kpis .v{font-size:13px;overflow-wrap:anywhere}
+.broadcast-context{display:flex;flex-wrap:wrap;gap:5px 12px;margin:10px 0 0;padding:9px 0;border-top:1px solid var(--line2);font-size:11px;color:var(--muted);line-height:1.35}.broadcast-context b{color:var(--text);font-weight:750;margin-right:3px}
+.broadcast-panel .broadcast-head{font-size:10px}.broadcast-total{font-size:clamp(17px,4.5vw,22px)}
+@media(max-width:390px){.match-actions .btn{font-size:12px;padding:9px 5px}.hero .badge.nation-badge{width:37px!important}.hero .badge.nation-badge .cricket-flag-svg{width:36px!important}}
 </style>
 </head>
 <body>
@@ -507,7 +527,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 003', title: 'Match Card Layout Fix', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 006', title: 'Consolidated UX & Decisions', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4586,7 +4606,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // centred dialogs on PC). Every page render returns an HTML string.
 const ui = { page:'home', squadTab:'list', listFmt:'T20', squadSort:'ovr', squadGroup:'ALL', xiFmt:'T20', tacFmt:'T20',
   fxMine:true, fxComp:'ALL', leagueTab:'ladders', ladComp:'SHIELD', leadFmt:'T20', leadStat:'runs', officeTab:'board',
-  tradePartner:null, tradeGive:[], tradeGet:[], search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, homeComp:null };
+  tradePartner:null, tradeGive:[], tradeGet:[], search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, homeComp:null, homeMode:null };
 
 function $(id) { return document.getElementById(id); }
 function go(page) { ui.page = page; render(); window.scrollTo(0, 0); if(page === 'matchday') showFixtureClashPrompt(); }
@@ -4596,8 +4616,8 @@ function panel(title, body, opts) { opts = opts || {}; return `<section class="p
 function pageTitle(t, sub, end) { return `<div class="page-title"><div><h1>${t}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${end ? `<div class="end">${end}</div>` : ''}</div>`; }
 function chip(cls, label) { return `<span class="chip ${cls}">${label}</span>`; }
 function pill(v) { return `<span class="pill ${v >= 82 ? 'elite' : v >= 74 ? 'good' : v < 55 ? 'lo' : ''}">${v}</span>`; }
-function badge(id, lg) { const t = teamDef(id); if(!t) return '<span class="badge">?</span>'; const flag = NATIONS[id] ? `<span class="team-flag">${flagFor(id)}</span>` : esc(t.short || t.id); return `<span class="badge ${lg ? 'lg' : ''} ${NATIONS[id] ? 'nation-badge' : ''}" style="border-color:${t.color}" title="${esc(t.name || NATIONS[id] || id)}">${flag}</span>`; }
-function tdot(id) { const t = teamDef(id); return t ? NATIONS[id] ? `${nationTag(id)} ${esc(t.short || id)}` : `<span class="dot" style="background:${t.color}"></span>${esc(t.short || id)}` : '<span class="dim">FA</span>'; }
+function badge(id, lg) { const t = teamDef(id); if(!t) return '<span class="badge">?</span>'; const national = !!t.intl; const nat = national ? (id === 'AUS' ? 'AUS' : id.slice(2)) : null; const symbol = national ? `<span class="team-flag">${flagFor(nat)}</span>` : esc(t.short || t.id); return `<span class="badge ${lg ? 'lg' : ''} ${national ? 'nation-badge' : ''}" style="${national ? '' : 'border-color:'+t.color}" title="${esc(t.name || id)}">${symbol}</span>`; }
+function tdot(id) { const t = teamDef(id); if (!t) return '<span class="dim">FA</span>'; return t.intl ? `${nationTag(id === 'AUS' ? 'AUS' : id.slice(2))} ${esc(t.short || id)}` : `<span class="dot" style="background:${t.color}"></span>${esc(t.short || id)}`; }
 function av(p) { return `<span class="av">${p.first[0]}${p.last[0]}</span>`; }
 function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${natTag(p)} ${esc(txt || pname(p))}</span>` : '–'; }
 // England's Unicode tag-sequence flag can display as a black flag in iOS Safari.
@@ -4804,8 +4824,10 @@ function noticeRead() {
   try { const list=JSON.parse(localStorage.getItem(noticeStoreKey()) || '[]'); return Array.isArray(list)?list:[]; }
   catch (_) { return []; }
 }
-function noticeDismissed(n) { return noticeRead().includes(n.id); }
+const dismissedNoticesThisSession = new Set();
+function noticeDismissed(n) { return dismissedNoticesThisSession.has(noticeStoreKey() + ':' + n.id) || noticeRead().includes(n.id); }
 function noticeMark(id) {
+  dismissedNoticesThisSession.add(noticeStoreKey() + ':' + id);
   try { const list = noticeRead(); if (!list.includes(id)) { list.push(id); localStorage.setItem(noticeStoreKey(),JSON.stringify(list.slice(-100))); } } catch (_) {}
 }
 function noticeAct(index) {
@@ -4826,9 +4848,11 @@ function noticeAct(index) {
 }
 function noticeDismiss(index) {
   const n=homeNotices()[index]; if(!n)return;
-  noticeMark(n.id); render();
+  noticeMark(n.id);
+  // Close the modal before refreshing its contents; reopening from render can otherwise look like a failed dismissal.
+  closeModal(); render();
   const remaining=homeNotices().filter(a=>!noticeDismissed(a));
-  if(remaining.length) attentionSheet();else closeModal();
+  if(remaining.length) attentionSheet();
 }
 function attentionSheet() {
   const all=homeNotices();
@@ -4836,9 +4860,20 @@ function attentionSheet() {
   const body=pending.length ? pending.map(n=>`<div class="attention-item"><div class="attention-item-head"><span class="attention-status ${n.action?'required':''}">${n.action?'ACTION':'INFO'}</span><strong>${esc(n.title)}</strong></div><div class="attention-detail">${esc(n.description)}</div><div class="attention-buttons"><button class="btn ${n.action?'pri':'ghost'}" onclick="noticeAct(${n.i})">${n.action?'Review':'View details'}</button><button class="btn ghost" onclick="noticeDismiss(${n.i})">Dismiss</button></div></div>`).join('') : '<div class="empty">You’re all caught up.</div>';
   sheet('Club updates', pending.length ? `${pending.length} update${pending.length===1?'':'s'}` : 'All caught up', body, {flush:true, foot: pending.length?'<button class="btn ghost block" onclick="closeModal()">Close</button>':''});
 }
+function nationHomeKpis() {
+ const n = game.nation || {};
+ const rankings = n.rankings || {};
+ const rank = Object.keys(rankings).sort((a,b)=>rankings[b]-rankings[a]).indexOf('AUS')+1;
+ return `<div class="kpis nation-home-kpis"><div class="kpi"><div class="v">${rank ? ordinal(rank) : '–'}</div><div class="l">World rank</div></div><div class="kpi"><div class="v">${n.conf ?? '–'}</div><div class="l">National board</div></div><div class="kpi"><div class="v">Australia</div><div class="l">Nation</div></div></div>`;
+}
+function worldHomeRankings() {
+ const ranks = (game.nation || {}).rankings || {};
+ return Object.keys(ranks).sort((a,b)=>ranks[b]-ranks[a]).slice(0,8).map((n,i)=>`<div class="kv"><span>${i+1}. ${nationTag(n)} ${esc(NATIONS[n]||n)}</span><b>${Math.round(ranks[n])}</b></div>`).join('') || '<div class="empty">Rankings not yet available.</div>';
+}
 function renderHome() {
   if (game.phase !== 'season') return renderOffseason();
   const me = teamDef(U()), fx = nextUserFx(), sq = squadOf(U());
+  const homeNation = ui.homeMode === 'nation' || (ui.homeMode !== 'club' && fx && (fx.home === 'AUS' || fx.away === 'AUS'));
   let hero, acts = '';
   if (game.live) {
     hero = `<div class="hero"><div class="mid"><div class="comp">Match in progress</div><div class="vs">${teamName(game.live.home)} v ${teamName(game.live.away)}</div></div></div>`;
@@ -4853,6 +4888,8 @@ function renderHome() {
     acts = `<button class="btn pri block home-acts" onclick="continueGame()">Continue ▸</button>`;
   }
   const form = recentForm(5);
+  const homeSwitch = `<div class="home-mode"><button class="${homeNation?'':'on'}" onclick="ui.homeMode='club';render()">Club</button><button class="${homeNation?'on':''}" onclick="ui.homeMode='nation';render()">Nation</button></div>`;
+  const nationRankings = `<div class="rows">${worldHomeRankings()}</div>`;
   const pos = c => game.season.standings[c][U()].P ? ordinal(ladderPos(c, U())) : '–';
   const kpis = `<div class="kpis">
     <div class="kpi" onclick="ui.leagueTab='ladders';ui.ladComp='SHIELD';go('league')"><div class="v">${pos('SHIELD')}</div><div class="l">Shield</div></div>
@@ -4869,10 +4906,11 @@ function renderHome() {
   const hc = COMP_ORDER.includes(ui.homeComp) ? ui.homeComp : fx && COMP_ORDER.includes(fx.comp) ? fx.comp : 'SHIELD';
   return `<div class="grid">
     ${panel(`${me.nick} · ${game.season.label}`, hero, { end: form ? `<span class="flex" style="gap:3px">${form}</span>` : '' })}
-    ${kpis}
+    ${homeSwitch}
+    ${homeNation ? nationHomeKpis() : kpis}
     ${attention}
     <div class="grid g2">
-      <div class="grid">${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
+      <div class="grid">${homeNation ? panel('World rankings', nationRankings, {flush:true}) : panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
       <div class="grid">
         ${wcHomeCard()}${homeExtras()}
         ${panel('News', `<div class="rows">${game.news.slice(0, 4).map(newsRow).join('') || '<div class="empty">No news yet.</div>'}</div>`, { flush: true, end: `<button class="link" onclick="newsSheet()">All news ▸</button>` })}
@@ -5425,19 +5463,35 @@ function myTeamIn(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
 // Show fixture overlap only when it matters; never occupy permanent dashboard space.
 // Acknowledgement changes no result or fixture priority. Delegation is explicit.
 const shownFixtureClashes = new Set();
+function chooseClashFixture(fixtureId, delegatedId) {
+  const chosen = fixtureById(fixtureId), delegated = fixtureById(delegatedId);
+  if (!chosen || chosen.result || !delegated || delegated.result) { closeModal(); return; }
+  // One explicit decision: complete the other fixture through existing staff simulation,
+  // keep the chosen fixture pending and do not invoke the auto-continue decision loop.
+  closeModal();
+  staffPlay(delegated, `You chose ${fxLabel(chosen)}.`);
+  game.pendingFx = chosen.id;
+  autosave();
+  ui.page = 'matchday'; render();
+  flash(`Managing ${chosen.home === 'AUS' || chosen.away === 'AUS' ? 'Nation' : 'Club'} · other match delegated`);
+}
+
 function showFixtureClashPrompt() {
   if (!game || !game.pendingFx || $('modalRoot').innerHTML) return;
   const fx = fixtureById(game.pendingFx);
   if (!fx || fx.result) return;
-  const other = clashesWith(fx);
-  if (!other.length && !isClash(fx)) return;
-  if (shownFixtureClashes.has(fx.id)) return;
+  const other = clashesWith(fx).find(f => !f.result && (isUserTeam(f.home) || isUserTeam(f.away)));
+  if (!other || shownFixtureClashes.has(fx.id)) return;
   shownFixtureClashes.add(fx.id);
-  const details = isClash(fx) ? `You are currently managing ${esc(busyLabel())}.` :
-    `Also scheduled: ${other.map(f => esc(fxLabel(f))).join('; ')}.`;
-  sheet('Fixture clash', 'Choose which match to manage',
-    `<p class="s" style="margin:0 0 10px">${details}</p><p class="s muted" style="margin:0">Continue to manage this fixture, or delegate it to your staff. Dismissing this notice does not change either fixture.</p>`,
-    {foot:`<button class="btn ghost" onclick="closeModal()">Dismiss</button><button class="btn" onclick="closeModal()">Manage this match</button><button class="btn pri" onclick="closeModal();handToStaff('${fx.id}')">Staff manages this match</button>`});
+  const national = f => f.home === 'AUS' || f.away === 'AUS';
+  const nationFx = national(fx) ? fx : national(other) ? other : null;
+  const clubFx = !national(fx) ? fx : !national(other) ? other : null;
+  if (!nationFx || !clubFx) return;
+  sheet('Fixture clash', 'Choose your match',
+    `<p class="s muted">Both matches are scheduled for ${esc(dateStr(fx.day))}. Staff will manage the fixture you do not choose.</p>
+    <div class="clash-option"><strong>Nation · ${esc(fxLabel(nationFx))}</strong><button class="btn pri block" onclick="chooseClashFixture('${nationFx.id}','${clubFx.id}')">Manage Nation</button></div>
+    <div class="clash-option"><strong>Club · ${esc(fxLabel(clubFx))}</strong><button class="btn block" onclick="chooseClashFixture('${clubFx.id}','${nationFx.id}')">Manage Club</button></div>`,
+    {foot:'<button class="btn ghost block" onclick="closeModal()">Decide later</button>'});
 }
 function renderMatchday() {
   const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt;
@@ -5458,8 +5512,8 @@ function renderMatchday() {
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       ${gamePlanRow(fmt, hc, fx)}
-      <div class="grid" style="grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button>${me === 'AUS' ? `<button class="btn" onclick="go('natsel')" disabled>Squad locked</button>` : `<button class="btn" onclick="ui.squadTab='xi';ui.xiFmt='${fmt}';go('squad')">Edit XI</button>`}</div>
-      <div class="grid" style="grid-template-columns:1fr 2fr;gap:6px;margin-top:6px">${pre.abandoned ? `<button class="btn pri" style="grid-column:span 2" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn" onclick="quickSimUser()">Quick sim</button><button class="btn pri" onclick="startLive()">Watch live ▸</button>`}</div>`)}
+      <div class="grid match-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button><button class="btn" onclick="quickSimUser()">Quick sim</button></div>
+      <div style="margin-top:8px">${pre.abandoned ? `<button class="btn pri block" onclick="quickSimUser()">Confirm abandonment</button>` : `<button class="btn pri block" onclick="startLive()">Watch live ▸</button>`}</div>`)}
     <div class="grid" style="grid-template-columns:1fr 1fr">${panel(`${teamDef(me).short || me} · ${avgO(mine)}`, xi(mine), { flush: true })}${panel(`${teamDef(opp).short || opp} · ${avgO(theirs)}`, xi(theirs), { flush: true, end: scouted ? chip('good', 'Scouted') : `<button class="link" onclick="scoutOpposition('${fx.id}','${opp}')">Scout</button>` })}</div>
   </div>`;
 }
@@ -5677,12 +5731,18 @@ function broadcastScore(M, compact) {
   return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
     <div class="broadcast-match">${team(teams[0])}<span class="broadcast-vs">v</span>${team(teams[1])}</div>${chase}`;
 }
+function broadcastMatchContext(M) {
+  const venue = M.venue ? teamDef(M.venue).ground : '';
+  const toss = M.toss && M.toss.decision ? `${teamName(M.toss.winner)} chose to ${M.toss.decision}` : '';
+  const cond = M.condText || (M.cond && M.cond.pitch ? M.cond.pitch.replace(/_/g,' ') : '');
+  return `<div class="broadcast-context">${venue ? `<span><b>Venue</b> ${esc(venue)}</span>` : ''}${toss ? `<span><b>Toss</b> ${esc(toss)}</span>` : ''}${cond ? `<span><b>Conditions</b> ${esc(cond)}</span>` : ''}</div>`;
+}
 function broadcastMetrics(M, inn) {
   if (!inn || M.done || inn.closed) return '';
   const rate = inn.balls ? inn.runs * 6 / inn.balls : 0;
   const target = M.fmt !== 'FC' && inn.target;
   const rr = target ? Math.max(0, inn.target - inn.runs) * 6 / Math.max(1, mOvers(M) * 6 - inn.balls) : null;
-  const items = [['CRR', rate.toFixed(2)], [target ? 'RRR' : 'Wickets', target ? rr.toFixed(2) : inn.wkts], ['Overs', oversStr(inn.balls)], ['Wickets', inn.wkts]];
+  const items = [['CRR', rate.toFixed(2)], [target ? 'RRR' : 'Partnership', target ? rr.toFixed(2) : (inn.partnership && inn.partnership.runs || 0)], ['Overs', oversStr(inn.balls)], ['Wickets', inn.wkts]];
   if (M.fmt === 'FC') items[1] = ['Day', fcDay(M)];
   return `<div class="broadcast-metrics">${items.map(([k,v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
 }
@@ -5711,11 +5771,11 @@ function renderLive() {
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
-  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn);
+  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastMatchContext(M) + broadcastCrease(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
-    ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
+    ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true).replace(/<div class="kv"><span>(Venue|Toss|Conditions)<\/span>.*?<\/div>/g, '')
     : ui.liveTab === 'wagon' ? wagonPanel(M) : commentaryHtml(M);
   let bar;
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
@@ -5813,7 +5873,7 @@ function resultRecap(M) {
   }
   const won = res.winner && isUserTeam(res.winner);
   const inningsCards = M.innings.map(i => broadcastInningsCard(M,i)).join('');
-  const inner = `<div class="broadcast-recap-score">${broadcastScore(M,true)}</div>
+  const inner = `<div class="broadcast-head broadcast-result-meta"><span class="broadcast-live">FULL TIME</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
     <div class="broadcast-result ${won ? 'is-win' : ''}">${esc(res.text)}</div>
     ${M.potm && P(M.potm) ? `<div class="broadcast-award">Player of the match · ${plink(P(M.potm))}</div>` : ''}
     ${inningsCards}
