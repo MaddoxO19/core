@@ -377,6 +377,14 @@ button,select,[onclick]{touch-action:manipulation}
 @media(max-width:480px){.recap .pb{padding:14px}.rc-rows .kv{padding:8px 9px}.training-row{padding:11px 12px}.worm-legend{font-size:10px}.worm-target{width:100%;margin:0}}
 
 .live-worm{margin-top:10px;padding-top:10px;border-top:1px solid var(--line2)}
+
+/* v0.9.5: compact international national record cards */
+.national-record-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px}
+.national-record-group{border:1px solid var(--line,#294154);border-radius:10px;min-width:0;overflow:hidden}
+.national-record-group>.lbl{padding:8px 10px 4px}
+.national-record-group .row{padding:5px 8px;gap:6px;min-width:0}
+.national-record-group .row .grow{min-width:0;overflow-wrap:anywhere}
+@media(max-width:430px){.national-record-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -429,7 +437,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.4', title: 'World Stability & Qualification', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.6', title: 'Squad Stability & Series Honours', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1013,7 +1021,39 @@ function attackShape(fx, fmt) {
   if (pace >= 1.08 && pace > spin) return { spin: pace >= 1.1 ? 0 : 1, pace: pace >= 1.1 ? 4 : 3 };
   return null;
 }
+// Safety net for AI-managed domestic squads depleted by retirement, injuries or
+// national call-ups. Permanent local development players preserve valid match
+// references, with no borrowed players and no changes to existing contracts.
+// Only runs when fewer than eleven eligible cricketers remain.
+function ensureDomesticMatchDepth(teamId) {
+  if (!TEAM_DEFS.some(t => t.id === teamId)) return 0;
+  const available = availablePlayers(teamId);
+  if (available.length >= 11) return 0;
+  const roles = ['WK','PACE','OPEN','TOP','MID','LEG','BAR','PACE','TOP','BWAR','OFF'];
+  const missing = 11 - available.length;
+  for (let i=0;i<missing;i++) {
+    const existing=availablePlayers(teamId);
+    const keepers=existing.filter(p=>p.sk.keep>=45).length;
+    const bowlers=existing.filter(p=>canBowl(p)&&bowlRating(p,'FC')>=BOWL_OPTION).length;
+    const role=!keepers?'WK':bowlers<4?'PACE':roles[(existing.length+i)%roles.length];
+    const p=makePlayer({role, q:randInt(48,58)+RATING_SHIFT, age:randInt(19,23), teamId, nat:'AUS'});
+    p.depthCallup=true;
+  }
+  if (teamId===U() && typeof addNews==='function') addNews('Squad','Development players called up',`${missing} local player${missing===1?'':'s'} added to provide an available XI.`);
+  return missing;
+}
 function selectXI(teamId, fmt, fx) {
+  ensureDomesticMatchDepth(teamId);
+  if (teamId && teamId.startsWith('X_')) {
+    const nat=teamId.slice(2);
+    ensureIntlSquad(nat);
+    let eligible=availablePlayers(teamId).length;
+    while (eligible<11) {
+      const role=eligible===0?'WK':eligible%4===0?'PACE':eligible%4===1?'OPEN':eligible%4===2?'BAR':'TOP';
+      const p=makePlayer({role,q:INTL_BASE+(NATION_STRENGTH[nat]-82)-9,age:randInt(19,24),nat,teamId});
+      p.contract=null;p.depthCallup=true;eligible++;
+    }
+  }
   if (teamId === U() && !game.autoXI[fmt] && (game.userXI[fmt] || []).length) return userXI(fmt);
   const r = autoXI(teamId, fmt, null, attackShape(fx, fmt)); r.replaced = []; return r;
 }
@@ -1951,6 +1991,7 @@ function migrateGame(g) {
   g.globalTournamentHistory = g.globalTournamentHistory || [];
   g.associateQualificationHistory = g.associateQualificationHistory || [];
   g.wtcHistory = g.wtcHistory || [];
+  g.nationalMatchRecords = g.nationalMatchRecords || {};
   if (!g.wtc) g.wtc = blankWtc(g.year);
   if (!g.fin) g.fin = initFinances();
   if (!g.inbox) g.inbox = [];
@@ -2558,8 +2599,31 @@ function archiveWorldSeries() {
   for (const s of complete) {
     if (game.worldSeriesHistory.some(x=>x.id===s.id)) continue;
     const winner = s.winsHome>s.winsAway ? s.home : s.winsAway>s.winsHome ? s.away : null;
+    // Award is based on actual match contributions, never invented from results.
+    // Match-award counts remain available for legacy fixtures without scorecards.
+    const matchIds=(game.season.fixtures||[]).filter(f=>f.seriesId===s.id && f.result);
+    const perf={};
+    for (const f of matchIds) {
+      const card=(game.scorecards||{})[f.id];
+      if (card && card.innings) for (const inn of card.innings) {
+        for (const bat of (inn.card||[])) if (bat.in) {
+          const t=perf[bat.id]||(perf[bat.id]={runs:0,wickets:0,matchAwards:0}); t.runs+=bat.r||0;
+        }
+        for (const b of (inn.bw||[])) {
+          const t=perf[b.id]||(perf[b.id]={runs:0,wickets:0,matchAwards:0}); t.wickets+=b.w||0;
+        }
+      }
+      if (f.result.potm) {
+        const t=perf[f.result.potm]||(perf[f.result.potm]={runs:0,wickets:0,matchAwards:0}); t.matchAwards++;
+      }
+    }
+    const ranked=Object.entries(perf).filter(([id])=>!!P(id)).sort((a,b)=>
+      ((b[1].runs + b[1].wickets*24 + b[1].matchAwards*35) - (a[1].runs + a[1].wickets*24 + a[1].matchAwards*35)));
+    const best=ranked[0];
+    const honours=best?{playerId:best[0],playerName:pname(P(best[0])),runs:best[1].runs,wickets:best[1].wickets,matchAwards:best[1].matchAwards,
+      basis:matchIds.every(f=>(game.scorecards||{})[f.id])?'performance':'match awards'}:null;
     game.worldSeriesHistory.unshift({id:s.id,year:game.year,comp:s.comp,home:s.home,away:s.away,
-      winner,winsHome:s.winsHome,winsAway:s.winsAway,draws:s.draws});
+      winner,winsHome:s.winsHome,winsAway:s.winsAway,draws:s.draws,honours});
   }
   if (game.worldSeriesHistory.length>120) game.worldSeriesHistory.length=120;
 }
@@ -3192,6 +3256,47 @@ function teamHonours(teamId) {
   COMP_ORDER.forEach(c => { if (game.phase === 'season' && game.season.champions[c] === teamId) out[c]++; });
   return out;
 }
+
+// §8f INTERNATIONAL CAREER BOOK -----------------------------------------------
+// The existing p.stats.intl[format] is authoritative for player aggregates.
+// Only compact national match outcomes and POTM honours need extra persistence.
+function trackNationalMatchRecord(M) {
+  if (M.abandoned || !COMPS[M.comp].intl) return;
+  const records = game.nationalMatchRecords = game.nationalMatchRecords || {};
+  const fmt = M.fmt;
+  [M.home, M.away].forEach(t => {
+    const nat = teamNat(t);
+    if (!NATIONS[nat]) return;
+    const k = nat + '_' + fmt;
+    const r = records[k] = records[k] || { p:0,w:0,l:0,d:0,t:0,nr:0,potm:{} };
+    r.p++;
+    if (M.result.noResult) r.nr++;
+    else if (M.result.winner) r[M.result.winner === t ? 'w' : 'l']++;
+    else if (M.result.tie) r.t++;
+    else r.d++;
+    if (M.potm && P(M.potm) && P(M.potm).nat === nat) {
+      r.potm[M.potm] = (r.potm[M.potm] || 0) + 1;
+    }
+  });
+}
+function nationalCareerLeaders(nat, fmt, stat, limit) {
+  const get = p => p.stats && p.stats.intl && p.stats.intl[fmt];
+  const key = { runs:'r', wickets:'w', matches:'m', hundreds:'c100', fifties:'c50', fivefors:'w5' }[stat] || 'r';
+  return Object.values(game.players).filter(p => p.nat === nat && get(p) && get(p).m > 0)
+    .map(p => ({p,s:get(p),value:get(p)[key] || 0}))
+    .sort((a,b) => b.value-a.value || b.s.m-a.s.m || pname(a.p).localeCompare(pname(b.p))).slice(0,limit || 5);
+}
+function nationalCareerPanel(nat,fmt) {
+  const labels={FC:'Tests',OD:'ODIs',T20:'T20Is'};
+  const r=(game.nationalMatchRecords||{})[nat+'_'+fmt];
+  const summary=r?`${r.p} played · ${r.w} won · ${r.l} lost${r.d?' · '+r.d+' drawn':''}${r.t?' · '+r.t+' tied':''}${r.nr?' · '+r.nr+' no result':''}`:'Results recorded from v0.9.5 onwards';
+  const blocks=[['runs','Runs'],['wickets','Wickets'],['matches','Caps'],['hundreds','Centuries']].map(([key,label])=>{
+    const rows=nationalCareerLeaders(nat,fmt,key,5);
+    return `<div class="national-record-group"><div class="lbl">${label}</div>${rows.map((x,i)=>`<div class="row tap" onclick="showPlayer('${x.p.id}')"><span class="n">${i+1}</span><div class="grow s">${esc(pname(x.p))}<div class="xs dim">${x.s.m} matches${x.p.retired?' · Retired':''}</div></div><span class="b">${x.value.toLocaleString()}</span></div>`).join('')||'<div class="empty">No international appearances yet.</div>'}</div>`;
+  }).join('');
+  const awards=r?Object.entries(r.potm||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,v])=>{const pl=P(id);return pl?`<div class="kv"><span>${esc(pname(pl))}</span><b>${v}</b></div>`:''}).join(''):'';
+  return panel(`${esc(NATIONS[nat])} · ${labels[fmt]} records`,`<div class="xs dim" style="padding:8px 12px">${summary}</div><div class="national-record-grid">${blocks}</div>${awards?`<div class="pb"><div class="lbl">Player of the match awards</div>${awards}</div>`:''}`,{flush:true});
+}
 // §8f REAL ALL-TIME RECORDS ----------------------------------------------------------------
 // Real men's records the save's players are measured against. Figures come from the Wikipedia
 // record lists, which cite ESPNcricinfo Statsguru, read on 29 Oct 2026. Each table keeps the
@@ -3455,6 +3560,7 @@ function applyIntlMatch(M) {
   learnFromMatch(M);
   matchWear(M, inXI);
   recordMatch(M); logMatchForPlayers(M);
+  trackNationalMatchRecord(M);
   fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
   if (/^(wc(semi|final)|global(semi|final))/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
@@ -5700,6 +5806,7 @@ function talkSheet(id) {
 function doTalk(id, kind) { const r = talkToPlayer(id, kind); closeModal(); flash(r.text); autosave(); render(); }
 
 function setWorldNat(n) { ui.worldNat = n; render(); }
+function setIntlRecFmt(f) { ui.intlRecFmt = f; render(); }
 // ---- World Cup hub ----
 function wcName(id) { return teamDef(id) ? teamDef(id).name : 'TBC'; }
 function wcGroupTable(rows, w) {
@@ -5775,6 +5882,9 @@ function renderWorld() {
     const rows=associateQualificationTable(key),complete=game.season.fixtures.filter(f=>f.stage==='associatequal'&&f.event===key).every(f=>f.result);
     return `<div class="lbl" style="padding:8px 12px">${label}${complete?' · Completed':''}</div><div class="rows">${rows.slice(0,5).map((r,i)=>`<div class="row" style="padding:5px 12px"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('')}</div>`;
   }).join(''),{flush:true});
+  const intlNat = ui.intlRecNat || 'AUS';
+  const intlFmt = ui.intlRecFmt || 'FC';
+  const recordsPanel = `<div class="tool-row">${sel(Object.keys(NATIONS).map(n=>[n,NATIONS[n]]),intlNat,"ui.intlRecNat=this.value;render()")}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],intlFmt,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(intlNat,intlFmt)}`;
   const series = worldSeriesStandings();
   const wtc=wtcRows(), currentWtc=ensureWtc();
   const wtcFinal=game.season.fixtures.find(f=>f.stage==='wtcfinal');
@@ -5785,8 +5895,8 @@ function renderWorld() {
   const formatLine = x => `${COMPS[x.comp].short}: ${x.winsHome}–${x.winsAway}${x.draws ? ` (${x.draws} drawn)` : ''}`;
   const ongoing = series.filter(x=>x.played>0&&x.played<x.total).slice(0,7);
   const history = (game.worldSeriesHistory || []).slice(0,12);
-  const seriesPanel = panel('International series', `<div class="rows">${ongoing.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)}</span><span>${esc(formatLine(x))}</span></div>`).join('') || '<div class="empty">No series in progress.</div>'}${history.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)} · ${esc(COMPS[x.comp].short)}</span><span>${x.winner ? esc(teamDef(x.winner).name) : 'Drawn'} · ${x.winsHome}–${x.winsAway}</span></div>`).join('')}</div>`, {flush:true});
-  return `${globalTournamentPanel()}${qualificationPanel}<div class="grid g2">${wtcPanel}${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
+  const seriesPanel = panel('International series', `<div class="rows">${ongoing.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)}</span><span>${esc(formatLine(x))}</span></div>`).join('') || '<div class="empty">No series in progress.</div>'}${history.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)} · ${esc(COMPS[x.comp].short)}</span><span>${x.winner ? esc(teamDef(x.winner).name) : 'Drawn'} · ${x.winsHome}–${x.winsAway}${x.honours ? `<div class="xs dim">${x.honours.basis==='performance'?'Series standout':'Match awards'}: ${esc(x.honours.playerName)}${x.honours.basis==='performance'?' · '+x.honours.runs+' runs, '+x.honours.wickets+' wickets':''}</div>` : ''}</span></div>`).join('')}</div>`, {flush:true});
+  return `${globalTournamentPanel()}${recordsPanel}${qualificationPanel}<div class="grid g2">${wtcPanel}${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
     ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
     ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
     ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
@@ -5949,7 +6059,7 @@ function renderRecords() {
   return `<div class="tool-row">${seg([['dom','Domestic'],['intl','Intl']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
     <div style="height:8px"></div>${sel(cats, cat, "ui.recCat=this.value;render()", 'full')}<div style="height:8px"></div>
     ${panel(`${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
-    <div class="xs dim" style="margin-top:6px">${cat[0] === 'c' ? 'Career totals include matches played before your career began.' : 'Match records count from the start of your career.'}</div>`;
+    <div class="xs dim" style="margin-top:6px">${cat[0] === 'c' ? (scope === 'intl' ? 'International career totals accumulate as matches are simulated.' : 'Domestic career totals may include seeded history.') : 'Match records count from the start of your career.'}</div>`;
 }
 
 // Small SVG charts for profiles.
