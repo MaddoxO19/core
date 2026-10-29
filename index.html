@@ -385,6 +385,33 @@ button,select,[onclick]{touch-action:manipulation}
 .national-record-group .row{padding:5px 8px;gap:6px;min-width:0}
 .national-record-group .row .grow{min-width:0;overflow-wrap:anywhere}
 @media(max-width:430px){.national-record-grid{grid-template-columns:1fr}}
+
+/* v0.9.7: shared Legacy-series launch screen and compact international identity */
+#launch{min-height:100dvh;min-height:100svh;align-items:center;padding:calc(24px + env(safe-area-inset-top,0px)) 20px calc(24px + env(safe-area-inset-bottom,0px));background:radial-gradient(500px 350px at 50% 12%,rgba(244,197,66,.055),transparent),var(--bg)}
+.launch{max-width:520px;text-align:center}
+.launch .kick{font-size:10px;letter-spacing:.2em}
+.launch h1{font-size:clamp(2.3rem,9vw,3.5rem);line-height:1.05;margin:14px 0 10px}
+.launch h1::after{content:'';display:block;width:48px;height:2px;background:var(--accent);margin:16px auto 0;border-radius:4px}
+.launch p{font-size:14px;line-height:1.4;margin:12px 0 24px}
+.launch-career{background:var(--s1);border:1px solid var(--line);border-radius:15px;padding:16px;text-align:left;margin-bottom:10px}
+.launch-career-kicker{font-size:10px;color:var(--muted);font-weight:800;letter-spacing:.13em}
+.launch-career-name{font-size:20px;font-weight:900;margin-top:6px;line-height:1.2}
+.launch-career-detail{font-size:12px;color:var(--muted);margin:5px 0 13px;overflow-wrap:anywhere}
+.launch .launch-resume{width:100%;font-weight:850;padding:14px}
+.launch .btns{margin:0;grid-template-columns:1fr 1fr}
+.launch .btns .btn{padding:12px 8px}
+.launch-help{display:block;margin:16px auto 0;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:750;padding:10px 16px;cursor:pointer}
+.launch-help:focus-visible{outline:2px solid var(--accent);border-radius:8px}
+.launch .ver{justify-content:center;flex-wrap:wrap;column-gap:9px;row-gap:3px;margin-top:13px;font-size:10px}
+.launch .ver span{overflow-wrap:anywhere}
+@media(max-height:680px){#launch{align-items:flex-start}.launch{margin:auto 0}}
+
+/* v0.9.8 — compact dashboard and decision centre */
+.attention-link{width:100%;border:1px solid var(--line);border-radius:12px;background:var(--s1);color:var(--text);display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;cursor:pointer;min-height:60px}
+.attention-icon{width:29px;height:29px;display:grid;place-items:center;flex:none;border-radius:9px;background:rgba(244,197,66,.14);color:var(--accent);font-weight:900}
+.attention-copy{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}.attention-copy b{font-size:13px}.attention-copy small{color:var(--muted);font-size:11px}.attention-chevron{font-size:22px;color:var(--muted)}
+.attention-item{padding:13px 14px;border-bottom:1px solid var(--line2)}.attention-item:last-child{border-bottom:0}.attention-item-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:14px}.attention-status{font-size:9px;letter-spacing:.07em;font-weight:900;color:var(--cyan);border:1px solid rgba(125,211,252,.28);border-radius:5px;padding:3px 5px}.attention-status.required{color:var(--accent);border-color:rgba(244,197,66,.3)}.attention-detail{color:var(--muted);font-size:12px;margin:5px 0 10px;line-height:1.5}.attention-buttons{display:flex;gap:8px}.attention-buttons .btn{min-height:36px}
+@media(max-width:500px){.attention-link{padding:10px 12px}.kpi{padding:9px 3px}.kpi .v{font-size:15px}.hero .meta{font-size:11px}}
 </style>
 </head>
 <body>
@@ -392,9 +419,9 @@ button,select,[onclick]{touch-action:manipulation}
   <div class="launch">
     <div class="kick">H³O Interactive · Legacy GM series</div>
     <h1>Legacy <span>Cricket</span></h1>
-    <p>Run a state side across the Shield, the One-Day Cup and the T20 Championship. Pick the XI, plan every batter's downfall, manage your quicks, trade, sign and survive the board.</p>
+    <p>Build your team. Shape your legacy.</p>
     <div class="btns"><button class="btn pri" onclick="openNewCareer()">New career</button><button class="btn" onclick="openLoadCareer()">Load career</button></div>
-    <button class="btn ghost block" style="margin-top:8px" onclick="showHelp()">How to play</button>
+    <button class="launch-help" onclick="showHelp()">How to play</button>
     <div class="ver"><span id="bVer"></span><span id="bTitle"></span><span id="bEng"></span></div>
   </div>
 </section>
@@ -437,7 +464,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.6', title: 'Squad Stability & Series Honours', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.8', title: 'Home Dashboard & Decision Centre', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4533,12 +4560,13 @@ function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit
 // England's Unicode tag-sequence flag can display as a black flag in iOS Safari.
 // West Indies has no country-flag emoji. Render both as self-contained SVGs instead.
 // Other nations retain native flag emoji. These are presentation-only; nationality IDs never change.
-const NAT_FLAGS = { AUS:'🇦🇺', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', AFG:'🇦🇫', BAN:'🇧🇩', IRE:'🇮🇪', ZIM:'🇿🇼' };
+const NAT_FLAGS = { AUS:'🇦🇺', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', AFG:'🇦🇫', BAN:'🇧🇩', IRE:'🇮🇪', ZIM:'🇿🇼', SCO:'🏴󠁧󠁢󠁳󠁣󠁴󠁿', NED:'🇳🇱', NEP:'🇳🇵', USA:'🇺🇸', CAN:'🇨🇦', NAM:'🇳🇦', OMA:'🇴🇲', UAE:'🇦🇪' };
 const CRICKET_FLAGS = {
   ENG: `<svg class="cricket-flag-svg" viewBox="0 0 60 36" role="img" aria-label="England" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="36" rx="1.4" fill="#fff"/><path d="M25 0h10v36H25zM0 13h60v10H0z" fill="#ce1124"/></svg>`,
   WI: `<svg class="cricket-flag-svg" viewBox="0 0 60 36" role="img" aria-label="West Indies cricket" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="36" rx="1.4" fill="#7b183a"/><circle cx="39" cy="13" r="7" fill="#ffce51"/><path d="M8 28Q30 19 53 28v8H8z" fill="#f3f0e0"/><path d="M23 29q5-12 5-20l3 .4q-2 11-4 19z" fill="#165a44"/><path d="M29 11q-8-8-15-3 11-1 14 6M29 11q0-11 8-10-5 4-6 12M29 11q8-7 14-1-10-1-13 5M29 12q-9-2-11 5 6-4 12-2" fill="#168153" stroke="#168153" stroke-width="1.2" stroke-linejoin="round"/></svg>`
 };
 function flagFor(n) { return CRICKET_FLAGS[n] || NAT_FLAGS[n] || '🌐'; }
+function nationTag(n) { return '<span class="nat-flag" title="' + esc(NATIONS[n] || n) + '">' + flagFor(n) + '</span>'; }
 function natTag(p) { return ' <span class="nat-flag" title="' + esc(NATIONS[p.nat] || p.nat) + '">' + flagFor(p.nat) + '</span>'; }
 // Status is plain coloured text, and nothing at all when the player is fit and available.
 function statusChip(p) {
@@ -4625,7 +4653,7 @@ function render() {
   tc.classList.toggle('hidden', ui.page === 'home');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
-function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; render(); }
+function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 async function openNewCareer() {
@@ -4702,6 +4730,69 @@ function recentForm(n) {
     return `<span class="res ${r}" title="${esc(f.result.text)}">${r}</span>`;
   }).join('');
 }
+// Dashboard notifications are UI-only: dismissing one never resolves the underlying
+// trade, injury, selection or board issue. Notices are scoped to save and season.
+function homeNotices() {
+  const sq = squadOf(U());
+  const notices = [];
+  const add = (id, title, description, action, destination, count) => notices.push({
+    id: `${id}:${count == null ? '' : count}`, title, description, action, destination
+  });
+  const inj = sq.filter(p => p.injury), duty = sq.filter(p => p.natDuty);
+  const tired = sq.filter(p => !p.injury && !p.natDuty && p.fitness < 75);
+  if (game.offers.length) add('offers', `${game.offers.length} trade offer${game.offers.length===1?'':'s'}`, 'Review incoming offers before deciding.', true, 'offers', game.offers.length);
+  if (openInbox().length) add('inbox', `${openInbox().length} inbox decision${openInbox().length===1?'':'s'}`, 'Open your inbox to review outstanding decisions.', true, 'inbox', openInbox().length);
+  if (sq.some(p=>p.wantsOut)) add('requests', 'Player trade request', 'Review player concerns in the dressing room.', true, 'requests', sq.filter(p=>p.wantsOut).length);
+  if (game.nation.gm && game.season.windows.some(w=>w.selecting)) add('national', 'Australia squad selection', 'Select the national squad for the upcoming window.', true, 'national');
+  const myFinal = game.season.fixtures.find(f => isFinalFx(f) && !f.result && (f.home===U() || f.away===U()));
+  if (myFinal) add('final', `${COMPS[myFinal.comp].short} final coming up`, `v ${teamDef(myFinal.home===U()?myFinal.away:myFinal.home).nick} · ${dateStr(myFinal.day)}`, true, `final:${myFinal.comp}`, myFinal.id);
+  const vacant = STAFF_ORDER.filter(r=>!staffIn(U(),r));
+  if (vacant.length) add('staff', `${vacant.length} staff vacanc${vacant.length===1?'y':'ies'}`, 'Review club staffing.', true, 'staff', vacant.length);
+  if (sq.length < SQUAD_MIN) add('short', `Squad short: ${sq.length}/${SQUAD_MIN}`, 'Review free agents and squad depth.', true, 'short', sq.length);
+  if (inj.length) add('injuries', `${inj.length} player${inj.length===1?'':'s'} injured`, 'View injury status and recovery dates.', false, 'injuries', inj.map(p=>`${p.id}:${p.injury.until}`).sort().join(','));
+  if (duty.length) add('duty', `${duty.length} with Australia`, 'These players are unavailable during international duty.', false, 'duty', duty.map(p=>p.id).sort().join(','));
+  if (tired.length) add('fitness', `${tired.length} below 75% fitness`, 'Consider resting players before their next match.', false, 'fitness', tired.map(p=>p.id).sort().join(','));
+  return notices;
+}
+function noticeStoreKey() {
+  return `legacy_cricket_notices_${game.meta.slot || 1}_${game.season.label}_${U()}`;
+}
+function noticeRead() {
+  try { const list=JSON.parse(localStorage.getItem(noticeStoreKey()) || '[]'); return Array.isArray(list)?list:[]; }
+  catch (_) { return []; }
+}
+function noticeDismissed(n) { return noticeRead().includes(n.id); }
+function noticeMark(id) {
+  try { const list = noticeRead(); if (!list.includes(id)) { list.push(id); localStorage.setItem(noticeStoreKey(),JSON.stringify(list.slice(-100))); } } catch (_) {}
+}
+function noticeAct(index) {
+  const n = homeNotices()[index]; if (!n) return;
+  noticeMark(n.id); closeModal();
+  switch(n.destination) {
+    case 'offers': ui.officeTab='trades';go('office');break;
+    case 'inbox': ui.officeTab='inbox';go('office');break;
+    case 'requests': ui.squadTab='room';go('squad');break;
+    case 'national': go('natsel');break;
+    case 'staff': ui.clubTab='staff';go('club');break;
+    case 'short': ui.officeTab='fa';go('office');break;
+    case 'injuries':playerListSheet('Injuries','injured');break;
+    case 'duty':playerListSheet('National duty','duty');break;
+    case 'fitness':playerListSheet('Fitness watch','tired');break;
+    default: if(n.destination.startsWith('final:')){ui.leagueTab='ladders';ui.ladComp=n.destination.split(':')[1];go('league');}
+  }
+}
+function noticeDismiss(index) {
+  const n=homeNotices()[index]; if(!n)return;
+  noticeMark(n.id); render();
+  const remaining=homeNotices().filter(a=>!noticeDismissed(a));
+  if(remaining.length) attentionSheet();else closeModal();
+}
+function attentionSheet() {
+  const all=homeNotices();
+  const pending=all.map((n,i)=>({...n,i})).filter(n=>!noticeDismissed(n));
+  const body=pending.length ? pending.map(n=>`<div class="attention-item"><div class="attention-item-head"><span class="attention-status ${n.action?'required':''}">${n.action?'ACTION':'INFO'}</span><strong>${esc(n.title)}</strong></div><div class="attention-detail">${esc(n.description)}</div><div class="attention-buttons"><button class="btn ${n.action?'pri':'ghost'}" onclick="noticeAct(${n.i})">${n.action?'Review':'View details'}</button><button class="btn ghost" onclick="noticeDismiss(${n.i})">Dismiss</button></div></div>`).join('') : '<div class="empty">You’re all caught up.</div>';
+  sheet('Club updates', pending.length ? `${pending.length} update${pending.length===1?'':'s'}` : 'All caught up', body, {flush:true, foot: pending.length?'<button class="btn ghost block" onclick="closeModal()">Close</button>':''});
+}
 function renderHome() {
   if (game.phase !== 'season') return renderOffseason();
   const me = teamDef(U()), fx = nextUserFx(), sq = squadOf(U());
@@ -4726,29 +4817,17 @@ function renderHome() {
     <div class="kpi" onclick="ui.leagueTab='ladders';ui.ladComp='T20C';go('league')"><div class="v">${pos('T20C')}</div><div class="l">T20</div></div>
     <div class="kpi" onclick="ui.officeTab='board';go('office')"><div class="v ${game.board.confidence < 35 ? 'loss' : ''}">${game.board.confidence}</div><div class="l">Board</div></div>
     <div class="kpi" onclick="ui.squadTab='contracts';go('squad')"><div class="v">${money(capSpace(U()))}</div><div class="l">Cap space</div></div></div>`;
-  const inj = sq.filter(p => p.injury), duty = sq.filter(p => p.natDuty), tired = sq.filter(p => !p.injury && !p.natDuty && p.fitness < 75);
-  const alerts = [];
-  if (game.offers.length) alerts.push(`<span class="chip warn btn-chip" onclick="ui.officeTab='trades';go('office')">${game.offers.length} trade offer${game.offers.length > 1 ? 's' : ''} ▸</span>`);
-  if (inj.length) alerts.push(`<span class="chip bad btn-chip" onclick="playerListSheet('Injuries','injured')">${inj.length} injured ▸</span>`);
-  if (duty.length) alerts.push(`<span class="chip info btn-chip" onclick="playerListSheet('National duty','duty')">${duty.length} with Australia ▸</span>`);
-  if (tired.length) alerts.push(`<span class="chip warn btn-chip" onclick="playerListSheet('Fitness watch','tired')">${tired.length} below 75% fitness ▸</span>`);
-  const ib = openInbox().length;
-  if (ib) alerts.push(`<span class="chip warn btn-chip" onclick="ui.officeTab='inbox';go('office')">${ib} decision${ib > 1 ? 's' : ''} waiting in your inbox ▸</span>`);
-  const outs = sq.filter(p => p.wantsOut);
-  if (outs.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.squadTab='room';go('squad')">${outs.length} trade request${outs.length > 1 ? 's' : ''} ▸</span>`);
-  const selw = game.nation.gm && game.season.windows.find(w => w.selecting);
-  if (selw) alerts.push(`<span class="chip warn btn-chip" onclick="go('natsel')">Pick the Australia squad ▸</span>`);
-  const myFinal = game.season.fixtures.find(f => isFinalFx(f) && !f.result && (f.home === U() || f.away === U()));
-  if (myFinal) alerts.push(`<span class="chip warn btn-chip" onclick="ui.leagueTab='ladders';ui.ladComp='${myFinal.comp}';go('league')">Finals: ${COMPS[myFinal.comp].short} ${myFinal.round.toLowerCase()} v ${teamDef(myFinal.home === U() ? myFinal.away : myFinal.home).nick} · ${dateStr(myFinal.day)} ▸</span>`);
-  const vacant = STAFF_ORDER.filter(r => !staffIn(U(), r));
-  if (vacant.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='staff';go('office')">${vacant.length} staff vacanc${vacant.length > 1 ? 'ies' : 'y'} ▸</span>`);
-  if (sq.length < SQUAD_MIN) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='fa';go('office')">Squad short: ${sq.length}/${SQUAD_MIN} ▸</span>`);
+  const alerts = homeNotices();
+  const visible = alerts.filter(a => !noticeDismissed(a));
+  const decisions = visible.filter(a => a.action);
+  const information = visible.filter(a => !a.action);
+  const attention = visible.length ? `<button class="attention-link" onclick="attentionSheet()" aria-label="Open ${visible.length} club updates"><span class="attention-icon">${decisions.length ? '!' : 'i'}</span><span class="attention-copy"><b>${decisions.length ? `${decisions.length} decision${decisions.length === 1 ? '' : 's'} to review` : `${information.length} club update${information.length === 1 ? '' : 's'}`}</b><small>${decisions.length && information.length ? `${information.length} other update${information.length === 1 ? '' : 's'} · Tap to review` : 'Tap to review or dismiss'}</small></span><span class="attention-chevron">›</span></button>` : '';
   // The home ladder only shows domestic competitions; an international fixture next falls back to the Shield.
   const hc = COMP_ORDER.includes(ui.homeComp) ? ui.homeComp : fx && COMP_ORDER.includes(fx.comp) ? fx.comp : 'SHIELD';
   return `<div class="grid">
     ${panel(`${me.nick} · ${game.season.label}`, hero, { end: form ? `<span class="flex" style="gap:3px">${form}</span>` : '' })}
     ${kpis}
-    ${alerts.length ? panel('Needs your attention', `<div class="rows">${alerts.map(a => a.replace(/<span class="chip (\w+) btn-chip" onclick="([^"]*)">([^<]*)<\/span>/, (m, c, on, t) => `<div class="row tap" onclick="${on}"><span class="dot" style="background:var(--${c === 'bad' ? 'bad' : c === 'info' ? 'cyan' : 'warn'})"></span><div class="grow s">${t.replace(' ▸', '')}</div><span class="dim">›</span></div>`)).join('')}</div>`, { flush: true }) : ''}
+    ${attention}
     <div class="grid g2">
       <div class="grid">${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
       <div class="grid">
@@ -4871,7 +4950,7 @@ function renderDepth(toggle) {
   const rows = ch.slots.map(s => {
     const p = s.p, o = overall(p, f);
     return `<div class="row tap dslot ${s.avail ? '' : 'out'}" onclick="showPlayer('${p.id}')"><span class="n">${s.i + 1}</span>
-      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t">${natTag(p)} ${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
+      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t">${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
         <div class="sub-t">${identityLine(p)}</div><div class="sub-t dslot-backup">${s.avail ? (s.backup ? `Backup: ${natTag(s.backup)} ${esc(pname(s.backup))} ${Math.round(overall(s.backup, f))}` : '<span class="draw">No backup in the squad</span>') : `${statusChip(p)} <span class="win">${s.inFor ? esc(pshort(s.inFor)) + ' plays' : 'No cover'}</span>`}</div></div>
       <div class="end">${pill(o)}</div></div>`;
   }).join('');
@@ -5227,7 +5306,7 @@ function renderNational() {
        <div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`
     : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
   return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
-    ${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${N.rankings[n]}</span></div>`).join('')}</div>`, { flush: true })}
+    ${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px"><span class="n">${i + 1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><span class="b s">${N.rankings[n]}</span></div>`).join('')}</div>`, { flush: true })}
     ${game.season.windows.filter(w => w.wc && w.groups).map(w => panel('T20 World Cup', Object.keys(w.groups).map(g => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Group ${g}</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${wcTable(w, g).map(r => `<tr class="${r.t === 'AUS' ? 'me' : ''}"><td>${tdot(r.t)} ${teamDef(r.t).name}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`).join('') + (w.champion ? `<div class="kv"><span>Champions</span><span class="b">${teamDef(w.champion).name}</span></div>` : ''), { flush: true })).join('')}
     ${game.season.windows.map(w => panel(`${w.label}${w.wc ? '' : ' v ' + NATIONS[w.opp]}`, `<div class="kv"><span>${dateStr(w.start)} – ${dateStr(w.end)}</span><span>${w.result ? `<span class="${w.result.wins > w.result.losses ? 'win' : w.result.wins < w.result.losses ? 'loss' : 'draw'} b">${w.result.wins}–${w.result.losses}${w.result.draws ? ' (' + w.result.draws + 'D)' : ''}</span>` : w.size + ' players'}</span></div>
       <div class="rows">${(w.fx || []).map(id => fixtureById(id)).filter(Boolean).map(f => fixtureRow(f, false)).join('')}</div>
@@ -5896,7 +5975,7 @@ function renderWorld() {
   const ongoing = series.filter(x=>x.played>0&&x.played<x.total).slice(0,7);
   const history = (game.worldSeriesHistory || []).slice(0,12);
   const seriesPanel = panel('International series', `<div class="rows">${ongoing.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)}</span><span>${esc(formatLine(x))}</span></div>`).join('') || '<div class="empty">No series in progress.</div>'}${history.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)} · ${esc(COMPS[x.comp].short)}</span><span>${x.winner ? esc(teamDef(x.winner).name) : 'Drawn'} · ${x.winsHome}–${x.winsAway}${x.honours ? `<div class="xs dim">${x.honours.basis==='performance'?'Series standout':'Match awards'}: ${esc(x.honours.playerName)}${x.honours.basis==='performance'?' · '+x.honours.runs+' runs, '+x.honours.wickets+' wickets':''}</div>` : ''}</span></div>`).join('')}</div>`, {flush:true});
-  return `${globalTournamentPanel()}${recordsPanel}${qualificationPanel}<div class="grid g2">${wtcPanel}${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
+  return `${globalTournamentPanel()}${recordsPanel}${qualificationPanel}<div class="grid g2">${wtcPanel}${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
     ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
     ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
     ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
@@ -6134,7 +6213,14 @@ function homeExtras() {
   await Store.init();
   if (Store.status === 'none') { const n = document.createElement('div'); n.className = 'note bad'; n.style.marginTop = '12px'; n.innerHTML = 'This browser is not keeping saved data (private browsing or a file preview). Open the game directly in Safari or Chrome, or use Export save in the menu to keep your career.'; document.querySelector('.launch').appendChild(n); }
   const metas = await Store.list(); const last = metas.map((m, i) => m ? Object.assign({ slot: i + 1 }, m) : null).filter(Boolean).sort((a, b) => (b.saved || '').localeCompare(a.saved || ''))[0];
-  if (last) { const b = document.createElement('button'); b.className = 'btn pri block'; b.style.marginTop = '8px'; b.textContent = `Continue: ${last.name} · ${teamName(last.team)} · ${last.label}`; b.onclick = () => loadGame(last.slot); document.querySelector('.launch .btns').after(b); }
+  if (last) {
+    const card = document.createElement('div'); card.className = 'launch-career';
+    const kicker = document.createElement('div'); kicker.className = 'launch-career-kicker'; kicker.textContent = 'CONTINUE CAREER';
+    const name = document.createElement('div'); name.className = 'launch-career-name'; name.textContent = teamName(last.team);
+    const sub = document.createElement('div'); sub.className = 'launch-career-detail'; sub.textContent = [last.name, last.label].filter(Boolean).join(' · ');
+    const btn = document.createElement('button'); btn.className = 'btn pri block launch-resume'; btn.textContent = 'Continue career ›'; btn.onclick = () => loadGame(last.slot);
+    card.append(kicker,name,sub,btn); document.querySelector('.launch .btns').before(card);
+  }
 })();
 </script>
 </body>
