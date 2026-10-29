@@ -357,6 +357,26 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .chart-filters button{flex:none;border:1px solid var(--line);background:var(--s2);border-radius:9px;color:var(--muted);padding:7px 9px;font:inherit;font-size:11px;touch-action:manipulation}
 .chart-filters button.on{color:var(--accent);border-color:var(--accent)}
 @media(max-width:480px){.dslot{align-items:flex-start}.dslot>.end{align-self:center}.training-row{padding:12px}.training-select{margin-left:0}.training-head .av{flex:0 0 auto}}
+
+/* v0.8.4: compact, mobile-first display; simulation unchanged */
+.worm-wrap{padding:6px 0 2px;max-width:100%;overflow:hidden}
+.worm{display:block;width:100%;height:auto;aspect-ratio:600/165;min-height:102px}
+.worm-legend{display:flex;flex-wrap:wrap;gap:7px 14px;align-items:center;margin-bottom:3px;font-size:11px;color:var(--text)}
+.worm-key{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-weight:700}
+.worm-key i{width:14px;height:3px;border-radius:4px;display:inline-block}
+.worm-target{font-size:10px;color:var(--muted);margin-left:auto}
+.worm-axis{text-align:center;color:var(--muted);font-size:10px;margin-top:-3px}
+.recap-more{margin-top:8px;color:var(--muted);font-size:11px}
+.recap-more summary,.locker-more summary{cursor:pointer;touch-action:manipulation;min-height:36px;display:flex;align-items:center;font-weight:700}
+.locker-more{margin-top:10px}.locker-more>.rows{border-top:1px solid var(--line2)}
+.training-head{min-width:0}.training-identity{flex:1;min-width:0}.training-head .main-t{white-space:normal;overflow-wrap:anywhere}.training-select{min-width:0}
+.training-select select{width:100%;max-width:100%;font-size:16px!important;min-height:44px}
+.squad-tabs,.tab-row{scrollbar-width:none}
+.sheetbox{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+button,select,[onclick]{touch-action:manipulation}
+@media(max-width:480px){.recap .pb{padding:14px}.rc-rows .kv{padding:8px 9px}.training-row{padding:11px 12px}.worm-legend{font-size:10px}.worm-target{width:100%;margin:0}}
+
+.live-worm{margin-top:10px;padding-top:10px;border-top:1px solid var(--line2)}
 </style>
 </head>
 <body>
@@ -409,7 +429,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.8.3', title: 'UI & Player Presentation Consistency', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.8.4', title: 'Match Visuals & UX Refinement', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4271,7 +4291,7 @@ function showHelp() {
     <h4>The loop</h4><p>Continue moves the calendar on and stops whenever you are needed: a match, a trade offer, a national call-up. On match day, play live ball by ball or quick-sim.</p>
     <h4>Competitions</h4><p>The Sheffield Shield is four-day cricket with draws, follow-ons and declarations. The One-Day Cup is 50 overs. The T20 Championship runs through summer with semi-finals and a final. Shield and One-Day finals go to the top two; a drawn Shield final goes to the home side.</p>
     <h4>Selection and workloads</h4><p>Each format has its own XI, picked by staff on Auto or by you on Manual. Fitness falls with every match and fastest for quicks. Tired bowlers lose effectiveness and break down more often, so rotate during the T20 block.</p>
-    <h4>You are the GM</h4><p>You build the squad and the staff; the head coach and captain run the match. Before each match and at every innings break you set the brief: how to bat, how to bowl and whether to lean on pace or spin. During play you can send a message to the dressing room, which reaches the players at the next drinks break.</p>
+    <h4>You are the GM</h4><p>Build your squad and hire the staff. The coach manages match tactics. You can encourage the team at key breaks.</p>
     <h4>Staff</h4><p>Hire a head coach, batting and bowling coaches, a performance analyst, a physio and a talent scout from a separate staff budget. Coaches speed development, the analyst builds the bowling plan for each opposition batter, the physio cuts injuries, and the scout sharpens potential grades.</p>
     <h4>Scouting</h4><p>Every batter has strengths and weaknesses. Commission scouting on match day so your analyst can target them. Your analyst also learns about batters your bowlers bowl at. AI sides do the same to you.</p>
     <h4>Australia</h4><p>Take on the national selector role to pick every Australia squad. Tests and white-ball matches are played out in full. Picking your own state's players weakens your state while they are away.</p>
@@ -4465,7 +4485,7 @@ function renderDepth(toggle) {
   const rows = ch.slots.map(s => {
     const p = s.p, o = overall(p, f);
     return `<div class="row tap dslot ${s.avail ? '' : 'out'}" onclick="showPlayer('${p.id}')"><span class="n">${s.i + 1}</span>
-      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t">${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
+      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t">${natTag(p)} ${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
         <div class="sub-t">${identityLine(p)}</div><div class="sub-t dslot-backup">${s.avail ? (s.backup ? `Backup: ${natTag(s.backup)} ${esc(pname(s.backup))} ${Math.round(overall(s.backup, f))}` : '<span class="draw">No backup in the squad</span>') : `${statusChip(p)} <span class="win">${s.inFor ? esc(pshort(s.inFor)) + ' plays' : 'No cover'}</span>`}</div></div>
       <div class="end">${pill(o)}</div></div>`;
   }).join('');
@@ -4484,7 +4504,7 @@ function renderPlayerList() {
   const f = ui.listFmt;
   return `${tools}<div style="height:8px"></div><div class="panel"><div class="tbl-wrap"><table class="tbl clean"><thead><tr><th>Player</th><th>Age</th><th class="hide-m">Shield</th><th class="hide-m">1-Day</th><th class="hide-m">T20</th><th class="hide-d">${compName(f)}</th><th>Form</th><th>Fit</th></tr></thead><tbody>
     ${sq.map(p => `<tr class="tap" onclick="showPlayer('${p.id}')"><td class="l"><div class="b ell" style="max-width:170px">${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div><div class="xs dim">${identityLine(p)}${p.morale < 45 ? ' · <span class="loss">' + (p.wantsOut ? 'wants out' : 'unhappy') + '</span>' : ''}${p.focus && p.focus !== 'none' ? ' · ' + DEV_FOCUS[p.focus].label.toLowerCase() : ''}</div></td><td>${p.age}</td><td class="hide-m">${pill(overall(p, 'FC'))}</td><td class="hide-m">${pill(overall(p, 'OD'))}</td><td class="hide-m">${pill(overall(p, 'T20'))}</td><td class="hide-d">${pill(overall(p, f))}</td><td>${formArrow(p.form)}</td><td>${fitText(p)}</td></tr>`).join('')}</tbody></table></div></div>
-    <div class="xs dim" style="margin-top:6px">Tap a player for the full profile.</div>`;
+    `;
 }
 function setListFmt(f) { ui.listFmt = f; render(); }
 function fitTag(p) { const w = whereFits(p); return w ? `<span class="fit ${w.start ? 'start' : ''}">${esc(w.text)}</span> · ` : ''; }
@@ -4559,7 +4579,7 @@ function renderContracts() {
         <div class="sub-t ell">${identityLine(p)}</div>
         <div class="sub-t ell">${money(p.contract.salary)} × ${p.contract.years} yr · value <span class="${ask > p.contract.salary * 1.15 ? 'win' : ask < p.contract.salary * 0.8 ? 'loss' : ''}">${money(ask)}</span></div></div>
       <div class="end">${exp ? '<span class="tag warn">Expiring</span>' : ''}${pill(peakOvr(p))}<button class="btn icon sm ghost" aria-label="Contract actions" onclick="event.stopPropagation();contractMenu('${p.id}')">⋯</button></div></div>`; }).join('') || '<div class="empty">No players in this group.</div>'}</div>`, { flush: true })}
-    <div class="xs dim" style="margin-top:6px">Tap a player for his profile. Value is his open-market asking price. In-season releases leave half the salary on your cap.</div>`;
+    `;
 }
 function contractMenu(id) {
   const p = P(id), inSeason = game.phase === 'season';
@@ -4605,10 +4625,22 @@ function fixtureRow(f, isNext) {
 }
 function wormSvg(innings, fmt) {
   if (fmt === 'FC') return '';
-  const lines = innings.map(i => { let c = 0; return [0, ...(i.overRuns || []).map(r => c += r)]; });
-  const maxR = Math.max(10, ...lines.map(l => l[l.length - 1])), maxO = (innings[0] && innings[0].maxOvers) || FORMATS[fmt].overs;
-  const W = 600, H = 90, x = o => 4 + o / maxO * (W - 8), y = r => H - 4 - r / maxR * (H - 12);
-  return `<svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><line x1="0" y1="${H - 4}" x2="${W}" y2="${H - 4}" stroke="#1f3d53"/>${lines.map((l, k) => `<polyline fill="none" stroke="${teamDef(innings[k].bat).color}" stroke-width="2.2" vector-effect="non-scaling-stroke" points="${l.map((r, o) => x(o) + ',' + y(r)).join(' ')}"/>`).join('')}</svg>`;
+  const valid = (innings || []).filter(i => i && Array.isArray(i.overRuns) && i.overRuns.length);
+  if (!valid.length) return '<div class="empty">Run progression appears after the first over.</div>';
+  const maxO = Math.max(1, FORMATS[fmt].overs || 20, ...valid.map(i => i.maxOvers || 0));
+  const runs = valid.map(i => { let c = 0; return [0, ...i.overRuns.map(r => c += r)]; });
+  const maxR = Math.max(20, Math.ceil(Math.max(...runs.map(r => Math.max(...r))) / 25) * 25);
+  const W = 600, H = 165, L = 34, R = 10, T = 12, B = 24;
+  const x = o => L + Math.min(1, o / maxO) * (W - L - R);
+  const y = r => H - B - Math.max(0, r) / maxR * (H - T - B);
+  const palette = ['#f1c64f', '#76c9fa'];
+  const grid = [0,.25,.5,.75,1].map(f => { const r = Math.round(maxR*f); return `<line x1="${L}" y1="${y(r)}" x2="${W-R}" y2="${y(r)}" stroke="#294150" stroke-width=".7"/><text x="${L-5}" y="${y(r)+3}" fill="#8fa5b4" font-size="11" text-anchor="end">${r}</text>`; }).join('');
+  const ticks = [0,.25,.5,.75,1].map(f => `<text x="${x(maxO*f)}" y="${H-5}" fill="#8fa5b4" font-size="11" text-anchor="middle">${Math.round(maxO*f)}</text>`).join('');
+  const paths = runs.map((r,k) => `<polyline fill="none" stroke="${palette[k%2]}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${r.map((v,o)=>x(o)+','+y(v)).join(' ')}"/>`).join('');
+  const legends = valid.map((i,k) => `<span class="worm-key"><i style="background:${palette[k%2]}"></i>${esc(teamDef(i.bat).short || i.bat)} ${i.runs}/${i.wkts}</span>`).join('');
+  const chase = valid[1];
+  const target = chase && chase.target ? `<span class="worm-target">Target ${chase.target} · ${Math.max(0,chase.target-chase.runs)} needed</span>` : '';
+  return `<div class="worm-wrap"><div class="worm-legend">${legends}${target}</div><svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative runs by over for ${valid.map(i=>teamDef(i.bat).name).join(' and ')}">${grid}${ticks}${paths}</svg><div class="worm-axis">Overs</div></div>`;
 }
 function innLabel(S, k) { return `Inn ${k + 1}`; }
 function scorecardHtml(S, k, fnName, noWorm) {
@@ -4633,7 +4665,7 @@ function scorecardHtml(S, k, fnName, noWorm) {
     <div class="panel" style="margin-top:8px"><table class="tbl sc"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th class="hide-xs">Econ</th></tr></thead><tbody>
       ${bw.filter(b => b.balls || b.r).map(b => `<tr><td class="l"><div class="nm">${plink(P(b.id), pshort(P(b.id)))}</div></td><td>${oversStr(b.balls)}</td><td>${b.m}</td><td>${b.r}</td><td class="b">${b.w}</td><td class="dim hide-xs">${b.balls ? (b.r / (b.balls / 6)).toFixed(2) : '–'}</td></tr>`).join('')}</tbody></table></div>
     ${!noWorm && shots.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Wagon wheel</h3></div><div class="pb center">${wagonSvg(shots, 'R')}</div></div>` : ''}
-    ${!noWorm && S.fmt !== 'FC' ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Run chart</h3></div><div class="pb">${wormSvg(S.innings, S.fmt)}</div></div>` : ''}
+    ${!noWorm && S.fmt !== 'FC' ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Run progression</h3></div><div class="pb">${wormSvg(S.innings, S.fmt)}</div></div>` : ''}
     <div class="panel" style="margin-top:8px"><div class="rows">${S.potm ? `<div class="kv"><span>Player of the match</span><span>${plink(P(S.potm))}</span></div>` : ''}<div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}${S.crowd ? `<div class="kv"><span>Crowd</span><span>${S.crowd.toLocaleString('en-AU')}</span></div>` : ''}</div></div>`;
 }
 let _scFx = null;
@@ -5142,6 +5174,7 @@ function renderLive() {
     <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
       <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
         <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
+        ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
         </div>
       ${crease}<div style="height:12px"></div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
@@ -5180,8 +5213,8 @@ function inningsRecap(M, inn) {
     <div class="grid g2" style="gap:8px;margin-top:10px">
       <div><div class="lbl">Top scorers</div>${perfRows(bats.map(c => batRow(c)))}</div>
       <div><div class="lbl">Best bowling</div>${perfRows(bowls.map(([id, f]) => bowlRow(id, f)))}</div></div>
-    ${best ? `<div class="xs muted" style="margin-top:8px">Best partnership: <b class="t">${best.r}</b> for the ${ordinal(best.w)} wicket${best.live ? ' (unbroken)' : ''}</div>` : ''}
-    ${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg([inn], M.fmt)}</div>` : ''}
+    ${best ? `<details class="recap-more"><summary>Partnership</summary><div class="xs muted">${best.r} runs · ${ordinal(best.w)} wicket${best.live ? ' · unbroken' : ''}</div></details>` : ''}
+    ${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg(M.innings, M.fmt)}</div>` : ''}
     ${nb ? `<div class="lbl" style="margin-top:12px">Next innings · ${nb === me ? 'we bat' : 'we bowl'}</div>${coachPlanLine(M)}` : ''}`;
   return recapShell(`Innings complete${M.fmt === 'FC' ? ' · Day ' + fcDay(M) : ''}`, `${teamName(inn.bat)} ${inn.runs}${inn.allOut ? ' all out' : '/' + inn.wkts}${inn.declared ? ' declared' : ''}`,
     `${oversStr(inn.balls)} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`, inner);
@@ -5360,8 +5393,8 @@ function renderDevelopment() {
   const used = devUsed(), slots = devSlots();
   return `<div class="grid g2">${panel('Team training focus', `<div class="rows">${Object.keys(TRAINING).map(k => `<div class="row tap ${game.training === k ? 'me' : ''}" onclick="game.training='${k}';autosave();render()"><div class="stack"><div class="main-t">${TRAINING[k].label}</div><div class="sub-t">${TRAINING[k].desc}</div></div><div class="end">${game.training === k ? chip('good', 'Active') : ''}</div></div>`).join('')}</div>`, { flush: true })}
     ${panel('Coaching capacity', `<div class="rows"><div class="kv"><span>Individual programmes</span><span class="b">${used}/${slots}</span></div>${['head','bat','bowl','physio'].map(r => { const st = staffIn(U(), r); return `<div class="kv"><span>${STAFF_ROLES[r].label}</span><span>${st ? `${esc(st.last)}${st.spec ? ' · ' + st.spec : ''} ${pill(st.rating)}` : '<span class="loss">Vacant</span>'}</span></div>`; }).join('')}</div>
-      <div class="pb xs muted">Programmes make the chosen skills grow about 60% faster in the off-season and add monthly progress during the season. Better head coaches can run more programmes; batting and bowling coach specialities give extra growth in their area.</div>`, { flush: true })}</div>
-    <div style="height:8px"></div>${panel('Individual programmes', `<div class="rows">${sq.map(p => `<div class="training-row"><div class="training-head">${av(p)}<div class="training-identity"><div class="main-t">${plink(p)}</div><div class="sub-t">${identityLine(p)} · ${PERSONAS[ensurePersona(p)].label}</div></div>${pill(peakOvr(p))}</div><div class="training-select"><span class="xs dim">Development focus</span>${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}</div></div>`).join('')}</div>`, { flush: true })}`;
+      <div class="pb xs muted">Focused training accelerates skill growth. Available slots depend on coaching staff.</div>`, { flush: true })}</div>
+    <div style="height:8px"></div>${panel(`Player development · ${used}/${slots} focused`, `<div class="rows">${sq.map(p => `<div class="training-row"><div class="training-head">${av(p)}<div class="training-identity"><div class="main-t">${plink(p)}</div><div class="sub-t">${identityLine(p)} · ${PERSONAS[ensurePersona(p)].label}</div></div>${pill(peakOvr(p))}</div><div class="training-select"><span class="xs dim">Development focus</span>${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}</div></div>`).join('')}</div>`, { flush: true })}`;
 }
 function renderDressingRoom() {
   const sq = squadOf(U()).sort((a, b) => a.morale - b.morale);
@@ -5371,10 +5404,10 @@ function renderDressingRoom() {
   const careLine = care.length ? `${coach} is working with ${care.length} unsettled player${care.length > 1 ? 's' : ''}: ${care.map(p => esc(p.last)).join(', ')}. ${h ? `His man-management (${h.mm}) lifts them a little each week.` : 'Hire a head coach to settle them faster.'}` : `${coach} reports a settled group.`;
   const needRows = needs.map(p => playerRow(p, { sub: `<span class="loss">${gmIssue(p)}</span> · ${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}`, end: `${chip(moodClass(p.morale), moodLabel(p.morale))}<button class="btn sm" onclick="event.stopPropagation();talkSheet('${p.id}')">Talk</button>` })).join('');
   return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${tm < 50 ? 'loss' : tm >= 65 ? 'win' : ''}">${tm}</div><div class="l">Morale</div></div><div class="kpi"><div class="v ${needs.length ? 'loss' : ''}">${needs.length}</div><div class="l">Need you</div></div><div class="kpi"><div class="v">${sq.filter(p => p.wantsOut).length}</div><div class="l">Trade asks</div></div><div class="kpi"><div class="v">${h ? h.mm : '–'}</div><div class="l">Coach care</div></div></div>
-    <div style="height:8px"></div><div class="note" style="margin-bottom:8px">${careLine}${cap ? ` Captain <b>${esc(pname(cap))}</b> (${PERSONAS[ensurePersona(cap)].label})${cap.persona === 'leader' ? ' lifts the squad every week.' : '.'}` : ''}</div>
+    <div style="height:8px"></div><div class="xs muted" style="margin-bottom:8px">${care.length} players with coaching staff · ${needs.length} need GM attention</div>
     ${panel(`Needs the GM · ${needs.length}`, needs.length ? `<div class="rows">${needRows}</div>` : '<div class="empty">Nobody needs you right now. Your coach is handling the squad.</div>', { flush: true })}
-    <div style="height:8px"></div>${panel('Squad mood', `<div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}${p.morale < 62 ? ' · with the coach' : ''}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div>`, { flush: true })}
-    <div class="xs dim" style="margin-top:6px">The head coach handles everyday mood. You step in for trade requests, Unhappy players, broken promises and contract disputes.</div>`;
+    <details class="panel locker-more"><summary>Other players · ${sq.length-needs.length}</summary><div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div></details>
+    `;
 }
 function talkSheet(id) {
   const p = P(id); ensurePersona(p);
