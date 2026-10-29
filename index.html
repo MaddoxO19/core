@@ -418,6 +418,22 @@ button,select,[onclick]{touch-action:manipulation}
 .badge.nation-badge.lg{font-size:27px}
 .team-flag{display:inline-flex;align-items:center;justify-content:center;line-height:1}
 .team-flag .cricket-flag-svg{width:1.35em;height:.82em;margin:0}
+
+/* v0.9.9 Build 001: clean national flags and selection controls. */
+.badge.nation-badge,.badge.nation-badge.lg{border:0!important;background:transparent!important;box-shadow:none!important;border-radius:0!important;font-size:29px;overflow:visible}
+.badge.nation-badge.lg{font-size:37px}
+.badge.nation-badge .team-flag{display:flex;align-items:center;justify-content:center}
+.badge.nation-badge .cricket-flag-svg{width:1.28em;height:.78em}
+.staff-picks-switch{display:inline-flex;gap:9px;align-items:center;cursor:pointer;font-size:13px;color:var(--text);white-space:nowrap}
+.staff-picks-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.staff-switch-track{position:relative;display:inline-block;flex:none;width:42px;height:25px;border-radius:20px;background:#34495a;border:1px solid #557088;transition:background .15s}
+.staff-switch-track:after{content:'';position:absolute;left:3px;top:3px;width:17px;height:17px;background:#e6eef3;border-radius:50%;transition:transform .15s}
+.staff-picks-switch input:checked + .staff-switch-track{background:#337a63;border-color:#4bb68d}
+.staff-picks-switch input:checked + .staff-switch-track:after{transform:translateX(17px)}
+.staff-picks-switch input:focus-visible + .staff-switch-track{outline:2px solid var(--gold);outline-offset:2px}
+.wagon-controls{display:grid;gap:8px}
+.wagon-select-label{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px}
+.wagon-select-label select{flex:1;min-width:0;font-size:16px}
 </style>
 </head>
 <body>
@@ -470,7 +486,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9', title: 'Clash Decisions & Team Flags', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 001', title: 'Interface Refinement', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5779,29 +5795,46 @@ function commentaryHtml(M) {
 }
 function wagonSvg(shots, hand) {
   const C = 110, R = 98;
-  const lines = shots.map(([a, r]) => { const len = r >= 6 ? R + 6 : r === 4 ? R : 26 + r * 20; const rad = a * Math.PI / 180; const x = C + Math.sin(rad) * len, y = C - Math.cos(rad) * len; const col = r >= 6 ? '#f4c542' : r === 4 ? '#4ade80' : '#7dd3fc'; return `<line x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="${r >= 4 ? 1.8 : 1.1}" stroke-opacity="${r >= 4 ? 0.95 : 0.6}"/>`; }).join('');
-  const offRight = hand !== 'L';
+  // View from the batting end: the bowler is at the bottom.
+  // For a right-hander off side is left, leg side is right.
+  const mirror = 1; // zoneAngle already mirrors shots for left-handed batters
+  const lines = shots.map(([a, r]) => { const len = r >= 6 ? R + 6 : r === 4 ? R : 26 + r * 20; const rad = a * Math.PI / 180; const x = C - Math.sin(rad) * len * mirror, y = C + Math.cos(rad) * len; const col = r >= 6 ? '#f4c542' : r === 4 ? '#4ade80' : '#7dd3fc'; return `<line x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="${r >= 4 ? 1.8 : 1.1}" stroke-opacity="${r >= 4 ? 0.95 : 0.6}"/>`; }).join('');
+  const offRight = hand === 'L';
   return `<svg viewBox="0 0 220 220" class="wagon"><circle cx="${C}" cy="${C}" r="${R}" fill="#0f2a1e" stroke="#1f4d36"/><circle cx="${C}" cy="${C}" r="54" fill="none" stroke="#1f4d36" stroke-dasharray="3 3"/>
-    <rect x="${C - 4}" y="${C - 22}" width="8" height="30" fill="#3d4a2a" rx="1"/>${lines}
+    <rect x="${C - 4}" y="${C - 8}" width="8" height="30" fill="#3d4a2a" rx="1"/>${lines}
     <text x="${offRight ? 200 : 20}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Off</text><text x="${offRight ? 20 : 200}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Leg</text></svg>`;
 }
 function setWagon(m) { ui.wagon = m; render(); }
 function wagonPanel(M) {
   const inn = ui.liveInn != null && M.innings[ui.liveInn] ? M.innings[ui.liveInn] : curInn(M);
-  const mode = ui.wagon || 'part';
-  const sc = inn.card[inn.striker], ns = inn.card[inn.non];
+  const valid = inn.card.filter(c => c && c.id && P(c.id));
+  // Keep the chosen batter across strike changes and wickets.
+  // A newly selected innings defaults to its current batter only if the
+  // previous player is not present in that innings.
+  const selected = valid.find(c => c.id === ui.wagonPlayer);
+  const current = valid.find(c => c.id === inn.card[inn.striker]?.id) || valid[0];
+  const mode = ui.wagon === 'inn' ? 'inn' : 'player';
+  const card = selected || current;
   let shots = [], label = '', hand = 'R';
-  if (mode === 'striker' && sc) { shots = sc.shots || []; label = `${P(sc.id).last} ${sc.r} (${sc.b})`; hand = P(sc.id).hand; }
-  else if (mode === 'non' && ns) { shots = ns.shots || []; label = `${P(ns.id).last} ${ns.r} (${ns.b})`; hand = P(ns.id).hand; }
-  else if (mode === 'part') { [sc, ns].forEach(c => c && (c.shots || []).forEach(s => { if (s[2] === inn.wkts) shots.push(s); })); label = `Partnership ${inn.part.r} (${inn.part.b})`; }
-  else { inn.card.forEach(c => (c.shots || []).forEach(s => shots.push(s))); label = `${teamDef(inn.bat).short || inn.bat} innings ${inn.runs}/${inn.wkts}`; }
-  const count = r => shots.filter(s => (r === 1 ? s[1] < 4 : s[1] === r)).length;
-  const runs = shots.reduce((a, s) => a + s[1], 0);
-  const offR = shots.filter(s => (hand === 'L' ? s[0] > 180 : s[0] < 180) && s[0] !== 0).reduce((a, s) => a + s[1], 0);
-  return `${seg([['part','Partnership'],['striker','Striker'],['non','Non-striker'],['inn','Innings']], mode, 'setWagon')}
-    <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, mode === 'part' || mode === 'inn' ? 'R' : hand)}
-      <div class="flex" style="justify-content:center;gap:14px;margin-top:6px" ><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
-      ${mode !== 'part' && mode !== 'inn' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}</div></div>`;
+  if (mode === 'inn') {
+    valid.forEach(c => (c.shots || []).forEach(shot => shots.push(shot)));
+    label = `${teamDef(inn.bat).short || inn.bat} · ${inn.runs}/${inn.wkts}`;
+  } else if (card) {
+    shots = card.shots || [];
+    const player = P(card.id);
+    label = `${pname(player)} · ${card.r} (${card.b})`;
+    // Stored shot bearings already encode batting handedness.
+    hand = player.hand || 'R';
+  }
+  const count = r => shots.filter(shot => (r === 1 ? shot[1] < 4 : shot[1] === r)).length;
+  const runs = shots.reduce((a, shot) => a + shot[1], 0);
+  const offR = shots.filter(shot => shot[0] > 0 && shot[0] < 180).reduce((a, shot) => a + shot[1], 0);
+  const players = valid.map(c => `<option value="${esc(c.id)}" ${card && c.id === card.id ? 'selected' : ''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
+  return `<div class="wagon-controls"><div class="seg"><button class="${mode === 'player' ? 'on' : ''}" onclick="setWagon('player')">Player</button><button class="${mode === 'inn' ? 'on' : ''}" onclick="setWagon('inn')">Innings</button></div>
+    ${mode === 'player' ? `<label class="wagon-select-label">Batter <select aria-label="Select batter for wagon wheel" onchange="ui.wagonPlayer=this.value;render()">${players}</select></label>` : ''}</div>
+    <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, hand)}
+      <div class="flex" style="justify-content:center;gap:14px;margin-top:6px"><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
+      ${mode === 'player' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}</div></div>`;
 }
 
 // ---- Game plan (the GM's brief) ----
@@ -5830,6 +5863,7 @@ function renderNatSel() {
   const w = game.season.windows.find(x => x.selecting) || game.season.windows.find(x => !x.squad.length);
   if (!w || !game.nation.gm) { ui.page = 'office'; ui.officeTab = 'national'; return renderOffice(); }
   if (!w.pick) w.pick = recommendSquad(w);
+  if (w.staffAuto == null) w.staffAuto = true;
   const fmt = w.fmt;
   const picked = w.pick.map(P).filter(Boolean);
   const pool = sortPlayers(nationEligible().filter(p => !w.pick.includes(p.id) && (ui.natGroup === 'ALL' || !ui.natGroup || group(p) === ui.natGroup)), 'ovr', fmt).slice(0, 40);
@@ -5837,15 +5871,16 @@ function renderNatSel() {
   const comp = { BAT:0, WK:0, AR:0, PACE:0, SPIN:0 }; picked.forEach(p => comp[group(p)]++);
   return `${pageTitle('National selection', `${w.label} v ${NATIONS[w.opp]} · from ${dateStr(w.start)}`, `<button class="btn sm ghost" onclick="ui.officeTab='national';go('office')">Back</button>`)}
     <div class="kpis">${Object.keys(comp).map(g => `<div class="kpi"><div class="v">${comp[g]}</div><div class="l">${{ BAT:'Batters', WK:'Keepers', AR:'All-rounders', PACE:'Pace', SPIN:'Spin' }[g]}</div></div>`).join('')}</div><div style="height:8px"></div>
-    <div class="grid g2">${panel(`Squad · ${n}/${w.size}`, `<div class="rows">${picked.map(p => playerRow(p, { team: true, fmt, sub: `${ROLES[p.role].short} · ${p.age} · ${formArrow(p.form)} · ${p.caps[fmt]} caps${p.teamId === U() ? ' · <span class="draw">your player</span>' : ''}`, end: `${pill(overall(p, fmt))}<button class="btn icon sm ghost" onclick="event.stopPropagation();natDrop('${p.id}')">✕</button>` })).join('')}</div>`, { flush: true, end: `<button class="link" onclick="natReset()">Staff picks</button>` })}
+    <div class="grid g2">${panel(`Squad · ${n}/${w.size}`, `<div class="rows">${picked.map(p => playerRow(p, { team: true, fmt, sub: `${ROLES[p.role].short} · ${p.age} · ${formArrow(p.form)} · ${p.caps[fmt]} caps${p.teamId === U() ? ' · <span class="draw">your player</span>' : ''}`, end: `${pill(overall(p, fmt))}<button class="btn icon sm ghost" onclick="event.stopPropagation();natDrop('${p.id}')">✕</button>` })).join('')}</div>`, { flush: true, end: `<label class="staff-picks-switch"><span>Staff picks</span><input type="checkbox" role="switch" aria-label="Staff picks" ${w.staffAuto ? 'checked' : ''} onchange="natStaffPicks(this.checked)"><span class="staff-switch-track"></span></label>` })}
       ${panel('Available', `<div class="pb" style="padding-bottom:0">${sel(GROUP_OPTS, ui.natGroup || 'ALL', "ui.natGroup=this.value;render()")}</div><div class="rows">${pool.map(p => playerRow(p, { team: true, fmt, sub: `${ROLES[p.role].short} · ${p.age} · ${formArrow(p.form)} · ${p.caps[fmt]} caps`, end: `${statusChip(p)}${pill(overall(p, fmt))}<button class="btn sm" ${n >= w.size ? 'disabled' : ''} onclick="event.stopPropagation();natAdd('${p.id}')">Add</button>` })).join('')}</div>`, { flush: true })}</div>
     <div style="height:8px"></div><button class="btn pri block" ${ok ? '' : 'disabled'} onclick="natConfirm()">${ok ? 'Confirm squad' : `Select exactly ${w.size} players`}</button>
     <div class="xs dim" style="margin-top:6px">Selected players miss state matches during the series, including yours. Results move the national board's confidence and Australia's ranking.</div>`;
 }
 function natWin() { return game.season.windows.find(x => x.selecting); }
-function natDrop(id) { const w = natWin(); w.pick = w.pick.filter(x => x !== id); render(); }
-function natAdd(id) { const w = natWin(); if (w.pick.length < w.size) w.pick.push(id); render(); }
-function natReset() { const w = natWin(); w.pick = recommendSquad(w); render(); }
+function natDrop(id) { const w = natWin(); w.staffAuto = false; w.pick = w.pick.filter(x => x !== id); render(); }
+function natAdd(id) { const w = natWin(); w.staffAuto = false; if (w.pick.length < w.size) w.pick.push(id); render(); }
+function natStaffPicks(on) { const w = natWin(); if (!w) return; w.staffAuto = !!on; if (on) w.pick = recommendSquad(w); autosave(); render(); }
+function natReset() { natStaffPicks(true); }
 function natConfirm() { const w = natWin(); w.locked = w.pick.slice(); w.selecting = false; addNews('National', `Squad confirmed for the ${w.label.toLowerCase()}`, `${w.locked.length} players named.`); autosave(); ui.officeTab = 'national'; go('office'); }
 
 function renderStaff() {
