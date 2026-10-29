@@ -67,7 +67,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .top .date{font-size:var(--fs-xs);color:var(--muted);font-weight:600}
 .top .cont{margin-left:auto}
 .main{padding:12px 12px calc(var(--nav-h) + 16px + var(--safe-b));max-width:1180px;margin:0 auto}
-.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(var(--nav-h) + var(--safe-b));padding-bottom:var(--safe-b);display:grid;grid-template-columns:repeat(5,1fr);background:rgba(7,17,26,.97);border-top:1px solid var(--line2);backdrop-filter:blur(12px)}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;height:calc(var(--nav-h) + var(--safe-b));padding-bottom:var(--safe-b);display:grid;grid-template-columns:repeat(6,1fr);background:rgba(7,17,26,.97);border-top:1px solid var(--line2);backdrop-filter:blur(12px)}
 .nav button{border:0;background:transparent;color:var(--dim);font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;position:relative}
 .nav button svg{width:21px;height:21px}
 .nav button.on{color:var(--accent)}
@@ -304,6 +304,34 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 
 @media(max-width:899px){input,textarea,select{font-size:16px!important}}
 button{touch-action:manipulation}
+
+/* v0.7.8 navigation (Legacy series layout), brackets, World Cup */
+.top .brandblock .studio{font-size:9.5px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+.top .brand{font-size:19px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;line-height:1.1}
+.top .gear svg{width:20px;height:20px}.top .exitbtn{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;padding:0 12px;height:36px;margin-left:6px}
+.top .cont{margin-left:auto;margin-right:6px}.top .cont.hidden + .gear{margin-left:auto}
+.quick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 14px 10px;border-bottom:1px solid var(--line2);background:var(--bg)}
+.quick button{display:flex;align-items:center;justify-content:center;gap:8px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--s1);color:var(--text);font-weight:800;font-size:14px;cursor:pointer;position:relative}
+.quick button svg{width:18px;height:18px;color:var(--muted)}.quick button.on{border-color:var(--accent);color:var(--accent)}
+.quick .badge-n{position:absolute;top:4px;right:8px}
+body.live-mode .quick{display:none}
+.nav button{font-size:10.5px}
+@media (min-width:900px){.quick{max-width:560px;margin-left:auto}}
+tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
+.q{display:inline-block;width:12px;font-size:9px;font-weight:900;color:var(--accent)}
+.bracket{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center}.bracket.single{grid-template-columns:1fr}
+.bk-col{display:grid;gap:8px}.bk{background:var(--s2);border-radius:10px;padding:8px 10px;min-width:0}.bk.tap{cursor:pointer}
+.bk-r{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.bk-t{font-size:13px;font-weight:700;padding:2px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.bk-t.won{color:var(--good)}.bk-t.lost{opacity:.55}
+.bk-x{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.3}
+@media (max-width:520px){.bracket{grid-template-columns:1fr}}
+
+.top .cont{display:none!important}
+.quick.four{grid-template-columns:repeat(3,1fr) 1.25fr}
+.quick .qcont{background:var(--accent);color:#111;border-color:var(--accent)}.quick .qcont svg{display:none}
+@media (max-width:420px){.quick.four button svg{display:none}.quick button{font-size:13.5px}}
+.home-acts{align-self:start}.grid > .grid{align-content:start}
+.top .gear{margin-left:auto}
 </style>
 </head>
 <body>
@@ -319,10 +347,12 @@ button{touch-action:manipulation}
 </section>
 <div id="app" class="hidden">
   <header class="top">
-    <div class="ell"><div class="brand">Legacy <span>Cricket</span></div><div class="date" id="dateChip"></div></div>
+    <div class="ell brandblock"><div class="studio">H³O Interactive</div><div class="brand">Legacy Cricket</div><div class="date" id="dateChip"></div></div>
     <button class="btn pri cont" id="topContinue" onclick="continueGame()">Continue</button>
-    <button class="btn icon" title="Menu" onclick="openMenu()">☰</button>
+    <button class="btn icon gear" title="Settings" aria-label="Settings" onclick="openMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    <button class="btn ghost exitbtn" onclick="confirmSheet('Exit','Save and return to the start screen?','Save and exit','returnToLaunch()')">Exit</button>
   </header>
+  <div class="quick" id="quick"></div>
   <nav class="nav" id="nav"></nav>
   <main class="main" id="main"></main>
 </div>
@@ -354,7 +384,7 @@ button{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.7', title: 'International Priority & Form Charts', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.7.8', title: 'Legacy Layout, World Cup & Finals', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2362,8 +2392,40 @@ function updateWorldCup() {
     w.champion = fin.result.winner;
     game.worldHistory = game.worldHistory || [];
     game.worldHistory.unshift({ year: game.year, event: 'T20 World Cup', winner: teamNat(w.champion), runnerUp: teamNat(w.champion === fin.home ? fin.away : fin.home) });
+    archiveWorldCup(w);
     addNews('World', `${teamDef(w.champion).name} win the T20 World Cup`, fin.result.text + '.');
   }
+}
+// Tournament stats: runs and wickets for every player across the World Cup.
+function trackWorldCupStats(M) {
+  const w = game.season.windows.find(x => x.wc); if (!w) return;
+  const st = w.stats = w.stats || { bat: {}, bowl: {} };
+  M.innings.forEach(inn => {
+    inn.card.forEach(c => { if (!c.in) return; const b = st.bat[c.id] || (st.bat[c.id] = [0, 0, 0, 0]); b[0] += c.r; b[1]++; if (c.r > b[2]) b[2] = c.r; if (!c.out) b[3]++; });
+    Object.keys(inn.bw).forEach(id => { const f = inn.bw[id]; if (!f.balls) return; const b = st.bowl[id] || (st.bowl[id] = [0, 0, 0]); b[0] += f.w; b[1] += f.r; b[2] += f.balls; });
+  });
+}
+function wcLeaders(w, n) {
+  const st = w.stats || { bat: {}, bowl: {} };
+  const bat = Object.keys(st.bat).map(id => ({ id, r: st.bat[id][0], inn: st.bat[id][1], hs: st.bat[id][2], no: st.bat[id][3] })).sort((a, b) => b.r - a.r).slice(0, n || 5);
+  const bowl = Object.keys(st.bowl).map(id => ({ id, w: st.bowl[id][0], r: st.bowl[id][1], balls: st.bowl[id][2] })).sort((a, b) => b.w - a.w || a.r - b.r).slice(0, n || 5);
+  return { bat, bowl };
+}
+// Snapshot of a finished World Cup, kept after the season rolls over.
+function archiveWorldCup(w) {
+  const fx = game.season.fixtures.filter(f => f.comp === 'WC');
+  const name = id => teamDef(id) ? teamDef(id).name : id;
+  const L = wcLeaders(w, 5);
+  const entry = {
+    year: game.year, label: game.season.label, champion: w.champion,
+    groups: { A: wcTable(w, 'A').map(r => Object.assign({}, r)), B: wcTable(w, 'B').map(r => Object.assign({}, r)) },
+    ko: fx.filter(f => f.stage !== 'wcgroup').map(f => ({ round: f.round, home: f.home, away: f.away, text: f.result ? f.result.text : '', winner: f.result ? f.result.winner : null, id: f.id })),
+    aus: fx.filter(f => f.home === 'AUS' || f.away === 'AUS').map(f => ({ round: f.round, opp: f.home === 'AUS' ? f.away : f.home, text: f.result ? f.result.text : '', won: f.result && f.result.winner === 'AUS', id: f.id })),
+    bat: L.bat.map(x => Object.assign({ name: pname(P(x.id)), team: P(x.id) ? (P(x.id).teamId || '').replace('X_', '') || P(x.id).nat : '' }, x)),
+    bowl: L.bowl.map(x => Object.assign({ name: pname(P(x.id)), team: P(x.id) ? (P(x.id).teamId || '').replace('X_', '') || P(x.id).nat : '' }, x)),
+    ausFinish: wcAusFinish(w)
+  };
+  game.wcArchive = [entry].concat((game.wcArchive || []).filter(e => e.year !== game.year)).slice(0, 10);
 }
 function wcAusFinish(w) {
   const fx = game.season.fixtures.filter(f => f.comp === 'WC');
@@ -2882,7 +2944,7 @@ function applyIntlMatch(M) {
   if (/^wc(semi|final)/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
   if (M.home === 'AUS' || M.away === 'AUS' || /^wc(semi|final)/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
   if (!fx.result.noResult) rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5);
-  if (M.comp === 'WC') updateWorldCup();
+  if (M.comp === 'WC') { trackWorldCupStats(M); updateWorldCup(); }
   const potm = M.potm ? P(M.potm) : null;
   if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
 }
@@ -2975,6 +3037,23 @@ function applyMatch(M) {
   updateFinals(M.comp);
 }
 
+// How a team's competition actually ended: Champions, Runners-up, Semi-finalist or null (league only).
+function isFinalFx(f) { return !!f && ['semi1', 'semi2', 'final'].includes(f.stage); }
+function compOutcome(comp, team) {
+  const fxs = game.season.fixtures.filter(f => f.comp === comp && isFinalFx(f) && (f.home === team || f.away === team));
+  const fin = fxs.find(f => f.stage === 'final');
+  if (game.season.champions[comp] === team) return 'Champions';
+  if (fin && fin.result) return 'Runners-up';
+  if (fin) return 'In the final';
+  if (fxs.some(f => f.result)) return 'Semi-finalist';
+  if (fxs.length) return 'In the semi-finals';
+  return null;
+}
+// A readable line for the season review: "Champions · 4th after the league", "Runners-up · 2nd", "4th".
+function outcomeLine(comp, team) {
+  const pos = ordinal(ladderPos(comp, team)), o = compOutcome(comp, team);
+  return o ? `${o} · ${pos} after the league` : pos;
+}
 function updateFinals(comp) {
   const fxs = game.season.fixtures.filter(f => f.comp === comp);
   if (fxs.some(f => f.stage === 'league' && !f.result)) return;
@@ -3073,7 +3152,9 @@ function myTeamOf(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
 // 'ask' the GM chooses on match day. Whichever match he runs, the other is run by the staff.
 function clashMode() { const m = game.clashMode; return m === 'domestic' || m === 'ask' ? m : 'intl'; }
 // International-first: a state match that overlaps one of Australia's is handed to the staff.
-function yieldsToIntl(fx) { return clashMode() === 'intl' && fx && fx.stage !== 'intl' && clashesWith(fx).some(f => f.stage === 'intl'); }
+function yieldsToIntl(fx) { return clashMode() === 'intl' && fx && fx.stage !== 'intl' && !isFinalFx(fx) && clashesWith(fx).some(f => f.stage === 'intl'); }
+// Finals always ask: a domestic semi-final or final involved in a clash is never handed over silently.
+function askClash(fx) { const cl = clashesWith(fx); return cl.length > 0 && (clashMode() === 'ask' || isFinalFx(fx) || cl.some(isFinalFx)); }
 function isClash(fx) {
   const b = game.busy;
   if (!b || !fx) return false;
@@ -3441,8 +3522,8 @@ function endSeason() {
   settleSeasonFinances();
   const awards = computeAwards();
   const board = evaluateBoard();
-  const finish = {}; COMP_ORDER.forEach(c => finish[c] = ladderPos(c, U()));
-  game.history.unshift({ year: game.year, label: game.season.label, champions: Object.assign({}, game.season.champions), awards, team: U(), finish, record: [game.season.userWins, game.season.userLosses] });
+  const finish = {}, outcome = {}; COMP_ORDER.forEach(c => { finish[c] = ladderPos(c, U()); outcome[c] = compOutcome(c, U()); });
+  game.history.unshift({ year: game.year, label: game.season.label, champions: Object.assign({}, game.season.champions), awards, team: U(), finish, outcome, record: [game.season.userWins, game.season.userLosses] });
   game.gm.seasons++;
   Object.values(game.players).forEach(p => {
     if (p.retired) return;
@@ -3844,21 +3925,46 @@ const ICONS = {
   squad:'<circle cx="9" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M14 20c0-2.6 1.5-4.6 4-4.6s3 1.8 3 4.6"/>',
   fixtures:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   league:'<path d="M8 21h8M12 17v4M6 4h12v4a6 6 0 0 1-12 0zM6 6H3v1a3 3 0 0 0 3 3M18 6h3v1a3 3 0 0 1-3 3"/>',
-  office:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>'
+  office:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
+  club:'<path d="M12 3 4.5 6v5.5c0 4.5 3.2 8.2 7.5 9.5 4.3-1.3 7.5-5 7.5-9.5V6z"/>',
+  intl:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.9 5.6 3.9 9s-1.3 6.4-3.9 9c-2.6-2.6-3.9-5.6-3.9-9S9.4 5.6 12 3z"/>',
+  legacy:'<path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11M9 4v6l2-1.5L13 10V4"/>',
+  news:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+  guide:'<path d="M3 5.5C6 4 9 4 12 6c3-2 6-2 9-.5V19c-3-1.5-6-1.5-9 .5-3-2-6-2-9-.5z"/><path d="M12 6v13.5"/>'
 };
+// Navigation follows Legacy Basketball: a branded top bar, a News · Office · Guide quick row and six
+// bottom tabs. Older routes (fixtures, office tabs that moved, the old Brief tab) are redirected here.
+const NAV_ITEMS = [['home','Home'],['squad','Squad'],['club','Club'],['league','League'],['intl','Intl'],['legacy','Legacy']];
+function normaliseRoute() {
+  if (ui.page === 'fixtures') { ui.page = 'league'; ui.leagueTab = 'fixtures'; }
+  if (ui.page === 'office' && ['staff', 'club'].includes(ui.officeTab)) { ui.page = 'club'; ui.clubTab = ui.officeTab === 'staff' ? 'staff' : 'overview'; ui.officeTab = 'inbox'; }
+  if (ui.page === 'office' && ui.officeTab === 'national') { ui.page = 'intl'; ui.intlTab = 'aus'; ui.officeTab = 'inbox'; }
+  if (ui.page === 'league' && ui.leagueTab === 'world') { ui.page = 'intl'; ui.intlTab = 'world'; ui.leagueTab = 'ladders'; }
+  if (ui.page === 'league' && ui.leagueTab === 'history') { ui.page = 'legacy'; ui.legacyTab = 'honours'; ui.leagueTab = 'ladders'; }
+  if (ui.page === 'squad' && ui.squadTab === 'tactics') { ui.page = 'club'; ui.clubTab = 'philosophy'; ui.squadTab = 'list'; }
+}
+function navIcon(k) { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`; }
 function navHtml() {
-  const items = [['home','Home'],['squad','Squad'],['fixtures','Fixtures'],['league','League'],['office','Office']];
-  const cur = ['matchday','live'].includes(ui.page) ? 'home' : ui.page === 'natsel' ? 'office' : ui.page;
-  return items.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="go('${k}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>${l}${k === 'office' && (game.offers.length + openInbox().length) ? `<span class="badge-n">${game.offers.length + openInbox().length}</span>` : ''}</button>`).join('');
+  const cur = ['matchday','live'].includes(ui.page) ? 'home' : ui.page === 'natsel' ? 'intl' : ui.page === 'office' ? '' : ui.page;
+  return NAV_ITEMS.map(([k, l]) => `<button class="${cur === k ? 'on' : ''}" onclick="go('${k}')">${navIcon(k)}${l}</button>`).join('');
+}
+// On pages other than Home, the quick row carries the Continue button (Home has its own action row).
+function quickHtml() {
+  const n = game.offers.length + openInbox().length;
+  const cont = ui.page !== 'home' && ui.page !== 'live' ? `<button class="qcont" onclick="continueGame()">${game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸'}</button>` : '';
+  $('quick').classList.toggle('four', !!cont);
+  return `<button onclick="newsSheet()">${navIcon('news')}News</button><button class="${ui.page === 'office' ? 'on' : ''}" onclick="go('office')">${navIcon('office')}Office${n ? `<span class="badge-n">${n}</span>` : ''}</button><button onclick="showHelp()">${navIcon('guide')}Guide</button>${cont}`;
 }
 function render() {
   if (!game) return;
-  const pages = { home: renderHome, squad: renderSquad, fixtures: renderFixtures, league: renderLeague, office: renderOffice, matchday: renderMatchday, live: renderLive, natsel: renderNatSel };
+  normaliseRoute();
+  const pages = { home: renderHome, squad: renderSquad, club: renderClubPage, league: renderLeague, intl: renderIntl, legacy: renderLegacy, office: renderOffice, matchday: renderMatchday, live: renderLive, natsel: renderNatSel };
   if (ui.page === 'live' && !game.live) ui.page = 'home';
   if (ui.page === 'matchday' && !(game.pendingFx && fixtureById(game.pendingFx) && !fixtureById(game.pendingFx).result)) ui.page = 'home';
   document.body.classList.toggle('live-mode', ui.page === 'live');
   $('main').innerHTML = (pages[ui.page] || renderHome)();
   $('nav').innerHTML = navHtml();
+  $('quick').innerHTML = quickHtml();
   $('dateChip').textContent = game.phase === 'season' ? `${dateStr(game.day)} · ${game.season.label}` : `${game.season.label} off-season`;
   const tc = $('topContinue');
   tc.classList.toggle('hidden', ui.page === 'home');
@@ -3977,6 +4083,8 @@ function renderHome() {
   if (outs.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.squadTab='room';go('squad')">${outs.length} trade request${outs.length > 1 ? 's' : ''} ▸</span>`);
   const selw = game.nation.gm && game.season.windows.find(w => w.selecting);
   if (selw) alerts.push(`<span class="chip warn btn-chip" onclick="go('natsel')">Pick the Australia squad ▸</span>`);
+  const myFinal = game.season.fixtures.find(f => isFinalFx(f) && !f.result && (f.home === U() || f.away === U()));
+  if (myFinal) alerts.push(`<span class="chip warn btn-chip" onclick="ui.leagueTab='ladders';ui.ladComp='${myFinal.comp}';go('league')">Finals: ${COMPS[myFinal.comp].short} ${myFinal.round.toLowerCase()} v ${teamDef(myFinal.home === U() ? myFinal.away : myFinal.home).nick} · ${dateStr(myFinal.day)} ▸</span>`);
   const vacant = STAFF_ORDER.filter(r => !staffIn(U(), r));
   if (vacant.length) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='staff';go('office')">${vacant.length} staff vacanc${vacant.length > 1 ? 'ies' : 'y'} ▸</span>`);
   if (sq.length < SQUAD_MIN) alerts.push(`<span class="chip bad btn-chip" onclick="ui.officeTab='fa';go('office')">Squad short: ${sq.length}/${SQUAD_MIN} ▸</span>`);
@@ -3989,7 +4097,7 @@ function renderHome() {
     <div class="grid g2">
       <div class="grid">${panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
       <div class="grid">
-        ${homeExtras()}
+        ${wcHomeCard()}${homeExtras()}
         ${panel('News', `<div class="rows">${game.news.slice(0, 4).map(newsRow).join('') || '<div class="empty">No news yet.</div>'}</div>`, { flush: true, end: `<button class="link" onclick="newsSheet()">All news ▸</button>` })}
         ${panel('Board objectives', `<div class="rows">${game.board.objectives.map(o => `<div class="kv"><span>${o.text}</span><span>${objectiveStatus(o) ? '<span class="win">On track</span>' : '<span class="dim">Not yet</span>'}</span></div>`).join('')}</div>`, { flush: true })}
       </div>
@@ -4012,7 +4120,7 @@ function playerListSheet(title, kind) {
 function ladderTable(comp, compact) {
   const fc = COMPS[comp].fmt === 'FC';
   return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th>${fc ? '<th>D</th>' : compact ? '' : '<th>NR</th>'}<th>Pts</th><th>${fc ? 'Quot' : 'NRR'}</th></tr></thead><tbody>
-    ${sortedLadder(comp).map((r, i) => `<tr class="tap ${r.id === U() ? 'me' : ''}" onclick="showTeam('${r.id}')"><td><span class="dim" style="display:inline-block;width:14px">${i + 1}</span>${tdot(r.id)}<span class="hide-m"> ${teamDef(r.id).nick}</span></td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td>${fc ? `<td>${r.D}</td>` : compact ? '' : `<td>${r.NR || 0}</td>`}<td class="b">${r.Pts}</td><td class="dim">${fc ? quotient(r).toFixed(2) : (nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>
+    ${sortedLadder(comp).map((r, i) => `<tr class="tap ${r.id === U() ? 'me' : ''} ${i === (comp === 'T20C' ? 3 : 1) ? 'cut' : ''}" onclick="showTeam('${r.id}')"><td><span class="dim" style="display:inline-block;width:14px">${i + 1}</span>${tdot(r.id)}<span class="hide-m"> ${teamDef(r.id).nick}</span></td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td>${fc ? `<td>${r.D}</td>` : compact ? '' : `<td>${r.NR || 0}</td>`}<td class="b">${r.Pts}</td><td class="dim">${fc ? quotient(r).toFixed(2) : (nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>
     ${game.season.champions[comp] ? `<div class="kv"><span>Champions</span><span>${tdot(game.season.champions[comp])} ${teamName(game.season.champions[comp])}</span></div>` : ''}`;
 }
 
@@ -4043,7 +4151,7 @@ function renderOffseason() {
     const aw = (label, x, unit) => `<div class="kv"><span>${label}</span><span>${x ? `${plink(P(x.id), x.name)} <span class="dim">${tdot(x.team)}${unit ? ' · ' + x.v + ' ' + unit : ''}</span>` : '–'}</span></div>`;
     body = `<div class="grid g2">
       ${panel('Champions', `<div class="rows">${COMP_ORDER.map(c => `<div class="kv"><span>${COMPS[c].name}</span><span>${game.season.champions[c] ? tdot(game.season.champions[c]) + ' ' + teamDef(game.season.champions[c]).nick : '–'}</span></div>`).join('')}
-        ${COMP_ORDER.map(c => `<div class="kv"><span>Your ${COMPS[c].short} finish</span><span>${ordinal(ladderPos(c, U()))}</span></div>`).join('')}<div class="kv"><span>Season record</span><span>${game.season.userWins}W ${game.season.userLosses}L</span></div></div>`, { flush: true })}
+        ${COMP_ORDER.map(c => `<div class="kv"><span>Your ${COMPS[c].short} finish</span><span class="${compOutcome(c, U()) === 'Champions' ? 'win b' : ''}">${outcomeLine(c, U())}</span></div>`).join('')}<div class="kv"><span>Season record</span><span>${game.season.userWins}W ${game.season.userLosses}L</span></div></div>`, { flush: true })}
       ${panel('Board review', `<div class="rows">${b.lines.map(l => `<div class="kv"><span>${l.text}</span><span class="${l.ok ? 'win' : 'loss'}">${l.ok ? 'Met' : 'Missed'}</span></div>`).join('')}
         <div class="kv"><span>Confidence</span><span class="b">${b.confidence} (${b.delta >= 0 ? '+' : ''}${b.delta})</span></div></div>
         ${game.gm.fired ? `<div class="pb"><div class="note bad">The board has terminated your contract. Choose your next job.</div><div class="flex wrap" style="margin-top:8px">${o.jobOffers.map(t => `<button class="btn pri sm" onclick="acceptJob('${t}');autosave();render()">Take the ${teamName(t)} job</button>`).join('')}</div></div>` : ''}`, { flush: true })}
@@ -4087,7 +4195,7 @@ function setSquadTab(t) { ui.squadTab = t; render(); }
 function renderSquad() {
   const t = ui.squadTab;
   const body = t === 'xi' ? renderXIEditor() : t === 'tactics' ? renderTactics() : t === 'contracts' ? renderContracts() : (t === 'training' || t === 'dev') ? renderDevelopment() : t === 'room' ? renderDressingRoom() : renderSquadList();
-  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','Selection'],['tactics','Brief'],['dev','Development'],['room','Dressing room'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
+  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','Selection'],['dev','Development'],['room','Dressing room'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
 }
 const GROUP_OPTS = [['ALL','All roles'],['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
 function sortPlayers(arr, key, fmt) {
@@ -4218,7 +4326,8 @@ function renderTraining() {
 }
 
 // §20 FIXTURES + SCORECARDS ---------------------------------------------------------
-function renderFixtures() {
+function renderFixtures() { return `${pageTitle('Fixtures', game.season.label)}${renderFixturesBody()}`; }
+function renderFixturesBody() {
   let fx = game.season.fixtures;
   if (ui.fxMine) fx = fx.filter(f => isUserTeam(f.home) || isUserTeam(f.away) || (!f.home && f.stage !== 'league'));
   if (ui.fxComp !== 'ALL') fx = fx.filter(f => f.comp === ui.fxComp);
@@ -4226,7 +4335,7 @@ function renderFixtures() {
   const next = fx.findIndex(f => !f.result);
   let lastM = '';
   const rows = fx.map((f, i) => { const m = dateOf(f.day).toLocaleDateString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' }); const h = m !== lastM ? `<div class="mhead">${m}</div>` : ''; lastM = m; return h + fixtureRow(f, i === next); }).join('');
-  return `${pageTitle('Fixtures', game.season.label)}${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${rows || '<div class="empty">No fixtures.</div>'}</div>`, { flush: true })}`;
+  return `${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${rows || '<div class="empty">No fixtures.</div>'}</div>`, { flush: true })}`;
 }
 function setFxMine(v) { ui.fxMine = v === '1'; render(); }
 function displayInternationalSummary(s) { return String(s || '').replace(/\bX_([A-Z]{2,3})\b/g, (all, nat) => NATIONS[nat] || all); }
@@ -4292,15 +4401,24 @@ function scInn(k) { showScorecard(_scFx, k); }
 function setLeagueTab(t) { ui.leagueTab = t; render(); }
 function renderLeague() {
   const t = ui.leagueTab;
-  const body = t === 'leaders' ? renderLeaders() : t === 'history' ? renderHistory() : t === 'players' ? renderPlayerSearch() : t === 'world' ? renderWorld() : t === 'records' ? renderRecords() : renderLadders();
-  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['leaders','Leaders'],['records','Records'],['world','World'],['history','Honours'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'leaders' ? renderLeaders() : t === 'fixtures' ? renderFixturesBody() : t === 'players' ? renderPlayerSearch() : t === 'records' ? renderRecords() : renderLadders();
+  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['fixtures','Fixtures'],['leaders','Leaders'],['records','Records'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
 }
 function setLadComp(c) { ui.ladComp = c; render(); }
 function renderLadders() {
   const c = ui.ladComp;
   return `${seg(COMP_ORDER.map(x => [x, COMPS[x].short]), c, 'setLadComp')}<div style="height:8px"></div>
     ${panel(COMPS[c].name, ladderTable(c, false), { flush: true, end: `<span class="xs dim">Win ${COMPS[c].win}${COMPS[c].fmt === 'FC' ? ' · draw ' + COMPS[c].draw : ''} · ${c === 'T20C' ? 'top 4 to semis' : 'top 2 to final'}</span>` })}
-    <div style="height:8px"></div>${panel('Finals', `<div class="rows">${game.season.fixtures.filter(f => f.comp === c && f.stage !== 'league').map(f => fixtureRow(f, false)).join('')}</div>`, { flush: true })}`;
+    <div style="height:8px"></div>${panel('Finals', finalsBracket(c), { end: `<span class="xs dim">${c === 'T20C' ? '1st v 4th · 2nd v 3rd' : '1st hosts 2nd'}</span>` })}`;
+}
+function finalsBracket(c) {
+  const fx = game.season.fixtures.filter(f => f.comp === c && isFinalFx(f));
+  const get = s => fx.find(f => f.stage === s) || {};
+  const lad = sortedLadder(c).map(r => r.id), proj = i => lad[i];
+  const box = (f, label) => bracketBox(`${label}${f.day ? ' · ' + dateStr(f.day) : ''}`, f.home || null, f.away || null, f.result, f.id);
+  const note = fx.some(f => f.home) ? '' : `<div class="xs dim" style="margin-bottom:6px">Set when the league stage ends. If it ended today: ${c === 'T20C' ? `${tdot(proj(0))} v ${tdot(proj(3))} and ${tdot(proj(1))} v ${tdot(proj(2))}` : `${tdot(proj(0))} v ${tdot(proj(1))}`}.</div>`;
+  if (c === 'T20C') return `${note}<div class="bracket"><div class="bk-col">${box(get('semi1'), 'Semi-final 1')}${box(get('semi2'), 'Semi-final 2')}</div><div class="bk-col fin">${box(get('final'), 'Final')}</div></div>`;
+  return `${note}<div class="bracket single">${box(get('final'), 'Final')}</div>`;
 }
 const LEAD_STATS = {
   runs:  { label:'Most runs',      f: s => s.r,            show: s => `${s.r} <span class="dim xs">@ ${fmtNum(batAvgOf(s))}</span>` },
@@ -4345,9 +4463,40 @@ function playerSearchRows() {
 function setOfficeTab(t) { ui.officeTab = t; render(); }
 function renderOffice() {
   const t = ui.officeTab;
-  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'national' ? renderNational() : t === 'log' ? renderLog() : t === 'staff' ? renderStaff() : t === 'club' ? renderClub() : t === 'inbox' ? renderInbox() : renderBoard();
+  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'log' ? renderLog() : t === 'inbox' ? renderInbox() : renderBoard();
   const open = openInbox().length;
-  return `${pageTitle('Office', teamName(U()))}${seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['club','Club'],['staff','Staff'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['national','Australia'],['log','Log']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
+  return `${pageTitle('Office', `GM's desk · ${teamName(U())}`)}${seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['log','Log']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
+}
+// ---- Club, Intl and Legacy pages ----
+function renderClubPage() {
+  const t = ui.clubTab || 'overview';
+  const body = t === 'staff' ? renderStaff() : t === 'philosophy' ? renderTactics() : renderClub();
+  return `${pageTitle('Club', teamName(U()))}${seg([['overview','Club & finances'],['staff','Staff'],['philosophy','Philosophy']], t, '(v=>{ui.clubTab=v;render();})')}<div style="height:10px"></div>${body}`;
+}
+function renderIntl() {
+  const t = ui.intlTab || 'aus';
+  const body = t === 'wc' ? renderWorldCup() : t === 'world' ? renderWorld() : renderNational();
+  return `${pageTitle('International', 'Australia and world cricket')}${seg([['aus','Australia'],['wc','World Cup'],['world','World']], t, '(v=>{ui.intlTab=v;render();})')}<div style="height:10px"></div>${body}`;
+}
+function renderLegacy() {
+  const t = ui.legacyTab || 'career';
+  const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : renderGMCareer();
+  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honour roll']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
+}
+function renderGMCareer() {
+  const g = game.gm, N = game.nation, pct = g.wins + g.losses ? Math.round(g.wins / (g.wins + g.losses) * 100) : 0;
+  const kpis = `<div class="kpis"><div class="kpi"><div class="v">${g.seasons}</div><div class="l">Seasons</div></div><div class="kpi"><div class="v">${g.wins}-${g.losses}</div><div class="l">W-L</div></div><div class="kpi"><div class="v">${pct}%</div><div class="l">Win rate</div></div><div class="kpi"><div class="v">${g.titles.length}</div><div class="l">Trophies</div></div><div class="kpi"><div class="v">${g.rep}</div><div class="l">Reputation</div></div></div>`;
+  const jobs = (g.jobs || []).map(j => `<div class="kv"><span>${tdot(j.teamId)} ${teamName(j.teamId)}</span><span class="dim">from ${j.from}</span></div>`).join('');
+  return `${kpis}<div style="height:8px"></div><div class="grid g2">
+    ${panel('Trophy cabinet', `<div class="rows">${g.titles.map(t => `<div class="kv"><span>${COMPS[t.comp].name}</span><span>${t.year}–${String(t.year + 1).slice(2)}</span></div>`).join('') || '<div class="empty">Empty for now.</div>'}</div>`, { flush: true })}
+    ${panel('Clubs', `<div class="rows">${jobs || '<div class="empty">—</div>'}<div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div></div>`, { flush: true })}
+    ${panel('Australia', `<div class="rows"><div class="kv"><span>National selector</span><span>${N.gm ? '<span class="win">Yes</span>' : 'No'}</span></div>${(N.history || []).slice(0, 8).map(h => `<div class="kv"><span>${h.year} ${esc(h.label)} v ${NATIONS[h.opp] || h.opp}</span><span>${h.finish ? esc(h.finish) : `${h.wins}-${h.losses}${h.draws ? '-' + h.draws : ''}`}</span></div>`).join('') || '<div class="empty">No series yet.</div>'}</div>`, { flush: true })}</div>`;
+}
+function renderGMSeasons() {
+  const h = game.history;
+  if (!h.length) return '<div class="empty">Complete a season to start your history.</div>';
+  return panel('Season by season', `<div class="rows">${h.map(s => `<div class="row"><div class="stack"><div class="main-t">${s.label} · ${tdot(s.team)} ${teamDef(s.team).nick}${s.record ? ` <span class="dim xs">${s.record[0]}W ${s.record[1]}L</span>` : ''}</div>
+    <div class="sub-t" style="white-space:normal">${COMP_ORDER.map(c => { const o = s.outcome && s.outcome[c]; return `${COMPS[c].short}: <span class="${o === 'Champions' ? 'win b' : ''}">${o ? o + ' (' + ordinal(s.finish[c]) + ')' : ordinal(s.finish[c])}</span>`; }).join(' · ')}</div></div></div>`).join('')}</div>`, { flush: true });
 }
 function renderBoard() {
   const c = game.board.confidence;
@@ -4499,7 +4648,7 @@ function renderMatchday() {
       <table class="tbl clean" style="margin-top:6px"><tbody>
         ${(() => { const cl = clashesWith(fx); if (!cl.length) return '';
           const names = cl.map(f => `${esc(teamDef(myTeamOf(f)).nick)} v ${esc(teamDef(myTeamOf(f) === f.home ? f.away : f.home).nick)} (${COMPS[f.comp].short}, ${dateStr(f.day)})`).join(', ');
-          if (clashMode() === 'ask') return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${names} falls during this match. Run this one and your staff take the other, or hand this match to your staff.<div style="margin-top:6px"><button class="btn sm" onclick="handToStaff('${fx.id}')">Let staff run this match</button></div></td></tr>`;
+          if (askClash(fx)) return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${isFinalFx(fx) || cl.some(isFinalFx) ? '<b>A final is involved.</b> ' : ''}${names} falls during this match. Run this one and your staff take the other, or hand this match to your staff.<div style="margin-top:6px"><button class="btn sm" onclick="handToStaff('${fx.id}')">Let staff run this match</button></div></td></tr>`;
           return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${names} will be run by your staff while you are at this match.</td></tr>`; })()}
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
@@ -4977,6 +5126,67 @@ function talkSheet(id) {
 function doTalk(id, kind) { const r = talkToPlayer(id, kind); closeModal(); flash(r.text); autosave(); render(); }
 
 function setWorldNat(n) { ui.worldNat = n; render(); }
+// ---- World Cup hub ----
+function wcName(id) { return teamDef(id) ? teamDef(id).name : 'TBC'; }
+function wcGroupTable(rows, w) {
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.t === 'AUS' ? 'me' : ''} ${i === 1 ? 'cut' : ''}"><td>${i < 2 ? '<span class="q">Q</span>' : '<span class="q"></span>'}${tdot(r.t)} ${wcName(r.t)}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function bracketBox(round, home, away, res, fxId) {
+  const win = res && res.winner;
+  const side = t => `<div class="bk-t ${win && win === t ? 'won' : win && t ? 'lost' : ''}">${t ? `${tdot(t)} ${wcName(t)}` : '<span class="dim">TBC</span>'}</div>`;
+  return `<div class="bk ${fxId && game.scorecards[fxId] ? 'tap' : ''}" ${fxId && game.scorecards[fxId] ? `onclick="showScorecard('${fxId}',0)"` : ''}><div class="bk-r">${esc(round)}</div>${side(home)}${side(away)}${res ? `<div class="bk-x">${esc(displayInternationalSummary(res.text || ''))}</div>` : ''}</div>`;
+}
+function renderWorldCup() {
+  const w = game.season.windows.find(x => x.wc && x.groups);
+  const arch = game.wcArchive || [];
+  if (!w) {
+    const nextYear = game.year % 2 === 1 ? game.year + 2 : game.year + 1;
+    const last = arch[0];
+    return `${last ? renderWCArchive(last) : `<div class="note">The T20 World Cup is held in odd-year seasons. The next one is in ${nextYear}–${String(nextYear + 1).slice(2)}.</div>`}
+      ${pastWinners()}`;
+  }
+  const fx = game.season.fixtures.filter(f => f.comp === 'WC');
+  const ko = s => fx.find(f => f.stage === s) || {};
+  const s1 = ko('wcsemi1'), s2 = ko('wcsemi2'), fin = ko('wcfinal');
+  const aus = fx.filter(f => f.home === 'AUS' || f.away === 'AUS');
+  const L = wcLeaders(w, 5);
+  const stage = fin.result ? `Champions: ${wcName(w.champion)}` : fin.home ? 'Final' : s1.home ? 'Semi-finals' : 'Group stage';
+  return `<div class="note">T20 World Cup ${game.season.label} · <b>${stage}</b>. The top two in each group reach the semi-finals.</div><div style="height:8px"></div>
+    <div class="grid g2">${panel('Group A', wcGroupTable(wcTable(w, 'A'), w), { flush: true })}${panel('Group B', wcGroupTable(wcTable(w, 'B'), w), { flush: true })}</div><div style="height:8px"></div>
+    ${panel('Knockouts', `<div class="bracket"><div class="bk-col">${bracketBox('Semi-final 1 · A1 v B2', s1.home, s1.away, s1.result, s1.id)}${bracketBox('Semi-final 2 · B1 v A2', s2.home, s2.away, s2.result, s2.id)}</div><div class="bk-col fin">${bracketBox('Final', fin.home, fin.away, fin.result, fin.id)}</div></div>`)}
+    <div style="height:8px"></div><div class="grid g2">
+    ${panel("Australia's path", `<div class="rows">${aus.map(f => fixtureRow(f, false)).join('') || '<div class="empty">Australia are not in this tournament.</div>'}</div>`, { flush: true })}
+    ${panel('Tournament leaders', wcLeaderRows(L.bat.map(x => ({ id: x.id, v: `${x.r} runs`, sub: `${x.inn} inns · HS ${x.hs}` })), L.bowl.map(x => ({ id: x.id, v: `${x.w} wkts`, sub: `${oversStr(x.balls)} ov · ${x.r} runs` }))), { flush: true })}</div>
+    <div style="height:8px"></div>${panel('All World Cup results', `<div class="rows">${fx.filter(f => f.result).slice().reverse().map(f => fixtureRow(f, false)).join('') || '<div class="empty">No results yet.</div>'}</div>`, { flush: true })}
+    ${pastWinners()}`;
+}
+function wcLeaderRows(bat, bowl) {
+  const row = x => { const p = P(x.id); return p ? `<div class="kv tap" onclick="showPlayer('${x.id}')"><span>${esc(pshort(p))} <span class="xs dim">${p.teamId && p.teamId.startsWith('X_') ? p.teamId.slice(2) : 'AUS'}</span></span><span><b>${x.v}</b> <span class="xs dim">${x.sub}</span></span></div>` : ''; };
+  return `<div class="lbl" style="padding:10px 14px 2px">Most runs</div><div class="rows">${bat.map(row).join('') || '<div class="empty">—</div>'}</div><div class="lbl" style="padding:10px 14px 2px">Most wickets</div><div class="rows">${bowl.map(row).join('') || '<div class="empty">—</div>'}</div>`;
+}
+function renderWCArchive(e) {
+  const box = k => bracketBox(k.round, k.home, k.away, k.winner || k.text ? { winner: k.winner, text: k.text } : null, k.id);
+  const semis = e.ko.filter(k => /Semi/.test(k.round)), fin = e.ko.find(k => k.round === 'Final');
+  const lead = (arr, f) => arr.map(x => `<div class="kv"><span>${esc(x.name)} <span class="xs dim">${esc(x.team || '')}</span></span><span class="b">${f(x)}</span></div>`).join('') || '<div class="empty">—</div>';
+  return `<div class="note">Last tournament: T20 World Cup ${e.label}. Champions <b>${wcName(e.champion)}</b>. Australia: ${esc(e.ausFinish)}.</div><div style="height:8px"></div>
+    <div class="grid g2">${panel('Group A · final table', wcGroupTable(e.groups.A), { flush: true })}${panel('Group B · final table', wcGroupTable(e.groups.B), { flush: true })}</div><div style="height:8px"></div>
+    ${panel('Knockouts', `<div class="bracket"><div class="bk-col">${semis.map(box).join('')}</div><div class="bk-col fin">${fin ? box(fin) : ''}</div></div>`)}<div style="height:8px"></div>
+    <div class="grid g2">${panel("Australia's path", `<div class="rows">${e.aus.map(a => `<div class="kv ${game.scorecards[a.id] ? 'tap' : ''}" ${game.scorecards[a.id] ? `onclick="showScorecard('${a.id}',0)"` : ''}><span>${esc(a.round)} v ${wcName(a.opp)}</span><span class="${a.won ? 'win' : a.text ? 'loss' : 'dim'}">${esc(displayInternationalSummary(a.text) || '—')}</span></div>`).join('') || '<div class="empty">Australia did not take part.</div>'}</div>`, { flush: true })}
+    ${panel('Tournament leaders', `<div class="lbl" style="padding:10px 14px 2px">Most runs</div><div class="rows">${lead(e.bat, x => x.r + ' runs')}</div><div class="lbl" style="padding:10px 14px 2px">Most wickets</div><div class="rows">${lead(e.bowl, x => x.w + ' wkts')}</div>`, { flush: true })}</div>`;
+}
+function pastWinners() {
+  const h = (game.worldHistory || []).filter(x => x.event === 'T20 World Cup');
+  return `<div style="height:8px"></div>${panel('Past winners', `<div class="rows">${h.map(x => `<div class="kv"><span>${x.year}–${String(x.year + 1).slice(2)}</span><span><b>${NATIONS[x.winner]}</b> <span class="dim">beat ${NATIONS[x.runnerUp]}</span></span></div>`).join('') || '<div class="empty">No World Cups played yet in this career.</div>'}</div>`, { flush: true })}`;
+}
+// Home card while a World Cup is on.
+function wcHomeCard() {
+  const w = game.season.windows.find(x => x.wc && x.groups);
+  if (!w || w.champion && game.day > w.end) return '';
+  const g = w.groups.A.includes('AUS') ? 'A' : w.groups.B.includes('AUS') ? 'B' : null;
+  const pos = g ? wcTable(w, g).findIndex(r => r.t === 'AUS') + 1 : 0;
+  const nxt = game.season.fixtures.filter(f => f.comp === 'WC' && !f.result && (f.home === 'AUS' || f.away === 'AUS'))[0];
+  return panel('T20 World Cup', `<div class="rows"><div class="row tap" onclick="ui.intlTab='wc';go('intl')"><div class="stack"><div class="main-t">${w.champion ? `Champions: ${wcName(w.champion)}` : g ? `Australia ${ordinal(pos)} in Group ${g}` : 'Tournament under way'}</div><div class="sub-t">${nxt ? `Next: v ${wcName(nxt.home === 'AUS' ? nxt.away : nxt.home)} · ${esc(nxt.round)} · ${dateStr(nxt.day)}` : 'Tables, bracket and leaders'}</div></div><span class="dim">›</span></div></div>`, { flush: true });
+}
 function renderWorld() {
   const R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]);
   const intl = game.season.fixtures.filter(f => f.result && !f.result.noResult && (f.stage === 'intl' || f.stage === 'world' || f.comp === 'WC')).slice(-14).reverse();
