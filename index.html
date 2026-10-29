@@ -499,6 +499,13 @@ button,select,[onclick]{touch-action:manipulation}
 .home-form-results{display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
 .home-form-results .res{width:25px;height:25px;font-size:11px}
 @media(max-width:370px){.home-form-results{gap:3px}.home-form-results .res{width:23px;height:23px}}
+
+/* Build 009: keep live metrics below current players and recent over. */
+.broadcast-panel .broadcast-metrics{margin-top:13px;border-radius:10px;}
+.broadcast-panel .broadcast-metrics>div{padding:9px 6px;}
+.broadcast-panel .broadcast-recent{min-width:0;}
+.broadcast-panel .broadcast-recent>div{min-width:0;text-align:right;}
+.broadcast-panel .broadcast-context{margin-top:11px;}
 </style>
 </head>
 <body>
@@ -551,7 +558,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 008', title: 'Partnership & Contextual Form', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 009', title: 'Live Card Layout Polish', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5771,7 +5778,8 @@ function broadcastMetrics(M, inn) {
   const rr = target ? Math.max(0, inn.target - inn.runs) * 6 / Math.max(1, mOvers(M) * 6 - inn.balls) : null;
   const partnership = inn.part && Number.isFinite(Number(inn.part.r)) ? Number(inn.part.r) : 0;
   const partnershipBalls = inn.part && Number.isFinite(Number(inn.part.b)) ? Number(inn.part.b) : 0;
-  const items = target ? [['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)], ['Partnership', `${partnership} (${partnershipBalls})`]] : [['Run rate', rate.toFixed(2)], ['Partnership', `${partnership} (${partnershipBalls})`]];
+  const stand = partnershipBalls ? `${partnership} (${partnershipBalls})` : '—';
+  const items = target ? [['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)], ['Partnership', stand]] : [['Run rate', rate.toFixed(2)], ['Partnership', stand]];
   return `<div class="broadcast-metrics">${items.map(([k,v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
 }
 function broadcastCrease(M, inn) {
@@ -5799,7 +5807,7 @@ function renderLive() {
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
-  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastMatchContext(M) + broadcastCrease(M, inn);
+  const broadcast = broadcastScore(M) + broadcastMatchContext(M) + broadcastCrease(M, inn) + broadcastMetrics(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
