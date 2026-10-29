@@ -434,6 +434,10 @@ button,select,[onclick]{touch-action:manipulation}
 .wagon-controls{display:grid;gap:8px}
 .wagon-select-label{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px}
 .wagon-select-label select{flex:1;min-width:0;font-size:16px}
+
+/* v0.9.9 Build 002 — mobile broadcast score and compact match recap */
+.broadcast-panel .pb{padding:13px 14px}.broadcast-head{display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--dim);font-size:10px;font-weight:750;letter-spacing:.05em}.broadcast-live{color:#86efac;letter-spacing:.08em}
+.broadcast-match{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);align-items:center;gap:8px;margin:11px 0 8px}.broadcast-team{min-width:0;display:grid;grid-template-columns:30px 1fr;column-gap:8px;align-items:center}.broadcast-team>.nat-flag,.broadcast-team>.badge{grid-row:span 2;display:grid;place-items:center;width:30px;height:30px;font-size:24px}.broadcast-team .cricket-flag-svg{width:28px;height:auto}.broadcast-name{font-size:12px;color:var(--muted);font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.broadcast-total{font-size:clamp(16px,5vw,23px);font-weight:850;color:var(--text);white-space:nowrap;letter-spacing:-.025em}.broadcast-vs{text-align:center;color:var(--dim);font-size:12px;font-weight:700}.broadcast-chase{color:#86efac;font-size:12px;text-align:center;font-weight:750;padding:6px 0 9px}.broadcast-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin-top:10px}.broadcast-metrics>div{display:flex;flex-direction:column;gap:2px;padding:8px 3px;text-align:center;border-right:1px solid var(--line2)}.broadcast-metrics>div:last-child{border:0}.broadcast-metrics span{font-size:9px;color:var(--dim);font-weight:800;text-transform:uppercase}.broadcast-metrics b{font-size:15px}.broadcast-people{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;padding-top:9px;border-top:1px solid var(--line2)}.broadcast-people>div{min-width:0}.broadcast-label{display:block;font-size:9px;color:var(--dim);font-weight:800;letter-spacing:.07em;margin-bottom:5px}.broadcast-player{display:flex;justify-content:space-between;gap:4px;font-size:12px;padding:4px 0}.broadcast-player>span{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.broadcast-player b{white-space:nowrap}.broadcast-player small{color:var(--muted);font-size:10px;font-weight:400}.broadcast-recent{display:flex;align-items:center;justify-content:space-between;gap:7px;padding-top:9px;margin-top:6px;border-top:1px solid var(--line2)}.broadcast-recent .bs{margin-left:3px}.broadcast-recap .pb{padding:12px}.broadcast-recap-score .broadcast-head{margin-top:9px}.broadcast-situation,.broadcast-next{font-size:12px;color:var(--muted);padding:7px 0}.broadcast-innings{border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin:9px 0}.broadcast-innings-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:var(--s2);font-weight:750}.broadcast-innings-head>span{display:flex;align-items:center;gap:5px;flex:1;min-width:0;font-size:12px}.broadcast-innings-head .nat-flag,.broadcast-innings-head .badge{font-size:17px}.broadcast-innings-head>b{font-size:19px}.broadcast-innings-head>small{font-size:10px;color:var(--muted)}.broadcast-innings-cols{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:9px}.broadcast-innings-cols>div{min-width:0}.broadcast-innings-cols .kv{display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:6px 1px;gap:5px;border-top:1px solid var(--line2)}.broadcast-innings-cols .kv>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.broadcast-innings-cols .kv>span:last-child{white-space:nowrap}.broadcast-innings-cols .kv .xs{font-size:9px}.broadcast-result{font-size:14px;font-weight:850;text-align:center;color:var(--text);padding:11px;background:var(--s2);border-radius:9px;margin:10px 0}.broadcast-result.is-win{color:#86efac}.broadcast-award{font-size:12px;color:var(--muted);padding:4px 0 6px}.broadcast-recap-worm{margin-top:8px}.broadcast-recap .rc-e{margin-bottom:2px}@media(max-width:390px){.broadcast-match{gap:5px}.broadcast-team{grid-template-columns:23px 1fr;gap:5px}.broadcast-team>.nat-flag,.broadcast-team>.badge{width:23px;height:23px;font-size:19px}.broadcast-innings-cols{gap:5px;padding:7px}.broadcast-innings-cols .kv{font-size:10px}.broadcast-recent .bs{min-width:19px}}
 </style>
 </head>
 <body>
@@ -486,7 +490,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 001', title: 'Interface Refinement', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 002', title: 'Live Match Centre & Recaps', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5635,6 +5639,46 @@ function sendGMMessage(key) {
   M.log.unshift({ cls:'sys', text: `GM to the dressing room: ${msg[0]}.` });
   closeModal(); autosave(); render();
 }
+// Build 002: compact broadcast-style match information, derived only from recorded innings.
+function broadcastScore(M, compact) {
+  const innings = M.innings || [], current = curInn(M);
+  const teams = [M.home, M.away];
+  const score = id => {
+    const played = innings.filter(i => i.bat === id);
+    return played.length ? played.map(i => inningsLine(i, M.fmt)).join(' & ') : 'Yet to bat';
+  };
+  const team = id => `<div class="broadcast-team">${NATIONS[id] ? nationTag(id) : badge(id)}<div class="broadcast-name">${esc(teamDef(id).short || id)}</div><div class="broadcast-total">${esc(score(id))}</div></div>`;
+  const target = current && !M.done && M.fmt !== 'FC' && current.target;
+  const remain = target ? Math.max(0, current.target - current.runs) : 0;
+  const ballsLeft = target ? Math.max(0, mOvers(M) * 6 - current.balls) : 0;
+  const chase = target ? `<div class="broadcast-chase">${esc(teamDef(current.bat).short || current.bat)} need ${remain} from ${ballsLeft} balls · RRR ${(ballsLeft ? remain * 6 / ballsLeft : 0).toFixed(2)}</div>` : '';
+  const heading = M.done ? 'FULL TIME' : current && current.closed ? 'INNINGS BREAK' : 'LIVE MATCH';
+  return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
+    <div class="broadcast-match">${team(teams[0])}<span class="broadcast-vs">v</span>${team(teams[1])}</div>${chase}`;
+}
+function broadcastMetrics(M, inn) {
+  if (!inn || M.done || inn.closed) return '';
+  const rate = inn.balls ? inn.runs * 6 / inn.balls : 0;
+  const target = M.fmt !== 'FC' && inn.target;
+  const rr = target ? Math.max(0, inn.target - inn.runs) * 6 / Math.max(1, mOvers(M) * 6 - inn.balls) : null;
+  const items = [['CRR', rate.toFixed(2)], [target ? 'RRR' : 'Wickets', target ? rr.toFixed(2) : inn.wkts], ['Overs', oversStr(inn.balls)], ['Wickets', inn.wkts]];
+  if (M.fmt === 'FC') items[1] = ['Day', fcDay(M)];
+  return `<div class="broadcast-metrics">${items.map(([k,v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
+}
+function broadcastCrease(M, inn) {
+  if (!inn || M.done || inn.closed) return '';
+  const bat = [inn.striker, inn.non].map(id => inn.card[id]).filter(Boolean);
+  const bowler = inn.curBowler || inn.lastBowler, f = bowler && inn.bw[bowler];
+  const batterHtml = bat.map(c => `<div class="broadcast-player tap" onclick="showPlayer('${c.id}')"><span>${esc(pshort(P(c.id)))}${c.id === inn.striker ? ' *' : ''}</span><b>${c.r} <small>(${c.b})</small></b></div>`).join('');
+  const bowlerHtml = bowler && P(bowler) ? `<div class="broadcast-player tap" onclick="showPlayer('${bowler}')"><span>${esc(pshort(P(bowler)))}</span><b>${f ? f.w+'/'+f.r : '0/0'} <small>(${f ? oversStr(f.balls) : '0'})</small></b></div>` : '<div class="dim xs">Awaiting next bowler</div>';
+  const last = inn.lastOver, cur = inn.thisOver || [];
+  return `<div class="broadcast-people"><div><span class="broadcast-label">BATTERS</span>${batterHtml}</div><div><span class="broadcast-label">BOWLER</span>${bowlerHtml}</div></div><div class="broadcast-recent"><span class="broadcast-label">${cur.length ? 'THIS OVER' : last ? 'LAST OVER' : 'FIRST OVER'}</span><div>${(cur.length ? cur : last ? last.syms : []).map(ballSym).join('') || '<span class="dim xs">Awaiting first ball</span>'}</div></div>`;
+}
+function broadcastInningsCard(M, inn) {
+  const bats = inn.card.filter(c => c.in).sort((a,b) => b.r-a.r).slice(0,3);
+  const bowls = Object.entries(inn.bw).filter(([id,f]) => f.balls).sort((a,b) => b[1].w-a[1].w || a[1].r-b[1].r).slice(0,3);
+  return `<div class="broadcast-innings"><div class="broadcast-innings-head"><span>${NATIONS[inn.bat] ? nationTag(inn.bat) : badge(inn.bat)} ${esc(teamName(inn.bat))}</span><b>${inn.runs}${inn.allOut ? '' : '/'+inn.wkts}</b><small>${oversStr(inn.balls)} ov</small></div><div class="broadcast-innings-cols"><div><div class="broadcast-label">TOP BATTERS</div>${bats.map(c => batRow(c)).join('') || '<span class="dim xs">No batting figures</span>'}</div><div><div class="broadcast-label">BEST BOWLING</div>${bowls.map(([id,f])=>bowlRow(id,f)).join('') || '<span class="dim xs">No bowling figures</span>'}</div></div></div>`;
+}
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
   if (!inn) return `${pageTitle('Live', 'Starting')}<div class="empty">Starting.</div>`;
@@ -5646,11 +5690,7 @@ function renderLive() {
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
-  const prev = M.innings.slice(0, -1).map(i => `${teamDef(i.bat).short || i.bat} ${inningsLine(i, M.fmt)}`).join(', ');
-  const crease = M.done || inn.closed ? '' : `<table class="tbl clean" style="margin-top:10px"><thead><tr><th>Batting</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>
-      ${[[sc, true], [ns, false]].map(([c, on]) => c ? `<tr class="tap" onclick="showPlayer('${c.id}')"><td class="l">${esc(P(c.id).last)}${on ? ' *' : ''}</td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td></tr>` : '').join('')}</tbody></table>
-    <table class="tbl clean"><thead><tr><th>Bowling</th><th>O</th><th>M</th><th>R</th><th>W</th></tr></thead><tbody>${bw ? `<tr class="tap" onclick="showPlayer('${bw}')"><td class="l">${esc(P(bw).last)}</td><td>${bf ? oversStr(bf.balls) : 0}</td><td>${bf ? bf.m : 0}</td><td>${bf ? bf.r : 0}</td><td class="b">${bf ? bf.w : 0}</td></tr>` : '<tr><td class="l dim" colspan="5">New over</td></tr>'}</tbody></table>
-    ${overStrip(inn)}`;
+  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
@@ -5666,12 +5706,9 @@ function renderLive() {
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
   return `<div class="grid">
-    <section class="panel"><div class="ph"><h3>${COMPS[M.comp].short} · ${esc(teamDef(M.venue).ground)}</h3><div class="end xs dim">${esc(skyOf(M).label)}</div></div>
-      <div class="pb" style="padding-bottom:4px"><div class="flex" style="align-items:flex-end"><div class="score-big">${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}</div></div>
-        <div class="s muted" style="margin-top:4px">${sit}</div>${prev ? `<div class="xs dim" style="margin-top:2px">${esc(prev)}</div>` : ''}
-        ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
-        </div>
-      ${crease}<div style="height:12px"></div></section>
+    <section class="panel broadcast-panel"><div class="pb">${broadcast}
+      ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
+    </div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
 }
@@ -5704,15 +5741,13 @@ function inningsRecap(M, inn) {
     else if (n === 3) sit = nb ? `${teamName(nb)} need ${teamRuns(M, inn.bat) - teamRuns(M, nb) + 1} to win with ${Math.round((mMaxBalls(M) - M.balls) / 6)} overs left.` : '';
   }
   const me = liveMyTeam(M);
-  const inner = `${sit ? `<div class="note" style="margin-top:10px">${esc(sit)}</div>` : ''}
-    <div class="grid g2" style="gap:8px;margin-top:10px">
-      <div><div class="lbl">Top scorers</div>${perfRows(bats.map(c => batRow(c)))}</div>
-      <div><div class="lbl">Best bowling</div>${perfRows(bowls.map(([id, f]) => bowlRow(id, f)))}</div></div>
-    ${best ? `<details class="recap-more"><summary>Partnership</summary><div class="xs muted">${best.r} runs · ${ordinal(best.w)} wicket${best.live ? ' · unbroken' : ''}</div></details>` : ''}
-    ${M.fmt !== 'FC' ? `<div style="margin-top:8px">${wormSvg(M.innings, M.fmt)}</div>` : ''}
-    ${nb ? `<div class="lbl" style="margin-top:12px">Next innings · ${nb === me ? 'we bat' : 'we bowl'}</div>${coachPlanLine(M)}` : ''}`;
-  return recapShell(`Innings complete${M.fmt === 'FC' ? ' · Day ' + fcDay(M) : ''}`, `${teamName(inn.bat)} ${inn.runs}${inn.allOut ? ' all out' : '/' + inn.wkts}${inn.declared ? ' declared' : ''}`,
-    `${oversStr(inn.balls)} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`, inner);
+  const inner = `<div class="broadcast-recap-score">${broadcastScore(M, true)}</div>
+    ${sit ? `<div class="broadcast-situation">${esc(sit)}</div>` : ''}
+    ${broadcastInningsCard(M, inn)}
+    ${M.fmt !== 'FC' ? `<div class="broadcast-recap-worm">${wormSvg(M.innings, M.fmt)}</div>` : ''}
+    ${best ? `<details class="recap-more"><summary>Best partnership</summary><span class="xs muted">${best.r} runs · ${ordinal(best.w)} wicket${best.live ? ' · unbroken' : ''}</span></details>` : ''}
+    ${nb ? `<div class="broadcast-next">Next: ${esc(teamName(nb))} ${nb === me ? 'batting' : 'bowling'}</div>` : ''}`;
+  return `<section class="panel recap broadcast-recap"><div class="pb"><div class="rc-e">Innings complete</div>${inner}</div></section>`;
 }
 function breakRecap(M, r) {
   const label = { lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[r.type];
@@ -5755,12 +5790,15 @@ function resultRecap(M) {
     const table = Object.keys(game.season.standings[M.comp]).map(id => ({ id, p: game.season.standings[M.comp][id].Pts + (id === me ? pts : 0) })).sort((a, b) => b.p - a.p);
     impact = `${pts ? `${pts} points` : 'No points'} for ${teamDef(me).nick}. That puts them ${ordinal(table.findIndex(x => x.id === me) + 1)} on the ${c.short} ladder with ${table.find(x => x.id === me).p}.`;
   }
-  const inner = `${M.potm ? `<div class="s" style="margin-top:8px">Player of the match: <b>${plink(P(M.potm))}</b></div>` : ''}
-    ${impact ? `<div class="note" style="margin-top:10px">${esc(impact)}</div>` : ''}
-    <div class="grid g2" style="gap:8px;margin-top:10px"><div><div class="lbl">Standout batting</div>${perfRows(bats.slice(0, 3).map(([c, t]) => batRow(c, t)))}</div>
-      <div><div class="lbl">Standout bowling</div>${perfRows(bowls.slice(0, 3).map(([id, f, t]) => bowlRow(id, f, t)))}</div></div>`;
   const won = res.winner && isUserTeam(res.winner);
-  return recapShell(`Result${M.fmt === 'FC' ? ' · Day ' + fcDay(M) : ''}`, `<span class="${won ? 'win' : res.winner ? 'loss' : ''}">${esc(res.text)}</span>`, M.innings.map(i => `${tShort(i.bat)} ${inningsLine(i, M.fmt)}`).join(' · '), inner);
+  const inningsCards = M.innings.map(i => broadcastInningsCard(M,i)).join('');
+  const inner = `<div class="broadcast-recap-score">${broadcastScore(M,true)}</div>
+    <div class="broadcast-result ${won ? 'is-win' : ''}">${esc(res.text)}</div>
+    ${M.potm && P(M.potm) ? `<div class="broadcast-award">Player of the match · ${plink(P(M.potm))}</div>` : ''}
+    ${inningsCards}
+    ${M.fmt !== 'FC' ? `<div class="broadcast-recap-worm">${wormSvg(M.innings,M.fmt)}</div>` : ''}
+    ${impact ? `<details class="recap-more"><summary>Competition impact</summary><span class="xs muted">${esc(impact)}</span></details>` : ''}`;
+  return `<section class="panel recap broadcast-recap"><div class="pb"><div class="rc-e">Match complete</div>${inner}</div></section>`;
 }
 
 // ---- Live presentation helpers ----
