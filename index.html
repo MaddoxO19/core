@@ -438,6 +438,23 @@ button,select,[onclick]{touch-action:manipulation}
 /* v0.9.9 Build 002 — mobile broadcast score and compact match recap */
 .broadcast-panel .pb{padding:13px 14px}.broadcast-head{display:flex;justify-content:space-between;gap:8px;align-items:center;color:var(--dim);font-size:10px;font-weight:750;letter-spacing:.05em}.broadcast-live{color:#86efac;letter-spacing:.08em}
 .broadcast-match{display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);align-items:center;gap:8px;margin:11px 0 8px}.broadcast-team{min-width:0;display:grid;grid-template-columns:30px 1fr;column-gap:8px;align-items:center}.broadcast-team>.nat-flag,.broadcast-team>.badge{grid-row:span 2;display:grid;place-items:center;width:30px;height:30px;font-size:24px}.broadcast-team .cricket-flag-svg{width:28px;height:auto}.broadcast-name{font-size:12px;color:var(--muted);font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.broadcast-total{font-size:clamp(16px,5vw,23px);font-weight:850;color:var(--text);white-space:nowrap;letter-spacing:-.025em}.broadcast-vs{text-align:center;color:var(--dim);font-size:12px;font-weight:700}.broadcast-chase{color:#86efac;font-size:12px;text-align:center;font-weight:750;padding:6px 0 9px}.broadcast-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin-top:10px}.broadcast-metrics>div{display:flex;flex-direction:column;gap:2px;padding:8px 3px;text-align:center;border-right:1px solid var(--line2)}.broadcast-metrics>div:last-child{border:0}.broadcast-metrics span{font-size:9px;color:var(--dim);font-weight:800;text-transform:uppercase}.broadcast-metrics b{font-size:15px}.broadcast-people{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;padding-top:9px;border-top:1px solid var(--line2)}.broadcast-people>div{min-width:0}.broadcast-label{display:block;font-size:9px;color:var(--dim);font-weight:800;letter-spacing:.07em;margin-bottom:5px}.broadcast-player{display:flex;justify-content:space-between;gap:4px;font-size:12px;padding:4px 0}.broadcast-player>span{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.broadcast-player b{white-space:nowrap}.broadcast-player small{color:var(--muted);font-size:10px;font-weight:400}.broadcast-recent{display:flex;align-items:center;justify-content:space-between;gap:7px;padding-top:9px;margin-top:6px;border-top:1px solid var(--line2)}.broadcast-recent .bs{margin-left:3px}.broadcast-recap .pb{padding:12px}.broadcast-recap-score .broadcast-head{margin-top:9px}.broadcast-situation,.broadcast-next{font-size:12px;color:var(--muted);padding:7px 0}.broadcast-innings{border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin:9px 0}.broadcast-innings-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:var(--s2);font-weight:750}.broadcast-innings-head>span{display:flex;align-items:center;gap:5px;flex:1;min-width:0;font-size:12px}.broadcast-innings-head .nat-flag,.broadcast-innings-head .badge{font-size:17px}.broadcast-innings-head>b{font-size:19px}.broadcast-innings-head>small{font-size:10px;color:var(--muted)}.broadcast-innings-cols{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding:9px}.broadcast-innings-cols>div{min-width:0}.broadcast-innings-cols .kv{display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:6px 1px;gap:5px;border-top:1px solid var(--line2)}.broadcast-innings-cols .kv>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.broadcast-innings-cols .kv>span:last-child{white-space:nowrap}.broadcast-innings-cols .kv .xs{font-size:9px}.broadcast-result{font-size:14px;font-weight:850;text-align:center;color:var(--text);padding:11px;background:var(--s2);border-radius:9px;margin:10px 0}.broadcast-result.is-win{color:#86efac}.broadcast-award{font-size:12px;color:var(--muted);padding:4px 0 6px}.broadcast-recap-worm{margin-top:8px}.broadcast-recap .rc-e{margin-bottom:2px}@media(max-width:390px){.broadcast-match{gap:5px}.broadcast-team{grid-template-columns:23px 1fr;gap:5px}.broadcast-team>.nat-flag,.broadcast-team>.badge{width:23px;height:23px;font-size:19px}.broadcast-innings-cols{gap:5px;padding:7px}.broadcast-innings-cols .kv{font-size:10px}.broadcast-recent .bs{min-width:19px}}
+
+/* v0.9.9 Build 003: stable mobile scoreboard grids and borderless international flags. */
+.broadcast-match{display:grid;grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);gap:9px;align-items:center;min-width:0}
+.broadcast-team{display:flex;flex-direction:column;min-width:0;gap:5px;align-items:flex-start}
+.broadcast-identity{display:flex;align-items:center;gap:7px;min-width:0;max-width:100%;height:23px}
+.broadcast-identity>.nat-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;margin:0;font-size:21px;line-height:1;width:30px;height:23px}
+.broadcast-identity>.badge{flex:none;position:static!important;max-width:30px;width:30px;height:23px;font-size:10px;border:0!important;background:transparent!important;box-shadow:none!important}
+.broadcast-identity .cricket-flag-svg{display:block;width:30px;height:18px;max-width:30px}
+.broadcast-team .broadcast-name{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:800;color:var(--muted)}
+.broadcast-team .broadcast-total{font-size:clamp(16px,4.5vw,22px);font-weight:850;letter-spacing:-.035em;line-height:1.2;white-space:normal;overflow-wrap:normal;min-width:0}
+.broadcast-vs{align-self:center;font-size:11px}
+.broadcast-innings-head>span{min-width:0;flex:1 1 110px;gap:8px}
+.broadcast-innings-head .nat-flag{display:inline-flex;align-items:center;justify-content:center;flex:none;width:28px;height:22px;margin:0;font-size:21px}
+.broadcast-innings-head .cricket-flag-svg{display:block;width:28px;height:17px}
+.broadcast-innings-head .badge{flex:none;border:0!important;background:transparent!important;box-shadow:none!important;width:28px;height:22px;font-size:11px}
+.broadcast-innings-head>b{flex:none}
+@media(max-width:390px){.broadcast-match{gap:5px;grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr)}.broadcast-identity{gap:4px}.broadcast-team .broadcast-total{font-size:16px}.broadcast-innings-head{gap:5px}.broadcast-innings-head>span{flex-basis:100px}}
 </style>
 </head>
 <body>
@@ -490,7 +507,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 002', title: 'Live Match Centre & Recaps', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 003', title: 'Match Card Layout Fix', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5130,7 +5147,8 @@ function wormSvg(innings, fmt) {
   const paths = runs.map((r,k) => `<polyline fill="none" stroke="${palette[k%2]}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${r.map((v,o)=>x(o)+','+y(v)).join(' ')}"/>`).join('');
   const legends = valid.map((i,k) => `<span class="worm-key"><i style="background:${palette[k%2]}"></i>${esc(teamDef(i.bat).short || i.bat)} ${i.runs}/${i.wkts}</span>`).join('');
   const chase = valid[1];
-  const target = chase && chase.target ? `<span class="worm-target">Target ${chase.target} · ${Math.max(0,chase.target-chase.runs)} needed</span>` : '';
+  const activeChase = chase && chase.target && !chase.closed && !chase.allOut && chase.runs < chase.target && chase.balls < maxO * 6;
+  const target = activeChase ? `<span class="worm-target">Target ${chase.target} · ${Math.max(0,chase.target-chase.runs)} needed</span>` : '';
   return `<div class="worm-wrap"><div class="worm-legend">${legends}${target}</div><svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative runs by over for ${valid.map(i=>teamDef(i.bat).name).join(' and ')}">${grid}${ticks}${paths}</svg><div class="worm-axis">Overs</div></div>`;
 }
 function innLabel(S, k) { return `Inn ${k + 1}`; }
@@ -5640,6 +5658,9 @@ function sendGMMessage(key) {
   closeModal(); autosave(); render();
 }
 // Build 002: compact broadcast-style match information, derived only from recorded innings.
+// National fixtures use X_ prefixed team IDs; convert to the flag nationality.
+function broadcastNation(id) { const n = id === 'AUS' ? 'AUS' : String(id || '').startsWith('X_') ? String(id).slice(2) : id; return NATIONS[n] ? n : null; }
+function broadcastBadge(id) { const nat = broadcastNation(id); return nat ? nationTag(nat) : badge(id); }
 function broadcastScore(M, compact) {
   const innings = M.innings || [], current = curInn(M);
   const teams = [M.home, M.away];
@@ -5647,7 +5668,7 @@ function broadcastScore(M, compact) {
     const played = innings.filter(i => i.bat === id);
     return played.length ? played.map(i => inningsLine(i, M.fmt)).join(' & ') : 'Yet to bat';
   };
-  const team = id => `<div class="broadcast-team">${NATIONS[id] ? nationTag(id) : badge(id)}<div class="broadcast-name">${esc(teamDef(id).short || id)}</div><div class="broadcast-total">${esc(score(id))}</div></div>`;
+  const team = id => `<div class="broadcast-team"><div class="broadcast-identity">${broadcastBadge(id)}<span class="broadcast-name">${esc(teamDef(id).short || id)}</span></div><div class="broadcast-total">${esc(score(id))}</div></div>`;
   const target = current && !M.done && M.fmt !== 'FC' && current.target;
   const remain = target ? Math.max(0, current.target - current.runs) : 0;
   const ballsLeft = target ? Math.max(0, mOvers(M) * 6 - current.balls) : 0;
@@ -5677,7 +5698,7 @@ function broadcastCrease(M, inn) {
 function broadcastInningsCard(M, inn) {
   const bats = inn.card.filter(c => c.in).sort((a,b) => b.r-a.r).slice(0,3);
   const bowls = Object.entries(inn.bw).filter(([id,f]) => f.balls).sort((a,b) => b[1].w-a[1].w || a[1].r-b[1].r).slice(0,3);
-  return `<div class="broadcast-innings"><div class="broadcast-innings-head"><span>${NATIONS[inn.bat] ? nationTag(inn.bat) : badge(inn.bat)} ${esc(teamName(inn.bat))}</span><b>${inn.runs}${inn.allOut ? '' : '/'+inn.wkts}</b><small>${oversStr(inn.balls)} ov</small></div><div class="broadcast-innings-cols"><div><div class="broadcast-label">TOP BATTERS</div>${bats.map(c => batRow(c)).join('') || '<span class="dim xs">No batting figures</span>'}</div><div><div class="broadcast-label">BEST BOWLING</div>${bowls.map(([id,f])=>bowlRow(id,f)).join('') || '<span class="dim xs">No bowling figures</span>'}</div></div></div>`;
+  return `<div class="broadcast-innings"><div class="broadcast-innings-head"><span>${broadcastBadge(inn.bat)} ${esc(teamName(inn.bat))}</span><b>${inn.runs}/${inn.wkts}</b><small>${oversStr(inn.balls)} ov</small></div><div class="broadcast-innings-cols"><div><div class="broadcast-label">TOP BATTERS</div>${bats.map(c => batRow(c)).join('') || '<span class="dim xs">No batting figures</span>'}</div><div><div class="broadcast-label">BEST BOWLING</div>${bowls.map(([id,f])=>bowlRow(id,f)).join('') || '<span class="dim xs">No bowling figures</span>'}</div></div></div>`;
 }
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
