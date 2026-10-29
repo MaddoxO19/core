@@ -412,6 +412,12 @@ button,select,[onclick]{touch-action:manipulation}
 .attention-copy{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}.attention-copy b{font-size:13px}.attention-copy small{color:var(--muted);font-size:11px}.attention-chevron{font-size:22px;color:var(--muted)}
 .attention-item{padding:13px 14px;border-bottom:1px solid var(--line2)}.attention-item:last-child{border-bottom:0}.attention-item-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:14px}.attention-status{font-size:9px;letter-spacing:.07em;font-weight:900;color:var(--cyan);border:1px solid rgba(125,211,252,.28);border-radius:5px;padding:3px 5px}.attention-status.required{color:var(--accent);border-color:rgba(244,197,66,.3)}.attention-detail{color:var(--muted);font-size:12px;margin:5px 0 10px;line-height:1.5}.attention-buttons{display:flex;gap:8px}.attention-buttons .btn{min-height:36px}
 @media(max-width:500px){.attention-link{padding:10px 12px}.kpi{padding:9px 3px}.kpi .v{font-size:15px}.hero .meta{font-size:11px}}
+
+/* v0.9.9 international badge glyphs, consistent across home and match-day */
+.badge.nation-badge{font-size:23px;line-height:1;overflow:hidden}
+.badge.nation-badge.lg{font-size:27px}
+.team-flag{display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.team-flag .cricket-flag-svg{width:1.35em;height:.82em;margin:0}
 </style>
 </head>
 <body>
@@ -464,7 +470,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.8', title: 'Home Dashboard & Decision Centre', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9', title: 'Clash Decisions & Team Flags', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4546,15 +4552,15 @@ const ui = { page:'home', squadTab:'list', listFmt:'T20', squadSort:'ovr', squad
   tradePartner:null, tradeGive:[], tradeGet:[], search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, homeComp:null };
 
 function $(id) { return document.getElementById(id); }
-function go(page) { ui.page = page; render(); window.scrollTo(0, 0); }
+function go(page) { ui.page = page; render(); window.scrollTo(0, 0); if(page === 'matchday') showFixtureClashPrompt(); }
 function seg(items, active, fn) { return `<div class="seg">${items.map(([k, l]) => `<button class="${active === k ? 'on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`; }
 function sel(opts, cur, onchange, cls) { return `<select class="${cls || ''}" onchange="${onchange}">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`; }
 function panel(title, body, opts) { opts = opts || {}; return `<section class="panel ${opts.cls || ''}">${title ? `<div class="ph"><h3>${title}</h3>${opts.end ? `<div class="end">${opts.end}</div>` : ''}</div>` : ''}<div class="pb ${opts.flush ? 'tight' : ''}">${body}</div></section>`; }
 function pageTitle(t, sub, end) { return `<div class="page-title"><div><h1>${t}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${end ? `<div class="end">${end}</div>` : ''}</div>`; }
 function chip(cls, label) { return `<span class="chip ${cls}">${label}</span>`; }
 function pill(v) { return `<span class="pill ${v >= 82 ? 'elite' : v >= 74 ? 'good' : v < 55 ? 'lo' : ''}">${v}</span>`; }
-function badge(id, lg) { const t = teamDef(id); return t ? `<span class="badge ${lg ? 'lg' : ''}" style="border-color:${t.color}">${t.short || t.id}</span>` : `<span class="badge">?</span>`; }
-function tdot(id) { const t = teamDef(id); return t ? `<span class="dot" style="background:${t.color}"></span>${t.short || t.id}` : '<span class="dim">FA</span>'; }
+function badge(id, lg) { const t = teamDef(id); if(!t) return '<span class="badge">?</span>'; const flag = NATIONS[id] ? `<span class="team-flag">${flagFor(id)}</span>` : esc(t.short || t.id); return `<span class="badge ${lg ? 'lg' : ''} ${NATIONS[id] ? 'nation-badge' : ''}" style="border-color:${t.color}" title="${esc(t.name || NATIONS[id] || id)}">${flag}</span>`; }
+function tdot(id) { const t = teamDef(id); return t ? NATIONS[id] ? `${nationTag(id)} ${esc(t.short || id)}` : `<span class="dot" style="background:${t.color}"></span>${esc(t.short || id)}` : '<span class="dim">FA</span>'; }
 function av(p) { return `<span class="av">${p.first[0]}${p.last[0]}</span>`; }
 function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${natTag(p)} ${esc(txt || pname(p))}</span>` : '–'; }
 // England's Unicode tag-sequence flag can display as a black flag in iOS Safari.
@@ -5302,7 +5308,6 @@ function renderNational() {
   const role = N.gm
     ? `<div class="kv"><span>Your role</span><span class="win">National selector</span></div><div class="kv"><span>National board confidence</span><span class="b">${N.conf}</span></div>
        ${selw ? `<div class="pb"><button class="btn pri block" onclick="go('natsel')">Pick the ${esc(selw.label)} squad ▸</button></div>` : ''}
-       <div class="kv"><span>When matches clash</span><span>${sel([['intl','International first'],['domestic','Domestic first'],['ask','Ask me']], clashMode(), "game.clashMode=this.value;autosave()")}</span></div>
        <div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`
     : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
   return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
@@ -5379,6 +5384,23 @@ function showPlayer(id, tab) {
 // §24 MATCH DAY + LIVE MATCH ---------------------------------------------------------------
 // The GM sets the brief and watches. The coach and captain make the on-field calls.
 function myTeamIn(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
+// Show fixture overlap only when it matters; never occupy permanent dashboard space.
+// Acknowledgement changes no result or fixture priority. Delegation is explicit.
+const shownFixtureClashes = new Set();
+function showFixtureClashPrompt() {
+  if (!game || !game.pendingFx || $('modalRoot').innerHTML) return;
+  const fx = fixtureById(game.pendingFx);
+  if (!fx || fx.result) return;
+  const other = clashesWith(fx);
+  if (!other.length && !isClash(fx)) return;
+  if (shownFixtureClashes.has(fx.id)) return;
+  shownFixtureClashes.add(fx.id);
+  const details = isClash(fx) ? `You are currently managing ${esc(busyLabel())}.` :
+    `Also scheduled: ${other.map(f => esc(fxLabel(f))).join('; ')}.`;
+  sheet('Fixture clash', 'Choose which match to manage',
+    `<p class="s" style="margin:0 0 10px">${details}</p><p class="s muted" style="margin:0">Continue to manage this fixture, or delegate it to your staff. Dismissing this notice does not change either fixture.</p>`,
+    {foot:`<button class="btn ghost" onclick="closeModal()">Dismiss</button><button class="btn" onclick="closeModal()">Manage this match</button><button class="btn pri" onclick="closeModal();handToStaff('${fx.id}')">Staff manages this match</button>`});
+}
 function renderMatchday() {
   const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt;
   const me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home, v = teamDef(fx.venue || fx.home);
@@ -5395,14 +5417,6 @@ function renderMatchday() {
       ${pitchReport(pre, v, fmt)}
       ${forecastRow(pre, fmt, fx)}
       <table class="tbl clean" style="margin-top:6px"><tbody>
-        ${(() => {
-          if (isClash(fx)) return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal"><b>A final.</b> You are still at ${esc(busyLabel())}. Run this final yourself, or hand it to your staff.<div style="margin-top:6px"><button class="btn sm" onclick="handToStaff('${fx.id}')">Let staff run this match</button></div></td></tr>`;
-          const cl = clashesWith(fx); if (!cl.length) return '';
-          const names = cl.map(f => `${esc(fxLabel(f))} on day ${f.day - fx.day + 1}`).join(', ');
-          const fin = cl.some(isFinalFx), them = cl.length > 1 ? 'them' : 'it';
-          const cond = `${names} falls during this match. If it finishes earlier, you are free to take ${them}. If it is still going that day, ${fin ? 'you choose which match to run' : 'your staff run ' + them}.`;
-          if (askClash(fx)) return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${isFinalFx(fx) || cl.some(isFinalFx) ? '<b>A final is involved.</b> ' : ''}${cond} You can also hand this match to your staff.<div style="margin-top:6px"><button class="btn sm" onclick="handToStaff('${fx.id}')">Let staff run this match</button></div></td></tr>`;
-          return `<tr><td class="l muted">Clash</td><td class="l" style="white-space:normal">${cond}</td></tr>`; })()}
         ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       ${gamePlanRow(fmt, hc, fx)}
