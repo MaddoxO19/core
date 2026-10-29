@@ -296,7 +296,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 .recap .lbl{margin-top:2px}.recap .t{color:var(--text)}
 
 /* v0.7.4 depth chart */
-.depth-sum{display:flex;flex-wrap:wrap;gap:6px}.depth-sum span{background:var(--s2);border-radius:8px;padding:5px 9px;font-size:12px;color:var(--muted)}.depth-sum b{color:var(--text);margin-right:2px}
+.depth-sum{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}.depth-sum span{background:var(--s2);border-radius:8px;padding:5px 2px;font-size:10.5px;color:var(--muted);white-space:nowrap;text-align:center;overflow:hidden;text-overflow:ellipsis}.depth-sum b{display:block;font-size:15px;margin:0 0 1px}.depth-sum b{color:var(--text);margin-right:2px}
 .depth-sum span.thin{box-shadow:inset 0 0 0 1px rgba(245,158,11,.55);color:#fcd34d}.depth-sum span.thin b{color:#fcd34d}
 .dslot-l{color:var(--accent);font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:10px}
 .dslot.out .main-t{opacity:.55}
@@ -332,6 +332,8 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 @media (max-width:420px){.quick.four button svg{display:none}.quick button{font-size:13.5px}}
 .home-acts{align-self:start}.grid > .grid{align-content:start}
 .top .gear{margin-left:auto}
+
+.tool-row{display:flex;gap:6px;align-items:stretch}.tool-row>.seg{flex:1 1 auto;min-width:0}
 </style>
 </head>
 <body>
@@ -384,7 +386,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.7.8', title: 'Legacy Layout, World Cup & Finals', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.8.0', title: 'Records, Locker & Tidier Tabs', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2233,19 +2235,29 @@ function weeklyMorale() {
     if (p.contract && askingSalary(p) > p.contract.salary * 1.3) d -= per === 'loyal' ? 0.5 : 2;
     d += (r.mm - 60 - STAFF_SHIFT) / 20;
     if (r.leader) d += 1;
-    if (p.promise && game.day > p.promise.until) { if ((p.played || 0) < 0.45) { d -= 15; addNews('Dressing room', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
+    if (p.promise && game.day > p.promise.until) { if ((p.played || 0) < 0.45) { d -= 15; p.letDown = game.day; addNews('Locker', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
     if (per === 'volatile') d *= 1.5; if (per === 'professional') d *= 0.7;
     d += (67 - p.morale) * 0.09;
+    // The head coach looks after everyday mood: unsettled players (45-61) get a weekly lift from his man-management.
+    if (p.morale >= 45 && p.morale < 62 && !p.wantsOut && !(p.letDown && game.day - p.letDown >= 0 && game.day - p.letDown < 42)) d += clamp((r.mm - 50) / 14, 0.3, 2.5);
     p.morale = clamp(Math.round(p.morale + d + randn() * 1.2), 5, 100);
     p.form = clamp(Math.round(p.form + (p.morale - 60) / 25), 15, 92);
     if (p.teamId === U()) {
-      if (p.morale < 30 && !p.wantsOut) { p.wantsOut = game.day; addNews('Dressing room', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
-      if (p.wantsOut && p.morale >= 50) { p.wantsOut = null; addNews('Dressing room', `${pname(p)} withdraws his trade request`, 'He is settled again.'); }
+      if (p.morale < 30 && !p.wantsOut) { p.wantsOut = game.day; addNews('Locker', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
+      if (p.wantsOut && p.morale >= 50) { p.wantsOut = null; addNews('Locker', `${pname(p)} withdraws his trade request`, 'He is settled again.'); }
     } else if (p.morale >= 50) p.wantsOut = null;
   });
   // A sulking player unsettles the room.
   const sulk = squadOf(U()).filter(p => p.wantsOut && game.day - p.wantsOut > 28).length;
   if (sulk) squadOf(U()).forEach(p => { if (!p.wantsOut) p.morale = clamp(p.morale - Math.min(2, sulk * 0.5), 5, 100); });
+}
+// Issues only the GM can settle: trade requests, Unhappy or Wants out, broken promises and contract disputes.
+function gmIssue(p) {
+  if (p.wantsOut) return 'Asked for a trade';
+  if (p.letDown && game.day - p.letDown >= 0 && game.day - p.letDown < 42 && p.morale < 62) return 'Promised games he did not get';
+  if (p.morale < 45) return p.morale < 30 ? 'Wants out' : 'Unhappy';
+  if (p.contract && askingSalary(p) > p.contract.salary * 1.3 && p.morale < 62) return 'Wants a better contract';
+  return null;
 }
 function teamMorale(teamId) { return Math.round(mean(squadOf(teamId).map(p => { ensurePersona(p); return p.morale; }))); }
 // GM conversation. Once a month per player.
@@ -2664,12 +2676,24 @@ const EVENTS = {
       choices: [['Open contract talks', { negotiate: p.id }], ['Ignore it', { morale: { id: p.id, v: -3 } }]] };
   }
 };
+// Limits: board and government asks come once a season at most, and no event type repeats within 60 days.
+const EVENT_PER_SEASON = { grant: 1, community: 1, sponsor: 2 };
+const EVENT_COOLDOWN = 60;
+function eventAllowed(k) {
+  const log = game.evLog = game.evLog || {};
+  const mine = log[k] || [];
+  if (mine.length && game.day - mine[mine.length - 1].d < EVENT_COOLDOWN && mine[mine.length - 1].y === game.year) return false;
+  const cap = EVENT_PER_SEASON[k];
+  return !cap || mine.filter(x => x.y === game.year).length < cap;
+}
 function maybeEvent() {
-  if (game.phase !== 'season' || rand() > 0.045) return false;
+  if (game.phase !== 'season' || rand() > 0.032) return false;
   if ((game.inbox || []).filter(m => !m.done).length >= 3) return false;
-  const keys = shuffle(Object.keys(EVENTS));
+  const keys = shuffle(Object.keys(EVENTS).filter(eventAllowed));
   for (const k of keys) {
     const e = EVENTS[k](); if (!e) continue;
+    const log = game.evLog = game.evLog || {};
+    (log[k] = (log[k] || []).filter(x => x.y >= game.year - 1)).push({ y: game.year, d: game.day });
     game.inbox = game.inbox || [];
     game.inbox.unshift(Object.assign({ id: 'm' + game.day + k, kind: k, day: game.day, expires: game.day + 10, done: false }, e));
     if (game.inbox.length > 30) game.inbox.length = 30;
@@ -2829,6 +2853,157 @@ function teamHonours(teamId) {
   (game.history || []).forEach(h => COMP_ORDER.forEach(c => { if (h.champions[c] === teamId) out[c]++; }));
   COMP_ORDER.forEach(c => { if (game.phase === 'season' && game.season.champions[c] === teamId) out[c]++; });
   return out;
+}
+// §8f REAL ALL-TIME RECORDS ----------------------------------------------------------------
+// Real men's records the save's players are measured against. Figures come from the Wikipedia
+// record lists, which cite ESPNcricinfo Statsguru, read on 29 Oct 2026. Each table keeps the
+// "as of" date its source gave, because active players (marked a:1) keep moving.
+// Row: [value, display, name, team, note, active]. Larger value ranks higher; lowest totals use a negative value.
+// cat: run (career runs) wkt (career wickets) c100 (hundreds) avg (batting average, 20+ innings)
+//      hs (highest score) bb (best innings bowling) th (highest total) tl (lowest total) pt (partnership)
+const RR_SRC = 'Wikipedia record lists (citing ESPNcricinfo), read 29 Oct 2026';
+const RR_CATS = { run: 'Most runs', hs: 'Highest score', avg: 'Best average', c100: 'Most hundreds', wkt: 'Most wickets', bb: 'Best bowling', th: 'Highest total', tl: 'Lowest total', pt: 'Partnership' };
+// Best-bowling value: wickets first, then fewer runs.
+const bbv = (w, r) => w * 1000 - r;
+const REAL_RECORDS = {
+  TEST: {
+    world: {
+      run: { asOf: 'Jul 2026', rows: [[15921, '15,921', 'Sachin Tendulkar', 'IND', '1989–2013'], [14278, '14,278', 'Joe Root', 'ENG', '2012–', 1], [13378, '13,378', 'Ricky Ponting', 'AUS', '1995–2012'], [13289, '13,289', 'Jacques Kallis', 'SA', '1995–2013'], [13288, '13,288', 'Rahul Dravid', 'IND', '1996–2012']] },
+      hs: { asOf: 'Jul 2025', rows: [[400.5, '400*', 'Brian Lara', 'WI', 'v ENG, 2004'], [380, '380', 'Matthew Hayden', 'AUS', 'v ZIM, 2003'], [375, '375', 'Brian Lara', 'WI', 'v ENG, 1994'], [374, '374', 'Mahela Jayawardene', 'SL', 'v SA, 2006'], [367.5, '367*', 'Wiaan Mulder', 'SA', 'v ZIM, 2025']] },
+      avg: { asOf: 'Jul 2026', note: 'Minimum 20 innings.', rows: [[99.94, '99.94', 'Don Bradman', 'AUS', '80 innings'], [61.87, '61.87', 'Adam Voges', 'AUS', '31 innings'], [60.97, '60.97', 'Graeme Pollock', 'SA', '41 innings'], [60.83, '60.83', 'George Headley', 'WI', '40 innings'], [60.73, '60.73', 'Herbert Sutcliffe', 'ENG', '84 innings']] },
+      c100: { asOf: 'Jul 2026', rows: [[51, '51', 'Sachin Tendulkar', 'IND', '200 Tests'], [45, '45', 'Jacques Kallis', 'SA', '166 Tests'], [41, '41', 'Ricky Ponting', 'AUS', '168 Tests'], [41, '41', 'Joe Root', 'ENG', '164 Tests', 1], [38, '38', 'Kumar Sangakkara', 'SL', '134 Tests']] },
+      wkt: { asOf: 'Jul 2024', rows: [[800, '800', 'Muttiah Muralitharan', 'SL', '133 Tests'], [708, '708', 'Shane Warne', 'AUS', '145 Tests'], [704, '704', 'James Anderson', 'ENG', '188 Tests'], [619, '619', 'Anil Kumble', 'IND', '132 Tests'], [604, '604', 'Stuart Broad', 'ENG', '167 Tests']] },
+      bb: { asOf: 'Dec 2021', rows: [[bbv(10, 53), '10/53', 'Jim Laker', 'ENG', 'v AUS, 1956'], [bbv(10, 74), '10/74', 'Anil Kumble', 'IND', 'v PAK, 1999'], [bbv(10, 119), '10/119', 'Ajaz Patel', 'NZ', 'v IND, 2021'], [bbv(9, 28), '9/28', 'George Lohmann', 'ENG', 'v SA, 1896'], [bbv(9, 37), '9/37', 'Jim Laker', 'ENG', 'v AUS, 1956']] },
+      th: { asOf: 'Oct 2024', rows: [[952, '952/6d', 'Sri Lanka', 'SL', 'v IND, 1997'], [903, '903/7d', 'England', 'ENG', 'v AUS, 1938'], [849, '849', 'England', 'ENG', 'v WI, 1930'], [823, '823/7d', 'England', 'ENG', 'v PAK, 2024'], [790, '790/3d', 'West Indies', 'WI', 'v PAK, 1958']] },
+      tl: { asOf: 'Jul 2025', rows: [[-26, '26', 'New Zealand', 'NZ', 'v ENG, 1955'], [-27, '27', 'West Indies', 'WI', 'v AUS, 2025'], [-30, '30', 'South Africa', 'SA', 'v ENG, 1896'], [-30, '30', 'South Africa', 'SA', 'v ENG, 1924'], [-35, '35', 'South Africa', 'SA', 'v ENG, 1899']] },
+      pt: { asOf: 'Oct 2024', rows: [[624, '624', 'Sangakkara & Jayawardene', 'SL', '3rd wkt v SA, 2006'], [576, '576', 'Jayasuriya & Mahanama', 'SL', '2nd wkt v IND, 1997'], [467, '467', 'Jones & Crowe', 'NZ', '3rd wkt v SL, 1991'], [454, '454', 'Root & Brook', 'ENG', '4th wkt v PAK, 2024'], [451, '451', 'Ponsford & Bradman', 'AUS', '2nd wkt v ENG, 1934']] }
+    },
+    aus: {
+      run: { asOf: 'Aug 2026', rows: [[13378, '13,378', 'Ricky Ponting', 'AUS', '168 Tests'], [11174, '11,174', 'Allan Border', 'AUS', '156 Tests'], [10927, '10,927', 'Steve Waugh', 'AUS', '168 Tests'], [10920, '10,920', 'Steve Smith', 'AUS', '125 Tests', 1], [8786, '8,786', 'David Warner', 'AUS', '112 Tests']] },
+      hs: { asOf: 'Aug 2026', rows: [[380, '380', 'Matthew Hayden', 'AUS', 'v ZIM, 2003'], [335.5, '335*', 'David Warner', 'AUS', 'v PAK, 2019'], [334.5, '334*', 'Mark Taylor', 'AUS', 'v PAK, 1998'], [334, '334', 'Don Bradman', 'AUS', 'v ENG, 1930'], [329.5, '329*', 'Michael Clarke', 'AUS', 'v IND, 2012']] },
+      avg: { asOf: 'Aug 2026', note: 'Minimum 20 innings.', rows: [[99.94, '99.94', 'Don Bradman', 'AUS', '80 innings'], [61.87, '61.87', 'Adam Voges', 'AUS', '31 innings'], [56.00, '56.00', 'Steve Smith', 'AUS', '223 innings', 1], [53.86, '53.86', 'Greg Chappell', 'AUS', '151 innings'], [51.85, '51.85', 'Ricky Ponting', 'AUS', '287 innings']] },
+      c100: { asOf: 'Aug 2026', rows: [[41, '41', 'Ricky Ponting', 'AUS', ''], [37, '37', 'Steve Smith', 'AUS', '', 1], [32, '32', 'Steve Waugh', 'AUS', ''], [30, '30', 'Matthew Hayden', 'AUS', ''], [29, '29', 'Don Bradman', 'AUS', '']] },
+      wkt: { asOf: 'Aug 2026', rows: [[708, '708', 'Shane Warne', 'AUS', '145 Tests'], [571, '571', 'Nathan Lyon', 'AUS', '143 Tests', 1], [563, '563', 'Glenn McGrath', 'AUS', '124 Tests'], [445, '445', 'Mitchell Starc', 'AUS', '107 Tests', 1], [355, '355', 'Dennis Lillee', 'AUS', '70 Tests']] },
+      bb: { asOf: 'Aug 2026', rows: [[bbv(9, 121), '9/121', 'Arthur Mailey', 'AUS', 'v ENG, 1921'], [bbv(8, 24), '8/24', 'Glenn McGrath', 'AUS', 'v PAK, 2004'], [bbv(8, 31), '8/31', 'Frank Laver', 'AUS', 'v ENG, 1909'], [bbv(8, 38), '8/38', 'Glenn McGrath', 'AUS', 'v ENG, 1997'], [bbv(8, 43), '8/43', 'Albert Trott', 'AUS', 'v ENG, 1895']] },
+      th: { asOf: 'Aug 2026', rows: [[758, '758/8d', 'Australia', 'AUS', 'v WI, 1955'], [735, '735/6d', 'Australia', 'AUS', 'v ZIM, 2003'], [729, '729/6d', 'Australia', 'AUS', 'v ENG, 1930'], [701, '701', 'Australia', 'AUS', 'v ENG, 1934'], [695, '695', 'Australia', 'AUS', 'v ENG, 1930']] },
+      tl: { asOf: 'Aug 2026', rows: [[-36, '36', 'Australia', 'AUS', 'v ENG, 1902'], [-42, '42', 'Australia', 'AUS', 'v ENG, 1888'], [-44, '44', 'Australia', 'AUS', 'v ENG, 1896'], [-47, '47', 'Australia', 'AUS', 'v SA, 2011'], [-53, '53', 'Australia', 'AUS', 'v ENG, 1896']] },
+      pt: { asOf: 'Oct 2024', note: 'Australia\'s two highest stands that the sources list.', rows: [[451, '451', 'Ponsford & Bradman', 'AUS', '2nd wkt v ENG, 1934'], [405, '405', 'Barnes & Bradman', 'AUS', '5th wkt v ENG, 1946']] }
+    }
+  },
+  ODI: {
+    world: {
+      run: { asOf: 'Sep 2026', rows: [[18426, '18,426', 'Sachin Tendulkar', 'IND', '1989–2012'], [15109, '15,109', 'Virat Kohli', 'IND', '2008–', 1], [14234, '14,234', 'Kumar Sangakkara', 'SL', '2000–2015'], [13704, '13,704', 'Ricky Ponting', 'AUS', '1995–2012'], [13430, '13,430', 'Sanath Jayasuriya', 'SL', '1989–2011']] },
+      hs: { asOf: 'Sep 2026', rows: [[264, '264', 'Rohit Sharma', 'IND', 'v SL, 2014'], [237.5, '237*', 'Martin Guptill', 'NZ', 'v WI, 2015'], [223.5, '223*', 'Shubman Gill', 'IND', 'v WI, 2026', 1], [219, '219', 'Virender Sehwag', 'IND', 'v WI, 2011'], [215, '215', 'Chris Gayle', 'WI', 'v ZIM, 2015']] },
+      avg: { asOf: 'Sep 2026', note: 'Minimum 20 innings. Associate players are included.', rows: [[67.00, '67.00', 'Ryan ten Doeschate', 'NED', '32 innings'], [65.12, '65.12', 'Shubman Gill', 'IND', '68 innings', 1], [63.89, '63.89', 'Milind Kumar', 'USA', '27 innings', 1], [59.01, '59.01', 'Virat Kohli', 'IND', '303 innings', 1], [57.36, '57.36', 'Daryl Mitchell', 'NZ', '57 innings', 1]] },
+      c100: { asOf: 'Sep 2026', rows: [[55, '55', 'Virat Kohli', 'IND', '', 1], [49, '49', 'Sachin Tendulkar', 'IND', ''], [34, '34', 'Rohit Sharma', 'IND', '', 1], [30, '30', 'Ricky Ponting', 'AUS', ''], [28, '28', 'Sanath Jayasuriya', 'SL', '']] },
+      wkt: { asOf: 'Feb 2016', rows: [[534, '534', 'Muttiah Muralitharan', 'SL', '350 ODIs'], [502, '502', 'Wasim Akram', 'PAK', '356 ODIs'], [416, '416', 'Waqar Younis', 'PAK', '262 ODIs'], [400, '400', 'Chaminda Vaas', 'SL', '322 ODIs'], [395, '395', 'Shahid Afridi', 'PAK', '398 ODIs']] },
+      bb: { asOf: 'Jan 2024', rows: [[bbv(8, 19), '8/19', 'Chaminda Vaas', 'SL', 'v ZIM, 2001'], [bbv(7, 12), '7/12', 'Shahid Afridi', 'PAK', 'v WI, 2013'], [bbv(7, 15), '7/15', 'Glenn McGrath', 'AUS', 'v NAM, 2003'], [bbv(7, 18), '7/18', 'Rashid Khan', 'AFG', 'v WI, 2017'], [bbv(7, 19), '7/19', 'Wanindu Hasaranga', 'SL', 'v ZIM, 2024']] },
+      th: { asOf: 'Jun 2022', rows: [[498, '498/4', 'England', 'ENG', 'v NED, 2022'], [481, '481/6', 'England', 'ENG', 'v AUS, 2018'], [444, '444/3', 'England', 'ENG', 'v PAK, 2016'], [443, '443/9', 'Sri Lanka', 'SL', 'v NED, 2006'], [439, '439/2', 'South Africa', 'SA', 'v WI, 2015']] },
+      tl: { asOf: 'Feb 2020', rows: [[-35, '35', 'United States', 'USA', 'v NEP, 2020'], [-35, '35', 'Zimbabwe', 'ZIM', 'v SL, 2004'], [-36, '36', 'Canada', 'CAN', 'v SL, 2003'], [-38, '38', 'Zimbabwe', 'ZIM', 'v SL, 2001'], [-43, '43', 'Pakistan', 'PAK', 'v WI, 1993']] },
+      pt: { asOf: 'Aug 2020', rows: [[372, '372', 'Gayle & Samuels', 'WI', '2nd wkt v ZIM, 2015'], [365, '365', 'Campbell & Hope', 'WI', '1st wkt v IRE, 2019'], [331, '331', 'Tendulkar & Dravid', 'IND', '2nd wkt v NZ, 1999'], [318, '318', 'Ganguly & Dravid', 'IND', '2nd wkt v SL, 1999'], [304, '304', 'Fakhar & Imam', 'PAK', '1st wkt v ZIM, 2018']] }
+    },
+    aus: {
+      run: { asOf: 'Aug 2025', note: 'Runs for Australia only, so Ponting\'s total excludes his World XI match.', rows: [[13589, '13,589', 'Ricky Ponting', 'AUS', ''], [9595, '9,595', 'Adam Gilchrist', 'AUS', ''], [8500, '8,500', 'Mark Waugh', 'AUS', ''], [7981, '7,981', 'Michael Clarke', 'AUS', ''], [7569, '7,569', 'Steve Waugh', 'AUS', '']] },
+      hs: { asOf: 'Aug 2025', rows: [[201.5, '201*', 'Glenn Maxwell', 'AUS', 'v AFG, 2023'], [185.5, '185*', 'Shane Watson', 'AUS', 'v BAN, 2011'], [181.5, '181*', 'Matthew Hayden', 'AUS', 'v NZ, 2007'], [179, '179', 'David Warner', 'AUS', 'v PAK, 2017'], [178, '178', 'David Warner', 'AUS', 'v AFG, 2015']] },
+      avg: { asOf: 'Aug 2025', note: 'Minimum 20 innings.', rows: [[53.58, '53.58', 'Michael Bevan', 'AUS', ''], [48.15, '48.15', 'Michael Hussey', 'AUS', ''], [45.78, '45.78', 'Adam Voges', 'AUS', ''], [45.30, '45.30', 'David Warner', 'AUS', ''], [44.61, '44.61', 'Dean Jones', 'AUS', '']] },
+      c100: { asOf: 'Aug 2025', rows: [[30, '30', 'Ricky Ponting', 'AUS', ''], [22, '22', 'David Warner', 'AUS', ''], [18, '18', 'Mark Waugh', 'AUS', ''], [17, '17', 'Aaron Finch', 'AUS', ''], [16, '16', 'Adam Gilchrist', 'AUS', '']] },
+      wkt: { asOf: 'Aug 2025', rows: [[380, '380', 'Glenn McGrath', 'AUS', ''], [380, '380', 'Brett Lee', 'AUS', ''], [291, '291', 'Shane Warne', 'AUS', ''], [244, '244', 'Mitchell Starc', 'AUS', '', 1], [239, '239', 'Mitchell Johnson', 'AUS', '']] },
+      bb: { asOf: 'Aug 2025', rows: [[bbv(7, 15), '7/15', 'Glenn McGrath', 'AUS', 'v NAM, 2003'], [bbv(7, 20), '7/20', 'Andy Bichel', 'AUS', 'v ENG, 2003'], [bbv(6, 14), '6/14', 'Gary Gilmour', 'AUS', 'v ENG, 1975'], [bbv(6, 28), '6/28', 'Mitchell Starc', 'AUS', 'v NZ, 2015'], [bbv(6, 31), '6/31', 'Mitchell Johnson', 'AUS', 'v SL, 2011']] },
+      th: { asOf: 'Aug 2025', rows: [[434, '434/4', 'Australia', 'AUS', 'v SA, 2006'], [431, '431/2', 'Australia', 'AUS', 'v SA, 2025'], [417, '417/6', 'Australia', 'AUS', 'v AFG, 2015'], [399, '399/8', 'Australia', 'AUS', 'v NED, 2023'], [392, '392/8', 'Australia', 'AUS', 'v SA, 2023']] },
+      tl: { asOf: 'Aug 2025', rows: [[-70, '70', 'Australia', 'AUS', 'v NZ, 1986'], [-70, '70', 'Australia', 'AUS', 'v ENG, 1977'], [-74, '74', 'Australia', 'AUS', 'v SL, 2013'], [-91, '91', 'Australia', 'AUS', 'v WI, 1987'], [-93, '93', 'Australia', 'AUS', 'v SA, 2006']] }
+    }
+  },
+  T20I: {
+    world: {
+      run: { asOf: 'Jul 2026', rows: [[4596, '4,596', 'Babar Azam', 'PAK', '2016–', 1], [4231, '4,231', 'Rohit Sharma', 'IND', '2007–2024'], [4212, '4,212', 'Jos Buttler', 'ENG', '2011–', 1], [4188, '4,188', 'Virat Kohli', 'IND', '2010–2024'], [3895, '3,895', 'Paul Stirling', 'IRE', '2009–', 1]] },
+      hs: { asOf: 'Jun 2026', note: 'Associate nations are included. Finch\'s 172 is also the highest by a full member.', rows: [[172, '172', 'Aaron Finch', 'AUS', 'v ZIM, 2018'], [164.5, '164*', 'Hamza Khan', 'RWA', 'v CIV, 2026', 1], [164, '164', 'Karanbir Singh', 'AUT', 'v HUN, 2026', 1], [162.5, '162*', 'Hazratullah Zazai', 'AFG', 'v IRE, 2019'], [160, '160', 'Mohammad Ihsan', 'ESP', 'v CRO, 2025']] },
+      c100: { asOf: 'Jul 2026', rows: [[5, '5', 'Glenn Maxwell', 'AUS', '', 1], [5, '5', 'Rohit Sharma', 'IND', ''], [4, '4', 'Phil Salt', 'ENG', '', 1], [4, '4', 'Karanbir Singh', 'AUT', '', 1], [4, '4', 'Suryakumar Yadav', 'IND', '', 1]] },
+      wkt: { asOf: 'Jul 2026', rows: [[193, '193', 'Rashid Khan', 'AFG', '2015–', 1], [169, '169', 'Adil Rashid', 'ENG', '2009–', 1], [165, '165', 'Ish Sodhi', 'NZ', '2014–', 1], [164, '164', 'Tim Southee', 'NZ', '2008–2024'], [161, '161', 'Wanindu Hasaranga', 'SL', '2019–', 1]] },
+      bb: { asOf: 'May 2026', note: 'Associate nations hold the top figures. The best by a full member is Deepak Chahar\'s 6/7 for India v Bangladesh in 2019.', rows: [[bbv(8, 7), '8/7', 'Sonam Yeshey', 'BHU', 'v MYA, 2025'], [bbv(7, 7), '7/7', 'Sachin Gill', 'KEN', 'v CMR, 2026'], [bbv(7, 8), '7/8', 'Syazrul Idrus', 'MAS', 'v CHN, 2023'], [bbv(7, 19), '7/19', 'Ali Dawood', 'BHR', 'v BHU, 2025'], [bbv(6, 2), '6/2', 'Nabil Master', 'BOT', 'v MLI, 2026']] },
+      th: { asOf: 'Jun 2026', note: 'Associate opponents are included. Between full members the best is India\'s 297/6 v Bangladesh in 2024.', rows: [[344, '344/4', 'Zimbabwe', 'ZIM', 'v GAM, 2024'], [322, '322/7', 'Austria', 'AUT', 'v HUN, 2026'], [314, '314/3', 'Nepal', 'NEP', 'v MGL, 2023'], [313, '313/2', 'China', 'CHN', 'v SIN, 2026'], [308, '308/1', 'Germany', 'GER', 'v AUT, 2026']] },
+      tl: { asOf: 'May 2026', note: 'All five are associate nations.', rows: [[-7, '7', 'Ivory Coast', 'CIV', 'v NGA, 2024'], [-10, '10', 'Mongolia', 'MGL', 'v SIN, 2024'], [-10, '10', 'Isle of Man', 'IOM', 'v ESP, 2023'], [-12, '12', 'Mongolia', 'MGL', 'v JPN, 2024'], [-17, '17', 'Ivory Coast', 'CIV', 'v RWA, 2026']] }
+    },
+    aus: {
+      hs: { asOf: 'Jun 2026', note: 'Current Australian T20I tables could not be confirmed, so only these records are listed.', rows: [[172, '172', 'Aaron Finch', 'AUS', 'v ZIM, 2018']] },
+      c100: { asOf: 'Jul 2026', rows: [[5, '5', 'Glenn Maxwell', 'AUS', '2012–2026', 1]] }
+    }
+  },
+  SHIELD: {
+    world: {
+      run: { asOf: 'Mar 2015', rows: [[13635, '13,635', 'Darren Lehmann', 'SA/VIC', '1988–2008'], [10821, '10,821', 'Jamie Cox', 'TAS', '1988–2006'], [10643, '10,643', 'Jamie Siddons', 'VIC/SA', '1985–2000'], [10621, '10,621', 'Michael Bevan', 'SA/NSW/TAS', '1990–2007'], [10474, '10,474', 'Brad Hodge', 'VIC', '1994–2010']] },
+      hs: { asOf: 'Mar 2019', rows: [[452.5, '452*', 'Don Bradman', 'NSW', 'v QLD, 1930'], [437, '437', 'Bill Ponsford', 'VIC', 'v QLD, 1928'], [365.5, '365*', 'Clem Hill', 'SA', 'v NSW, 1901'], [359, '359', 'Bob Simpson', 'NSW', 'v QLD, 1964'], [357, '357', 'Don Bradman', 'SA', 'v VIC, 1936']] },
+      c100: { asOf: 'Mar 2015', rows: [[45, '45', 'Darren Lehmann', 'SA/VIC', '147 matches'], [42, '42', 'Michael Bevan', 'SA/NSW/TAS', '118 matches'], [36, '36', 'Don Bradman', 'NSW/SA', '62 matches'], [33, '33', 'Chris Rogers', 'WA/VIC', '120 matches'], [32, '32', 'Matthew Elliott', 'VIC/SA', '122 matches']] },
+      wkt: { asOf: 'Feb 2025', rows: [[513, '513', 'Clarrie Grimmett', 'SA/VIC', '79 matches'], [441, '441', 'Michael Kasprowicz', 'QLD', '101 matches'], [430, '430', 'Andy Bichel', 'QLD', '89 matches'], [419, '419', 'Jo Angel', 'WA', '105 matches'], [397, '397', 'Jackson Bird', 'NSW/TAS', '91 matches']] },
+      th: { asOf: 'Mar 2019', rows: [[1107, '1107', 'Victoria', 'VIC', 'v NSW, 1926–27'], [918, '918', 'New South Wales', 'NSW', 'v SA, 1900–01'], [900, '900/6d', 'Queensland', 'QLD', 'v VIC, 2005–06'], [821, '821/7d', 'South Australia', 'SA', 'v QLD, 1939–40'], [815, '815', 'New South Wales', 'NSW', 'v VIC, 1908–09']] },
+      tl: { asOf: 'Mar 2019', rows: [[-27, '27', 'South Australia', 'SA', 'v NSW, 1955–56'], [-29, '29', 'South Australia', 'SA', 'v NSW, 2004–05'], [-31, '31', 'Victoria', 'VIC', 'v NSW, 1906–07'], [-32, '32', 'New South Wales', 'NSW', 'v TAS, 2020–21'], [-35, '35', 'Victoria', 'VIC', 'v NSW, 1926–27']] },
+      pt: { asOf: 'Apr 2021', note: 'The record and the stand it beat.', rows: [[486, '486', 'Harris & Pucovski', 'VIC', '1st wkt v SA, 2020–21'], [464, '464', 'M Waugh & S Waugh', 'NSW', 'v WA, 1990–91']] }
+    }
+  }
+};
+const RR_FMT = { TEST: 'FC', ODI: 'OD', T20I: 'T20', SHIELD: 'FC' };
+const RR_LABEL = { TEST: 'Test', ODI: 'ODI', T20I: 'T20I', SHIELD: 'Shield' };
+function rrScope(set) { return set === 'SHIELD' ? 'dom' : 'intl'; }
+
+// Entries from this save for one table, as rows comparable with the real ones.
+// aus: limit to Australia (internationals) or no limit (world, Shield).
+function saveRows(set, cat, aus) {
+  const fmt = RR_FMT[set], scope = rrScope(set), k = scope + '_' + fmt, R = game.records || {};
+  const ausT = teamDef('AUS') ? (teamDef('AUS').short || 'AUS') : 'AUS';
+  const okT = t => !aus || t === ausT;
+  const yr = y => y ? `${y}` : '';
+  const out = [];
+  if (cat === 'hs') (R.hs && R.hs[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r + (x.no ? 0.5 : 0), d: x.r + (x.no ? '*' : ''), n: x.n, t: x.t, note: `v ${x.opp}, ${yr(x.y)}`, id: x.id }));
+  if (cat === 'bb') (R.bb && R.bb[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: bbv(x.w, x.r), d: `${x.w}/${x.r}`, n: x.n, t: x.t, note: `v ${x.opp}, ${yr(x.y)}`, id: x.id }));
+  if (cat === 'th') (R.th && R.th[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r, d: x.r + (x.w < 10 ? '/' + x.w : ''), n: teamName(teamIdByShort(x.t)) || x.t, t: x.t, note: `v ${x.opp}, ${yr(x.y)}` }));
+  if (cat === 'tl') (R.tl && R.tl[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: -x.r, d: String(x.r), n: teamName(teamIdByShort(x.t)) || x.t, t: x.t, note: `v ${x.opp}, ${yr(x.y)}` }));
+  if (cat === 'pt') (R.pt && R.pt[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r, d: x.r + (x.unb ? '*' : ''), n: `${lastOf(x.a)} & ${lastOf(x.b)}`, t: x.t, note: `${ordinal(x.w)} wkt v ${x.opp}, ${yr(x.y)}` }));
+  if (['run', 'wkt', 'c100', 'avg'].includes(cat)) {
+    const stat = { run: 'runs', wkt: 'wkts', c100: 'c100', avg: 'avg' }[cat];
+    careerLeaders(fmt, scope, stat, 40).filter(x => !aus || x.p.nat === 'AUS').slice(0, 10).forEach(x => {
+      const s = x.s, v = { run: s.r, wkt: s.w, c100: s.c100, avg: batAvgOf(s) }[cat];
+      const t = x.p.teamId && teamDef(x.p.teamId) ? (teamDef(x.p.teamId).short || x.p.teamId) : (x.p.retired ? 'retired' : '');
+      out.push({ v, d: cat === 'avg' ? fmtNum(v) : v.toLocaleString('en-AU'), n: pname(x.p), t: scope === 'intl' ? (x.p.nat || t) : t, note: `${s.m} matches`, id: x.p.id });
+    });
+  }
+  return out.filter(x => x.v != null && isFinite(x.v)).sort((a, b) => b.v - a.v);
+}
+function lastOf(n) { const parts = String(n || '').split(' '); return parts[parts.length - 1]; }
+function teamIdByShort(sh) { const t = TEAM_DEFS.find(x => (x.short || x.id) === sh); return t ? t.id : (teamDef(sh) ? sh : null); }
+
+// Merge real rows with this save's entries that would make the table.
+function mergedTable(set, cat, aus) {
+  const tab = (REAL_RECORDS[set][aus && set !== 'SHIELD' ? 'aus' : 'world'] || {})[cat];
+  if (!tab) return null;
+  const real = tab.rows.map(r => ({ v: r[0], d: r[1], n: r[2], t: r[3], note: r[4], active: !!r[5], real: true }));
+  const mine = saveRows(set, cat, aus);
+  const floor = real[real.length - 1].v;
+  const merged = real.concat(mine.filter(x => x.v >= floor)).sort((a, b) => b.v - a.v || (a.real ? -1 : 1));
+  const top = real[0], beaten = mine.length && mine[0].v > top.v;
+  const best = mine[0] ? Object.assign({ rank: merged.indexOf(mine[0]) >= 0 ? merged.indexOf(mine[0]) + 1 : real.filter(r => r.v > mine[0].v).length + 1 }, mine[0]) : null;
+  return { tab, rows: merged, best, beaten, top };
+}
+
+// Record broken: post news and a Legacy entry the first time a save player passes the real mark,
+// and again if another save player later takes it from him.
+function checkRealRecords(silent) {
+  if (!game || !game.players) return;
+  if (!game.recBroken) { game.recBroken = {}; silent = true; }
+  const B = game.recBroken;
+  Object.keys(REAL_RECORDS).forEach(set => ['world', 'aus'].forEach(sc => {
+    const tabs = REAL_RECORDS[set][sc]; if (!tabs) return;
+    Object.keys(tabs).forEach(cat => {
+      const m = mergedTable(set, cat, sc === 'aus'); if (!m || !m.beaten) return;
+      const key = `${set}_${sc}_${cat}`, cur = m.rows[0], prev = B[key];
+      if (prev && prev.n === cur.n && prev.d === cur.d) return;
+      const isNew = !prev || prev.n !== cur.n;
+      B[key] = { n: cur.n, d: cur.d, t: cur.t, set, sc, cat, year: game.year, day: game.day, was: `${m.top.n} (${m.top.d})` };
+      if (!isNew || silent) return;
+      const what = `${sc === 'aus' ? 'Australian ' : ''}${RR_LABEL[set]} record for ${RR_CATS[cat].toLowerCase()}`;
+      addNews('Records', `${cur.n} breaks the ${what}`, `${cur.d}, passing ${m.top.n}'s ${m.top.d}.`);
+      (game.legacyLog = game.legacyLog || []).unshift({ year: game.year, day: game.day, text: `${cur.n} broke the ${what}: ${cur.d}, passing ${m.top.n}'s ${m.top.d}.` });
+      if (game.legacyLog.length > 40) game.legacyLog.length = 40;
+    });
+  }));
 }
 // §9 NEW GAME + APPLYING RESULTS ---------------------------------------------
 let game = null;
@@ -3133,7 +3308,7 @@ function nextDay() {
     if (game.day === w.start) { windowStart(w); if (w.squad.some(id => P(id).teamId === U())) stop = true; }
     if (game.day === w.end) windowEnd(w);
   }
-  if (game.day % 7 === 0) weeklyMorale();
+  if (game.day % 7 === 0) { weeklyMorale(); checkRealRecords(); }
   if (game.day % 30 === 15) monthlyDevelopment();
   if (game.day === CAL.TRADE_DEADLINE) addNews('League', 'Trade deadline passed', 'No more trades until the off-season. Free agents can still be signed.');
   game.offers = game.offers.filter(o => o.expires >= game.day);
@@ -3958,6 +4133,7 @@ function normaliseRoute() {
   if (ui.page === 'office' && ['staff', 'club'].includes(ui.officeTab)) { ui.page = 'club'; ui.clubTab = ui.officeTab === 'staff' ? 'staff' : 'overview'; ui.officeTab = 'inbox'; }
   if (ui.page === 'office' && ui.officeTab === 'national') { ui.page = 'intl'; ui.intlTab = 'aus'; ui.officeTab = 'inbox'; }
   if (ui.page === 'league' && ui.leagueTab === 'world') { ui.page = 'intl'; ui.intlTab = 'world'; ui.leagueTab = 'ladders'; }
+  if (ui.page === 'league' && ui.leagueTab === 'records') { ui.page = 'legacy'; ui.legacyTab = 'records'; ui.leagueTab = 'ladders'; }
   if (ui.page === 'league' && ui.leagueTab === 'history') { ui.page = 'legacy'; ui.legacyTab = 'honours'; ui.leagueTab = 'ladders'; }
   if (ui.page === 'squad' && ui.squadTab === 'tactics') { ui.page = 'club'; ui.clubTab = 'philosophy'; ui.squadTab = 'list'; }
 }
@@ -4044,7 +4220,7 @@ function showHelp() {
     <h4>Staff</h4><p>Hire a head coach, batting and bowling coaches, a performance analyst, a physio and a talent scout from a separate staff budget. Coaches speed development, the analyst builds the bowling plan for each opposition batter, the physio cuts injuries, and the scout sharpens potential grades.</p>
     <h4>Scouting</h4><p>Every batter has strengths and weaknesses. Commission scouting on match day so your analyst can target them. Your analyst also learns about batters your bowlers bowl at. AI sides do the same to you.</p>
     <h4>Australia</h4><p>Take on the national selector role to pick every Australia squad. Tests and white-ball matches are played out in full. Picking your own state's players weakens your state while they are away.</p>
-    <h4>The dressing room</h4><p>Every player has a personality and a mood. Mood moves with playing time, results, pay and how well your head coach manages people. Talk to players to reassure them, promise them games or challenge them. Unhappy players lose form, refuse new contracts and eventually ask for a trade.</p>
+    <h4>The locker</h4><p>Every player has a personality and a mood. Mood moves with playing time, results, pay and how well your head coach manages people. The coach settles unsettled players each week. You step in when a player asks for a trade, is Unhappy, was let down on a promise or wants a better contract: talk to him to reassure him, promise him games or challenge him. Unhappy players lose form, refuse new contracts and eventually ask for a trade.</p>
     <h4>Development</h4><p>Put players on individual programmes (technique, power, bowling, control, variations, keeping, fitness, or learning to bowl). Your head coach decides how many programmes you can run. Programmes add monthly progress during the season and faster growth in the off-season.</p>
     <h4>World cricket</h4><p>Other nations play their own series, the rankings move with every international, and a T20 World Cup is held in odd-year seasons.</p>
     <h4>Club business</h4><p>The Club tab in the Office shows your bank balance, gate takings, sponsorship and wages. Set ticket prices and upgrade the training centre, medical centre, youth academy and stadium. The board now judges profit and debt as well as results. Decisions also arrive in your inbox: sponsors, media, discipline and rival clubs circling your players.</p>
@@ -4213,7 +4389,7 @@ function setSquadTab(t) { ui.squadTab = t; render(); }
 function renderSquad() {
   const t = ui.squadTab;
   const body = t === 'xi' ? renderXIEditor() : t === 'tactics' ? renderTactics() : t === 'contracts' ? renderContracts() : (t === 'training' || t === 'dev') ? renderDevelopment() : t === 'room' ? renderDressingRoom() : renderSquadList();
-  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','Selection'],['dev','Development'],['room','Dressing room'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
+  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','XI'],['dev','Training'],['room','Locker'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
 }
 const GROUP_OPTS = [['ALL','All roles'],['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
 function sortPlayers(arr, key, fmt) {
@@ -4222,13 +4398,13 @@ function sortPlayers(arr, key, fmt) {
 }
 function renderSquadList() {
   const view = ui.squadView || 'depth';
-  const toggle = seg([['depth','Depth chart'],['list','List']], view, `(v=>{ui.squadView=v;render();})`);
-  if (view === 'depth') return `${toggle}<div style="height:8px"></div>${renderDepth()}`;
+  const toggle = seg([['depth','Depth'],['list','List']], view, `(v=>{ui.squadView=v;render();})`);
+  if (view === 'depth') return renderDepth(toggle);
   return `${toggle}<div style="height:8px"></div>${renderPlayerList()}`;
 }
-function renderDepth() {
+function renderDepth(toggle) {
   const f = ui.listFmt, ch = depthChart(U(), f);
-  const tools = `<div class="flex wrap">${fmtSeg(f, 'setListFmt')}</div>`;
+  const tools = `<div class="tool-row">${toggle || ''}${fmtSeg(f, 'setListFmt')}</div>`;
   if (!ch) return `${tools}<div class="empty">Not enough players for an XI.</div>`;
   const sum = `<div class="depth-sum">${ch.summary.map(x => `<span class="${x.thin ? 'thin' : ''}"><b>${x.n}</b> ${x.label}</span>`).join('')}</div>`;
   const rows = ch.slots.map(s => {
@@ -4242,7 +4418,7 @@ function renderDepth() {
   const res = groups.map(([g, l]) => { const list = ch.reserves.filter(r => group(r.p) === g).sort((a, b) => overall(b.p, f) - overall(a.p, f)); if (!list.length) return '';
     return `<div class="lbl" style="padding:10px 14px 2px">${l}</div>${list.map(r => playerRow(r.p, { fmt: f, sub: `${identityLine(r.p)}${r.covers.length ? ` · covers ${r.covers.join(', ').toLowerCase()}` : ''}`, end: `${statusChip(r.p)}${pill(overall(r.p, f))}` })).join('')}`; }).join('');
   return `${tools}<div style="height:8px"></div>${sum}
-    <div class="grid g2" style="margin-top:8px">${panel(`${FORMATS[f].name} XI`, `<div class="rows">${rows}</div>`, { flush: true })}${panel(`Reserves · ${ch.reserves.length}`, `<div class="rows">${res || '<div class="empty">No reserves.</div>'}</div>`, { flush: true })}</div>
+    <div class="grid g2" style="margin-top:8px">${panel(`${compName(f)} XI`, `<div class="rows">${rows}</div>`, { flush: true })}${panel(`Reserves · ${ch.reserves.length}`, `<div class="rows">${res || '<div class="empty">No reserves.</div>'}</div>`, { flush: true })}</div>
     <div class="xs dim" style="margin-top:6px">The best XI if everyone were available. Greyed players are injured or on national duty, with the player who steps in. Amber counts are thin areas to recruit.</div>`;
 }
 function renderPlayerList() {
@@ -4420,7 +4596,7 @@ function setLeagueTab(t) { ui.leagueTab = t; render(); }
 function renderLeague() {
   const t = ui.leagueTab;
   const body = t === 'leaders' ? renderLeaders() : t === 'fixtures' ? renderFixturesBody() : t === 'players' ? renderPlayerSearch() : t === 'records' ? renderRecords() : renderLadders();
-  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['fixtures','Fixtures'],['leaders','Leaders'],['records','Records'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
+  return `${pageTitle('League', game.season.label)}${seg([['ladders','Ladders'],['fixtures','Fixtures'],['leaders','Leaders'],['players','Players']], t, 'setLeagueTab')}<div style="height:10px"></div>${body}`;
 }
 function setLadComp(c) { ui.ladComp = c; render(); }
 function renderLadders() {
@@ -4498,8 +4674,8 @@ function renderIntl() {
 }
 function renderLegacy() {
   const t = ui.legacyTab || 'career';
-  const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : renderGMCareer();
-  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honour roll']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
+  const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : t === 'records' ? renderLegacyRecords() : renderGMCareer();
+  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honours'],['records','Records']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
 }
 function renderGMCareer() {
   const g = game.gm, N = game.nation, pct = g.wins + g.losses ? Math.round(g.wins / (g.wins + g.losses) * 100) : 0;
@@ -5132,10 +5308,15 @@ function renderDevelopment() {
 function renderDressingRoom() {
   const sq = squadOf(U()).sort((a, b) => a.morale - b.morale);
   const tm = teamMorale(U()), cap = P(game.captain), h = staffIn(U(), 'head');
-  return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${tm < 50 ? 'loss' : tm >= 65 ? 'win' : ''}">${tm}</div><div class="l">Team morale</div></div><div class="kpi"><div class="v">${sq.filter(p => p.morale < 45).length}</div><div class="l">Unhappy</div></div><div class="kpi"><div class="v">${sq.filter(p => p.wantsOut).length}</div><div class="l">Trade requests</div></div><div class="kpi"><div class="v">${h ? h.mm : '–'}</div><div class="l">Coach man-mgmt</div></div></div>
-    <div style="height:8px"></div>${cap ? `<div class="note" style="margin-bottom:8px">Captain: <b>${esc(pname(cap))}</b> (${PERSONAS[ensurePersona(cap)].label})${cap.persona === 'leader' ? ' lifts the whole squad every week.' : '. A Leader as captain would lift team morale.'}</div>` : ''}
-    ${panel('Squad mood', `<div class="rows">${sq.map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'} · ${expectedStarter(p) ? 'expects to play' : 'squad player'}${p.promise ? ' · promised games' : ''}`, end: `${chip(moodClass(p.morale), moodLabel(p.morale))}<button class="btn sm" onclick="event.stopPropagation();talkSheet('${p.id}')">Talk</button>` })).join('')}</div>`, { flush: true })}
-    <div class="xs dim" style="margin-top:6px">Mood moves weekly with playing time, results, pay against market value, the head coach's man-management and the captain. Unhappy players lose form and may ask to leave; a player who stays unsettled for a month drags the room down.</div>`;
+  const needs = sq.filter(gmIssue), care = sq.filter(p => !gmIssue(p) && p.morale < 62);
+  const coach = h ? `Coach ${esc(h.last)}` : 'Your coaching staff';
+  const careLine = care.length ? `${coach} is working with ${care.length} unsettled player${care.length > 1 ? 's' : ''}: ${care.map(p => esc(p.last)).join(', ')}. ${h ? `His man-management (${h.mm}) lifts them a little each week.` : 'Hire a head coach to settle them faster.'}` : `${coach} reports a settled group.`;
+  const needRows = needs.map(p => playerRow(p, { sub: `<span class="loss">${gmIssue(p)}</span> · ${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}`, end: `${chip(moodClass(p.morale), moodLabel(p.morale))}<button class="btn sm" onclick="event.stopPropagation();talkSheet('${p.id}')">Talk</button>` })).join('');
+  return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${tm < 50 ? 'loss' : tm >= 65 ? 'win' : ''}">${tm}</div><div class="l">Morale</div></div><div class="kpi"><div class="v ${needs.length ? 'loss' : ''}">${needs.length}</div><div class="l">Need you</div></div><div class="kpi"><div class="v">${sq.filter(p => p.wantsOut).length}</div><div class="l">Trade asks</div></div><div class="kpi"><div class="v">${h ? h.mm : '–'}</div><div class="l">Coach care</div></div></div>
+    <div style="height:8px"></div><div class="note" style="margin-bottom:8px">${careLine}${cap ? ` Captain <b>${esc(pname(cap))}</b> (${PERSONAS[ensurePersona(cap)].label})${cap.persona === 'leader' ? ' lifts the squad every week.' : '.'}` : ''}</div>
+    ${panel(`Needs the GM · ${needs.length}`, needs.length ? `<div class="rows">${needRows}</div>` : '<div class="empty">Nobody needs you right now. Your coach is handling the squad.</div>', { flush: true })}
+    <div style="height:8px"></div>${panel('Squad mood', `<div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}${p.morale < 62 ? ' · with the coach' : ''}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div>`, { flush: true })}
+    <div class="xs dim" style="margin-top:6px">The head coach handles everyday mood. You step in for trade requests, Unhappy players, broken promises and contract disputes.</div>`;
 }
 function talkSheet(id) {
   const p = P(id); ensurePersona(p);
@@ -5340,6 +5521,28 @@ function showTeam(id) {
 // Records book.
 function setRecScope(v) { ui.recScope = v; render(); }
 function setRecFmt(v) { ui.recFmt = v; render(); }
+// Legacy > Records: real all-time tables with this save's players ranked among them, or this save's own book.
+function renderLegacyRecords() {
+  const mode = ui.rrMode || 'all';
+  const top = seg([['all','All-time'],['save','This save']], mode, '(v=>{ui.rrMode=v;render();})');
+  if (mode === 'save') return `${top}<div style="height:8px"></div>${renderRecords()}`;
+  const set = ui.rrSet || 'TEST', aus = set !== 'SHIELD' && ui.rrScope === 'aus';
+  const tabs = REAL_RECORDS[set][aus ? 'aus' : 'world'];
+  const cats = Object.keys(tabs);
+  const cat = cats.includes(ui.rrCat) ? ui.rrCat : cats[0];
+  const m = mergedTable(set, cat, aus);
+  const rows = m.rows.map((x, i) => `<tr class="${x.real ? '' : 'me tap'}" ${x.id ? `onclick="showPlayer('${x.id}')"` : ''}><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${esc(x.t || '')}</span>${x.real ? (x.active ? ' <span class="xs dim">active</span>' : '') : ' ' + chip('good', 'This save')}${x.real && m.beaten && x === m.top ? ' ' + chip('', 'Previous record') : ''}<div class="xs dim">${esc(x.note || '')}</div></td><td class="b big">${x.d}</td></tr>`).join('');
+  const best = m.best && !m.rows.includes(m.rows.find(r => !r.real)) ? `<div class="note" style="margin-top:8px">Best in this save: <b>${esc(m.best.n)}</b> ${m.best.d}${m.best.note ? ' · ' + esc(m.best.note) : ''}, which would rank ${ordinal(m.best.rank)}.</div>` : !m.best ? '<div class="note" style="margin-top:8px">No one in this save has an entry here yet.</div>' : '';
+  const broken = (game.legacyLog || []).slice(0, 8);
+  const brokenP = broken.length ? panel(`Records broken · ${broken.length}`, `<div class="rows">${broken.map(e => `<div class="row"><div class="stack"><div class="main-t" style="white-space:normal">${esc(e.text)}</div><div class="sub-t">${e.year}</div></div></div>`).join('')}</div>`, { flush: true }) : '';
+  return `${top}<div style="height:8px"></div>
+    <div class="tool-row">${seg(Object.keys(REAL_RECORDS).map(k => [k, RR_LABEL[k]]), set, '(v=>{ui.rrSet=v;render();})')}${set === 'SHIELD' ? '' : seg([['world','World'],['aus','Australia']], aus ? 'aus' : 'world', '(v=>{ui.rrScope=v;render();})')}</div>
+    <div style="height:8px"></div>${sel(cats.map(c => [c, RR_CATS[c]]), cat, 'ui.rrCat=this.value;render()', 'full')}<div style="height:8px"></div>
+    ${panel(`${aus ? 'Australia · ' : ''}${RR_LABEL[set]} · ${RR_CATS[cat]}`, `<table class="tbl rec"><tbody>${rows}</tbody></table>`, { flush: true, end: `<span class="xs dim">as of ${m.tab.asOf}</span>` })}
+    ${best}${m.tab.note ? `<div class="xs dim" style="margin-top:6px">${esc(m.tab.note)}</div>` : ''}
+    <div class="xs dim" style="margin-top:6px">Real figures: ${RR_SRC}. Players marked active may have added to their totals since that date. Save players count matches before your career began.</div>
+    ${brokenP ? `<div style="height:8px"></div>${brokenP}` : ''}`;
+}
 function renderRecords() {
   const scope = ui.recScope || 'dom', f = ui.recFmt || 'FC', cat = ui.recCat || 'hs';
   const k = scope + '_' + f, R = game.records || { hs:{}, bb:{}, th:{}, tl:{}, pt:{} };
@@ -5352,7 +5555,7 @@ function renderRecords() {
   if (cat === 'th' || cat === 'tl') rows = (R[cat][k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${x.t}</b><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.r}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
   if (cat === 'pt') rows = (R.pt[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> & <b>${esc(x.b)}</b><div class="xs dim">${x.t} v ${x.opp} · ${ordinal(x.w)} wicket · ${x.y}</div></td><td class="b big">${x.r}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
   if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${s.m} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${s.m} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${s.r} runs · ${s.w} wkts`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${x.p.retired ? 'retired' : tdot(x.p.teamId)}</span><div class="xs dim">${sub}</div></td><td class="b big">${v}</td><td></td></tr>`; }).join(''); }
-  return `<div class="flex wrap">${seg([['dom','Domestic'],['intl','International']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
+  return `<div class="tool-row">${seg([['dom','Domestic'],['intl','Intl']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
     <div style="height:8px"></div>${sel(cats, cat, "ui.recCat=this.value;render()", 'full')}<div style="height:8px"></div>
     ${panel(`${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
     <div class="xs dim" style="margin-top:6px">${cat[0] === 'c' ? 'Career totals include matches played before your career began.' : 'Match records count from the start of your career.'}</div>`;
