@@ -506,6 +506,16 @@ button,select,[onclick]{touch-action:manipulation}
 .broadcast-panel .broadcast-recent{min-width:0;}
 .broadcast-panel .broadcast-recent>div{min-width:0;text-align:right;}
 .broadcast-panel .broadcast-context{margin-top:11px;}
+
+/* Build 010: progress strip + unboxed partnership-left / rate-right metrics. */
+.broadcast-panel .broadcast-progress{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 2px;font-size:11px;color:var(--muted)}
+.broadcast-panel .broadcast-progress strong{color:var(--text);font-weight:750}
+.broadcast-panel .broadcast-metrics.broadcast-metrics-inline{display:flex;justify-content:space-between;align-items:center;gap:6px 12px;flex-wrap:wrap;border:0;border-radius:0;margin:10px 0 0;padding:9px 0 4px;background:transparent}
+.broadcast-panel .broadcast-metrics-inline .broadcast-metric{display:inline-flex;align-items:baseline;gap:7px;min-width:0;padding:0;border:0;text-align:left}
+.broadcast-panel .broadcast-metrics-inline .broadcast-metric span{color:var(--muted);font-size:11px;font-weight:650;text-transform:none;letter-spacing:0}
+.broadcast-panel .broadcast-metrics-inline .broadcast-metric b{color:var(--text);font-size:13px;font-weight:800;white-space:nowrap}
+.broadcast-panel .broadcast-recent{margin-top:7px;padding-top:10px}
+@media(max-width:360px){.broadcast-panel .broadcast-metrics-inline .broadcast-metric{gap:4px}.broadcast-panel .broadcast-metrics-inline .broadcast-metric span{font-size:10px}}
 </style>
 </head>
 <body>
@@ -558,7 +568,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 009', title: 'Live Card Layout Polish', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 010', title: 'Match Progress & Live Layout', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5756,14 +5766,39 @@ function broadcastScore(M, compact) {
     const played = innings.filter(i => i.bat === id);
     return played.length ? played.map(i => (i.balls === 0 && i.runs === 0 && i.wkts === 0 && !i.closed ? '—' : inningsLine(i, M.fmt))).join(' & ') : '—';
   };
-  const team = id => `<div class="broadcast-team"><div class="broadcast-identity">${broadcastBadge(id)}<span class="broadcast-name">${esc(teamDef(id).short || id)}</span></div><div class="broadcast-total">${esc(score(id))}</div></div>`;
+  const team = id => `<div class="broadcast-team"><div class="broadcast-identity">${broadcastBadge(id)}<span class="broadcast-name">${esc(broadcastNation(id) ? (teamDef(id).short || id) : teamName(id))}</span></div><div class="broadcast-total">${esc(score(id))}</div></div>`;
   const target = current && !M.done && M.fmt !== 'FC' && current.target;
   const remain = target ? Math.max(0, current.target - current.runs) : 0;
   const ballsLeft = target ? Math.max(0, mOvers(M) * 6 - current.balls) : 0;
   const chase = target ? `<div class="broadcast-chase">${esc(teamDef(current.bat).short || current.bat)} need ${remain} from ${ballsLeft} balls · RRR ${(ballsLeft ? remain * 6 / ballsLeft : 0).toFixed(2)}</div>` : '';
   const heading = M.done ? 'FULL TIME' : current && current.closed ? 'INNINGS BREAK' : 'LIVE MATCH';
-  return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
+  return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>${broadcastMatchProgress(M)}
     <div class="broadcast-match">${team(teams[0])}<span class="broadcast-vs">v</span>${team(teams[1])}</div>${chase}`;
+}
+// Build 010: derive the day/session and remaining playable overs from the match's
+// weather-adjusted daily capacities, not from the current innings' over count.
+function broadcastMatchProgress(M) {
+  if (M.done) return '';
+  if (M.fmt === 'FC') {
+    if (!M.cond || !Array.isArray(M.cond.days) || !M.cond.days.length) return '';
+    const capacities = M.cond.days.map(d => Math.max(0, dayOpd(M) - (Number(d.lost) || 0)) * 6);
+    let elapsed = Math.max(0, Number(M.balls) || 0), dayIndex = capacities.length - 1, before = 0;
+    for (let i = 0, sum = 0; i < capacities.length; i++) {
+      if (elapsed < sum + capacities[i]) { dayIndex = i; before = sum; break; }
+      sum += capacities[i]; before = sum;
+    }
+    const usedToday = Math.max(0, Math.min(capacities[dayIndex], elapsed - before));
+    const remainingBalls = Math.max(0, capacities[dayIndex] - usedToday);
+    const ses = sessionOf(M);
+    const session = ses && ses.name ? ses.name.replace(/ session$/i, '') : 'Session';
+    const remaining = remainingBalls % 6 ? `${Math.floor(remainingBalls / 6)}.${remainingBalls % 6}` : `${remainingBalls / 6}`;
+    return `<div class="broadcast-progress"><strong>Day ${dayIndex + 1} · ${esc(session)}</strong><span>${remaining} overs left today</span></div>`;
+  }
+  const inn = curInn(M);
+  if (!inn || inn.closed) return '';
+  const ballsLeft = Math.max(0, mOvers(M) * 6 - inn.balls);
+  const remain = ballsLeft % 6 ? `${Math.floor(ballsLeft / 6)}.${ballsLeft % 6}` : `${ballsLeft / 6}`;
+  return `<div class="broadcast-progress"><strong>${M.innings.length > 1 ? 'Second innings' : 'First innings'}</strong><span>${remain} overs left</span></div>`;
 }
 function broadcastMatchContext(M) {
   const venue = M.venue ? teamDef(M.venue).ground : '';
@@ -5779,8 +5814,8 @@ function broadcastMetrics(M, inn) {
   const partnership = inn.part && Number.isFinite(Number(inn.part.r)) ? Number(inn.part.r) : 0;
   const partnershipBalls = inn.part && Number.isFinite(Number(inn.part.b)) ? Number(inn.part.b) : 0;
   const stand = partnershipBalls ? `${partnership} (${partnershipBalls})` : '—';
-  const items = target ? [['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)], ['Partnership', stand]] : [['Run rate', rate.toFixed(2)], ['Partnership', stand]];
-  return `<div class="broadcast-metrics">${items.map(([k,v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
+  const items = target ? [['Partnership', stand], ['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)]] : [['Partnership', stand], ['Run rate', rate.toFixed(2)]];
+  return `<div class="broadcast-metrics broadcast-metrics-inline">${items.map(([k,v]) => `<span class="broadcast-metric"><span>${k}</span><b>${v}</b></span>`).join('')}</div>`;
 }
 function broadcastCrease(M, inn) {
   if (!inn || M.done || inn.closed) return '';
@@ -5789,7 +5824,7 @@ function broadcastCrease(M, inn) {
   const batterHtml = bat.map(c => `<div class="broadcast-player tap" onclick="showPlayer('${c.id}')"><span>${esc(pshort(P(c.id)))}${c.id === inn.striker ? ' *' : ''}</span><b>${c.r} <small>(${c.b})</small></b></div>`).join('');
   const bowlerHtml = bowler && P(bowler) ? `<div class="broadcast-player tap" onclick="showPlayer('${bowler}')"><span>${esc(pshort(P(bowler)))}</span><b>${f ? f.w+'/'+f.r : '0/0'} <small>(${f ? oversStr(f.balls) : '0'})</small></b></div>` : '<div class="dim xs">Awaiting next bowler</div>';
   const last = inn.lastOver, cur = inn.thisOver || [];
-  return `<div class="broadcast-people"><div><span class="broadcast-label">BATTERS</span>${batterHtml}</div><div><span class="broadcast-label">BOWLER</span>${bowlerHtml}</div></div><div class="broadcast-recent"><span class="broadcast-label">${cur.length ? 'THIS OVER' : last ? 'LAST OVER' : 'FIRST OVER'}</span><div>${(cur.length ? cur : last ? last.syms : []).map(ballSym).join('') || '<span class="dim xs">Awaiting first ball</span>'}</div></div>`;
+  return `<div class="broadcast-people"><div><span class="broadcast-label">BATTERS</span>${batterHtml}</div><div><span class="broadcast-label">BOWLER</span>${bowlerHtml}</div></div>${broadcastMetrics(M, inn)}<div class="broadcast-recent"><span class="broadcast-label">${cur.length ? 'THIS OVER' : last ? 'LAST OVER' : 'FIRST OVER'}</span><div>${(cur.length ? cur : last ? last.syms : []).map(ballSym).join('') || '<span class="dim xs">Awaiting first ball</span>'}</div></div>`;
 }
 function broadcastInningsCard(M, inn) {
   const bats = inn.card.filter(c => c.in).sort((a,b) => b.r-a.r).slice(0,3);
@@ -5807,7 +5842,7 @@ function renderLive() {
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
-  const broadcast = broadcastScore(M) + broadcastMatchContext(M) + broadcastCrease(M, inn) + broadcastMetrics(M, inn);
+  const broadcast = broadcastScore(M) + broadcastMatchContext(M) + broadcastCrease(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
