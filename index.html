@@ -339,6 +339,24 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .nat-flag{display:inline-block;font-size:1.05em;vertical-align:-.06em;margin-right:2px}
 .cricket-flag-svg{display:inline-block;width:1.36em;height:.88em;vertical-align:-.04em;overflow:visible;border-radius:1px;box-shadow:0 0 0 .5px rgba(255,255,255,.28)}
 .profile-name{font-size:17px;font-weight:850;letter-spacing:-.015em;margin-bottom:2px}
+
+/* v0.8.3 unified mobile player presentation */
+.dslot .stack .main-t{white-space:normal;overflow-wrap:anywhere;line-height:1.3}
+.dslot .stack .sub-t{white-space:normal;overflow-wrap:anywhere;line-height:1.4;margin-top:3px}
+.dslot .dslot-backup{font-size:11px;margin-top:5px}
+.dslot .n{flex:0 0 18px}
+.training-row{padding:13px 14px;border-top:1px solid var(--line2);min-width:0}
+.training-head{display:flex;align-items:center;gap:10px;min-width:0}
+.training-identity{min-width:0;flex:1}
+.training-identity .main-t{font-weight:750;font-size:14px;white-space:normal;overflow-wrap:anywhere}
+.training-identity .sub-t{font-size:11px;color:var(--muted);line-height:1.45;margin-top:4px;white-space:normal;overflow-wrap:anywhere}
+.training-head>.pill{flex:0 0 auto}
+.training-select{display:grid;grid-template-columns:minmax(0,1fr);gap:5px;margin:10px 0 0 46px}
+.training-select select{width:100%;min-width:0;min-height:44px;font-size:16px!important}
+.chart-filters{display:flex;gap:5px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.chart-filters button{flex:none;border:1px solid var(--line);background:var(--s2);border-radius:9px;color:var(--muted);padding:7px 9px;font:inherit;font-size:11px;touch-action:manipulation}
+.chart-filters button.on{color:var(--accent);border-color:var(--accent)}
+@media(max-width:480px){.dslot{align-items:flex-start}.dslot>.end{align-self:center}.training-row{padding:12px}.training-select{margin-left:0}.training-head .av{flex:0 0 auto}}
 </style>
 </head>
 <body>
@@ -391,7 +409,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.8.2', title: 'Flag Compatibility Fix', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.8.3', title: 'UI & Player Presentation Consistency', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4447,8 +4465,8 @@ function renderDepth(toggle) {
   const rows = ch.slots.map(s => {
     const p = s.p, o = overall(p, f);
     return `<div class="row tap dslot ${s.avail ? '' : 'out'}" onclick="showPlayer('${p.id}')"><span class="n">${s.i + 1}</span>
-      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t ell">${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
-        <div class="sub-t ell">${s.avail ? (s.backup ? `Backup: ${esc(pshort(s.backup))} ${Math.round(overall(s.backup, f))}` : '<span class="draw">No backup in the squad</span>') : `${statusChip(p)} <span class="win">${s.inFor ? esc(pshort(s.inFor)) + ' plays' : 'No cover'}</span>`}</div></div>
+      <div class="stack"><div class="xs dslot-l">${SLOT_NAMES[s.slot]}</div><div class="main-t">${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div>
+        <div class="sub-t">${identityLine(p)}</div><div class="sub-t dslot-backup">${s.avail ? (s.backup ? `Backup: ${natTag(s.backup)} ${esc(pname(s.backup))} ${Math.round(overall(s.backup, f))}` : '<span class="draw">No backup in the squad</span>') : `${statusChip(p)} <span class="win">${s.inFor ? esc(pshort(s.inFor)) + ' plays' : 'No cover'}</span>`}</div></div>
       <div class="end">${pill(o)}</div></div>`;
   }).join('');
   const groups = [['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
@@ -4465,7 +4483,7 @@ function renderPlayerList() {
   const tools = `<div class="flex wrap">${fmtSeg(ui.listFmt, 'setListFmt')}<span class="grow"></span>${sel(GROUP_OPTS, ui.squadGroup, "ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']], ui.squadSort, "ui.squadSort=this.value;render()")}</div>`;
   const f = ui.listFmt;
   return `${tools}<div style="height:8px"></div><div class="panel"><div class="tbl-wrap"><table class="tbl clean"><thead><tr><th>Player</th><th>Age</th><th class="hide-m">Shield</th><th class="hide-m">1-Day</th><th class="hide-m">T20</th><th class="hide-d">${compName(f)}</th><th>Form</th><th>Fit</th></tr></thead><tbody>
-    ${sq.map(p => `<tr class="tap" onclick="showPlayer('${p.id}')"><td class="l"><div class="b ell" style="max-width:170px">${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}${p.nat !== 'AUS' ? ` <span class="dim xs">${p.nat}</span>` : ''}</div><div class="xs dim">${ROLES[p.role].short}${p.morale < 45 ? ' · <span class="loss">' + (p.wantsOut ? 'wants out' : 'unhappy') + '</span>' : ''}${p.focus && p.focus !== 'none' ? ' · ' + DEV_FOCUS[p.focus].label.toLowerCase() : ''}</div></td><td>${p.age}</td><td class="hide-m">${pill(overall(p, 'FC'))}</td><td class="hide-m">${pill(overall(p, 'OD'))}</td><td class="hide-m">${pill(overall(p, 'T20'))}</td><td class="hide-d">${pill(overall(p, f))}</td><td>${formArrow(p.form)}</td><td>${fitText(p)}</td></tr>`).join('')}</tbody></table></div></div>
+    ${sq.map(p => `<tr class="tap" onclick="showPlayer('${p.id}')"><td class="l"><div class="b ell" style="max-width:170px">${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div><div class="xs dim">${identityLine(p)}${p.morale < 45 ? ' · <span class="loss">' + (p.wantsOut ? 'wants out' : 'unhappy') + '</span>' : ''}${p.focus && p.focus !== 'none' ? ' · ' + DEV_FOCUS[p.focus].label.toLowerCase() : ''}</div></td><td>${p.age}</td><td class="hide-m">${pill(overall(p, 'FC'))}</td><td class="hide-m">${pill(overall(p, 'OD'))}</td><td class="hide-m">${pill(overall(p, 'T20'))}</td><td class="hide-d">${pill(overall(p, f))}</td><td>${formArrow(p.form)}</td><td>${fitText(p)}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="xs dim" style="margin-top:6px">Tap a player for the full profile.</div>`;
 }
 function setListFmt(f) { ui.listFmt = f; render(); }
@@ -4869,7 +4887,7 @@ function renderMatchday() {
   const me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home, v = teamDef(fx.venue || fx.home);
   const mine = selectXI(me, fmt), theirs = selectXI(opp, fmt);
   const pre = previewConditions(fx), pt = PITCHES[pre.cond.pitch];
-  const xi = s => `<table class="tbl clean"><tbody>${s.order.map((id, i) => { const p = P(id); return `<tr class="tap" onclick="showPlayer('${id}')"><td class="l"><span class="dim xs" style="display:inline-block;width:16px">${i + 1}</span>${esc(pshort(p))}${id === s.captain ? ' <span class="dim xs">(c)</span>' : ''}${id === s.keeper ? ' <span class="dim xs">wk</span>' : ''}</td><td class="dim xs hide-m">${ROLES[p.role].short}</td><td>${overall(p, fmt)}</td></tr>`; }).join('')}</tbody></table>`;
+  const xi = s => `<table class="tbl clean"><tbody>${s.order.map((id, i) => { const p = P(id); return `<tr class="tap" onclick="showPlayer('${id}')"><td class="l"><span class="dim xs" style="display:inline-block;width:16px">${i + 1}</span>${natTag(p)} ${esc(pshort(p))}${id === s.captain ? ' <span class="dim xs">(c)</span>' : ''}${id === s.keeper ? ' <span class="dim xs">wk</span>' : ''}</td><td class="dim xs hide-m">${ROLES[p.role].short}</td><td>${overall(p, fmt)}</td></tr>`; }).join('')}</tbody></table>`;
   const avgO = s => Math.round(mean(s.order.map(id => overall(P(id), fmt))));
   const scouted = game.scoutedFx[fx.id];
   const wx = pre.cond.days.map((d, i) => chip(d.sky === 'rain' || d.sky === 'showers' ? 'warn' : d.sky === 'overcast' ? 'info' : '', `${fmt === 'FC' ? 'D' + (i + 1) + ' ' : ''}${SKIES[d.sky].label}${d.lost ? ' −' + d.lost : ''}`)).join(' ');
@@ -5343,7 +5361,7 @@ function renderDevelopment() {
   return `<div class="grid g2">${panel('Team training focus', `<div class="rows">${Object.keys(TRAINING).map(k => `<div class="row tap ${game.training === k ? 'me' : ''}" onclick="game.training='${k}';autosave();render()"><div class="stack"><div class="main-t">${TRAINING[k].label}</div><div class="sub-t">${TRAINING[k].desc}</div></div><div class="end">${game.training === k ? chip('good', 'Active') : ''}</div></div>`).join('')}</div>`, { flush: true })}
     ${panel('Coaching capacity', `<div class="rows"><div class="kv"><span>Individual programmes</span><span class="b">${used}/${slots}</span></div>${['head','bat','bowl','physio'].map(r => { const st = staffIn(U(), r); return `<div class="kv"><span>${STAFF_ROLES[r].label}</span><span>${st ? `${esc(st.last)}${st.spec ? ' · ' + st.spec : ''} ${pill(st.rating)}` : '<span class="loss">Vacant</span>'}</span></div>`; }).join('')}</div>
       <div class="pb xs muted">Programmes make the chosen skills grow about 60% faster in the off-season and add monthly progress during the season. Better head coaches can run more programmes; batting and bowling coach specialities give extra growth in their area.</div>`, { flush: true })}</div>
-    <div style="height:8px"></div>${panel('Individual programmes', `<div class="rows">${sq.map(p => `<div class="row"><div class="av">${p.first[0]}${p.last[0]}</div><div class="stack"><div class="main-t ell">${plink(p)} <span class="xs dim">${p.age} · pot ${potGrade(p)}</span></div><div class="sub-t">${ROLES[p.role].short} · ${PERSONAS[ensurePersona(p)].label}</div></div><div class="end">${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}${pill(peakOvr(p))}</div></div>`).join('')}</div>`, { flush: true })}`;
+    <div style="height:8px"></div>${panel('Individual programmes', `<div class="rows">${sq.map(p => `<div class="training-row"><div class="training-head">${av(p)}<div class="training-identity"><div class="main-t">${plink(p)}</div><div class="sub-t">${identityLine(p)} · ${PERSONAS[ensurePersona(p)].label}</div></div>${pill(peakOvr(p))}</div><div class="training-select"><span class="xs dim">Development focus</span>${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}</div></div>`).join('')}</div>`, { flush: true })}`;
 }
 function renderDressingRoom() {
   const sq = squadOf(U()).sort((a, b) => a.morale - b.morale);
@@ -5609,8 +5627,10 @@ function renderRecords() {
 const FMT_LETTER = { FC: 'S', OD: 'O', T20: 'T' }, INTL_LETTER = { FC: 'Test', OD: 'ODI', T20: 'T20I' };
 function isBowlerProfile(p) { return ['PACE', 'SPIN'].includes(group(p)) || p.role === 'BWAR'; }
 function formChart(p) {
-  const log = (p.log || []).slice(-12);
-  if (!log.length) return '';
+  const chartFilter = (ui.playerChartFormat || 'ALL');
+  const log = (p.log || []).filter(x => chartFilter === 'ALL' || x[0] === chartFilter).slice(-12);
+  const chartSwitch = `<div class="chart-filters">${[['ALL','All'],['FC','Shield / Test'],['OD','One-Day'],['T20','T20']].map(([k,l]) => `<button class="${chartFilter===k?'on':''}" onclick="ui.playerChartFormat='${k}';showPlayer('${p.id}','over')">${l}</button>`).join('')}</div>`;
+  if (!log.length) return `<div class="panel"><div class="pb">${chartSwitch}<div class="xs dim">No performances in this format yet.</div></div></div>`;
   const bowler = isBowlerProfile(p);
   const W = 320, H = 118, L = 24, top = 8, base = H - 22, bw = (W - L) / 12;
   const val = x => bowler ? x[2] : Math.max(0, x[1]);
@@ -5634,7 +5654,7 @@ function formChart(p) {
       <text x="${xx + (bw - 6) / 2}" y="${H - 8}" font-size="${x[4] ? 6.5 : 8}" fill="${x[4] ? '#f4c542' : '#6f8aa0'}" text-anchor="middle">${x[4] ? INTL_LETTER[x[0]] : FMT_LETTER[x[0]]}</text></g>`; }).join('');
   const avgTxt = `avg ${bowler ? avg.toFixed(1) + 'w' : Math.round(avg)}`, ay = Math.max(top + 9, y(avg) - 4);
   const avgLine = avg > 0 ? `<line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#f4c542" stroke-width="1.2" stroke-dasharray="4 3"/><rect x="${W - avgTxt.length * 5 - 6}" y="${ay - 8}" width="${avgTxt.length * 5 + 6}" height="11" rx="3" fill="#0d1b26" fill-opacity="0.9"/><text x="${W - 3}" y="${ay}" font-size="8.5" fill="#f4c542" text-anchor="end">${avgTxt}</text>` : '';
-  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Last ${log.length} matches</h3><div class="end xs dim">${bowler ? 'wickets per match' : 'runs per match · dots wickets'}</div></div><div class="pb">
+  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Last ${log.length} matches</h3><div class="end xs dim">${bowler ? 'wickets per match' : 'runs per match · dots wickets'}</div></div><div class="pb">${chartSwitch}
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:128px">${grid}${bars}${avgLine}</svg>
     <div class="xs dim">S Shield · O One-Day · T T20 · <span style="color:#f4c542">Test, ODI, T20I</span> for Australia · tap a bar for the match</div></div></div>`;
 }
