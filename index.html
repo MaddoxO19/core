@@ -475,6 +475,23 @@ button,select,[onclick]{touch-action:manipulation}
 .broadcast-context{display:flex;flex-wrap:wrap;gap:5px 12px;margin:10px 0 0;padding:9px 0;border-top:1px solid var(--line2);font-size:11px;color:var(--muted);line-height:1.35}.broadcast-context b{color:var(--text);font-weight:750;margin-right:3px}
 .broadcast-panel .broadcast-head{font-size:10px}.broadcast-total{font-size:clamp(17px,4.5vw,22px)}
 @media(max-width:390px){.match-actions .btn{font-size:12px;padding:9px 5px}.hero .badge.nation-badge{width:37px!important}.hero .badge.nation-badge .cricket-flag-svg{width:36px!important}}
+
+/* v0.9.9 Build 007 — compact broadcast scores, no repeated overs/wickets. */
+.broadcast-panel .broadcast-match{grid-template-columns:minmax(0,1fr) 12px minmax(0,1fr);gap:10px;margin:12px 0 10px;align-items:start}
+.broadcast-panel .broadcast-team{display:flex;flex-direction:column;gap:7px;min-width:0}
+.broadcast-panel .broadcast-identity{height:27px;display:flex;align-items:center;gap:7px;min-width:0}
+.broadcast-panel .broadcast-identity>.nat-flag,.broadcast-panel .broadcast-identity>.badge.nation-badge{flex:0 0 28px!important;width:28px!important;height:21px!important;max-width:28px!important;max-height:21px!important;padding:0!important;margin:0!important;overflow:hidden!important;display:inline-flex!important;align-items:center;justify-content:center;font-size:21px!important;line-height:1!important}
+.broadcast-panel .broadcast-identity .team-flag{width:28px!important;height:21px!important;font-size:21px!important;line-height:1!important;display:inline-flex;align-items:center;justify-content:center}
+.broadcast-panel .broadcast-identity .cricket-flag-svg{width:28px!important;height:17px!important;max-width:28px!important;max-height:17px!important;display:block!important;flex:none!important}
+.broadcast-panel .broadcast-name{font-size:12px;letter-spacing:.025em;white-space:nowrap}
+.broadcast-panel .broadcast-total{font-size:clamp(17px,5vw,23px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.broadcast-panel .broadcast-vs{margin-top:32px;font-size:11px}
+.broadcast-panel .broadcast-metrics{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:12px}
+.broadcast-panel .broadcast-metrics:has(>div:nth-child(3)){grid-template-columns:repeat(3,minmax(0,1fr))}
+.broadcast-panel .broadcast-metrics>div{padding:10px 5px;gap:4px}
+.broadcast-panel .broadcast-metrics span{font-size:10px;letter-spacing:.035em}
+.broadcast-panel .broadcast-metrics b{font-size:17px}
+@media(max-width:360px){.broadcast-panel .broadcast-match{gap:5px}.broadcast-panel .broadcast-total{font-size:16px}.broadcast-panel .broadcast-name{font-size:10px}}
 </style>
 </head>
 <body>
@@ -527,7 +544,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 006', title: 'Consolidated UX & Decisions', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 007', title: 'Live Scoreboard Refinement', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5720,7 +5737,7 @@ function broadcastScore(M, compact) {
   const teams = [M.home, M.away];
   const score = id => {
     const played = innings.filter(i => i.bat === id);
-    return played.length ? played.map(i => inningsLine(i, M.fmt)).join(' & ') : 'Yet to bat';
+    return played.length ? played.map(i => (i.balls === 0 && i.runs === 0 && i.wkts === 0 && !i.closed ? '—' : inningsLine(i, M.fmt))).join(' & ') : '—';
   };
   const team = id => `<div class="broadcast-team"><div class="broadcast-identity">${broadcastBadge(id)}<span class="broadcast-name">${esc(teamDef(id).short || id)}</span></div><div class="broadcast-total">${esc(score(id))}</div></div>`;
   const target = current && !M.done && M.fmt !== 'FC' && current.target;
@@ -5742,8 +5759,8 @@ function broadcastMetrics(M, inn) {
   const rate = inn.balls ? inn.runs * 6 / inn.balls : 0;
   const target = M.fmt !== 'FC' && inn.target;
   const rr = target ? Math.max(0, inn.target - inn.runs) * 6 / Math.max(1, mOvers(M) * 6 - inn.balls) : null;
-  const items = [['CRR', rate.toFixed(2)], [target ? 'RRR' : 'Partnership', target ? rr.toFixed(2) : (inn.partnership && inn.partnership.runs || 0)], ['Overs', oversStr(inn.balls)], ['Wickets', inn.wkts]];
-  if (M.fmt === 'FC') items[1] = ['Day', fcDay(M)];
+  const partnership = inn.partnership && Number.isFinite(Number(inn.partnership.runs)) ? Number(inn.partnership.runs) : 0;
+  const items = target ? [['Run rate', rate.toFixed(2)], ['Required rate', rr.toFixed(2)], ['Partnership', partnership]] : [['Run rate', rate.toFixed(2)], ['Partnership', partnership]];
   return `<div class="broadcast-metrics">${items.map(([k,v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>`;
 }
 function broadcastCrease(M, inn) {
