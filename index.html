@@ -334,6 +334,10 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .top .gear{margin-left:auto}
 
 .tool-row{display:flex;gap:6px;align-items:stretch}.tool-row>.seg{flex:1 1 auto;min-width:0}
+
+/* v0.8.1 unified player identity */
+.nat-flag{display:inline-block;font-size:1.05em;vertical-align:-.06em;margin-right:2px}
+.profile-name{font-size:17px;font-weight:850;letter-spacing:-.015em;margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -386,7 +390,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.8.0', title: 'Records, Locker & Tidier Tabs', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.8.1', title: 'Player Expectations & Profiles', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2217,6 +2221,28 @@ function trackSelection(M) {
     squadOf(t).forEach(p => { if (p.injury || p.natDuty) return; p.played = (p.played == null ? 0.6 : p.played) * 0.8 + (xi.includes(p.id) ? 0.2 : 0); });
   });
 }
+// Contract value is a club reward, not a recurring morale penalty. Only an explicit,
+// personality-weighted grievance can affect mood; an agreed deal normally stands.
+function contractConcern(p) {
+  if (!p.contract || !p.teamId || p.retired) return false;
+  const per = ensurePersona(p), gap = askingSalary(p) / Math.max(1, p.contract.salary);
+  const yrs = p.contract.years;
+  const thresholds = { loyal:2.45, professional:2.30, easygoing:2.30, leader:2.05, ambitious:1.62, volatile:1.48 };
+  if (gap < thresholds[per] || yrs > 2) return false;
+  return !!p.contractConcern;
+}
+function reviewContractExpectation(p) {
+  if (!p.contract || p.retired) { p.contractConcern = false; return; }
+  const per = ensurePersona(p), gap = askingSalary(p) / Math.max(1, p.contract.salary);
+  const threshold = { loyal:2.45, professional:2.30, easygoing:2.30, leader:2.05, ambitious:1.62, volatile:1.48 }[per];
+  if (gap < threshold * 0.90 || p.contract.years > 2) { p.contractConcern = false; return; }
+  // At most one consideration per ~season, not a weekly punishment. Shorter contracts
+  // and volatile/ambitious personalities make a reasonable request more likely.
+  if (p.contractReviewDay != null && game.day - p.contractReviewDay < 120) return;
+  p.contractReviewDay = game.day;
+  const chance = { loyal:0.025, professional:0.035, easygoing:0.04, leader:0.07, ambitious:0.16, volatile:0.22 }[per];
+  if (rand() < chance * (p.contract.years <= 1 ? 1.5 : 1)) p.contractConcern = true;
+}
 function weeklyMorale() {
   const res = {};
   TEAM_DEFS.forEach(t => {
@@ -2232,7 +2258,8 @@ function weeklyMorale() {
     let d = 0;
     if (expectedStarter(p) && !p.injury && !p.natDuty && (p.played == null ? 0.6 : p.played) < 0.4) d -= per === 'ambitious' ? 5 : per === 'easygoing' ? 1 : per === 'volatile' ? 4 : 3;
     d += clamp(r.form, -3, 3) * (per === 'ambitious' ? 0.8 : per === 'easygoing' ? 0.2 : 0.45);
-    if (p.contract && askingSalary(p) > p.contract.salary * 1.3) d -= per === 'loyal' ? 0.5 : 2;
+    reviewContractExpectation(p);
+    if (contractConcern(p)) d -= per === 'volatile' ? 1.5 : per === 'ambitious' ? 1 : 0.25;
     d += (r.mm - 60 - STAFF_SHIFT) / 20;
     if (r.leader) d += 1;
     if (p.promise && game.day > p.promise.until) { if ((p.played || 0) < 0.45) { d -= 15; p.letDown = game.day; addNews('Locker', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
@@ -2243,7 +2270,7 @@ function weeklyMorale() {
     p.morale = clamp(Math.round(p.morale + d + randn() * 1.2), 5, 100);
     p.form = clamp(Math.round(p.form + (p.morale - 60) / 25), 15, 92);
     if (p.teamId === U()) {
-      if (p.morale < 30 && !p.wantsOut) { p.wantsOut = game.day; addNews('Locker', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
+      if (p.morale < (per === 'volatile' ? 27 : per === 'ambitious' ? 23 : 17) && !p.wantsOut && (per === 'volatile' || per === 'ambitious' || p.letDown || p.contractConcern || (p.played != null && p.played < 0.3))) { p.wantsOut = game.day; addNews('Locker', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
       if (p.wantsOut && p.morale >= 50) { p.wantsOut = null; addNews('Locker', `${pname(p)} withdraws his trade request`, 'He is settled again.'); }
     } else if (p.morale >= 50) p.wantsOut = null;
   });
@@ -2255,8 +2282,8 @@ function weeklyMorale() {
 function gmIssue(p) {
   if (p.wantsOut) return 'Asked for a trade';
   if (p.letDown && game.day - p.letDown >= 0 && game.day - p.letDown < 42 && p.morale < 62) return 'Promised games he did not get';
-  if (p.morale < 45) return p.morale < 30 ? 'Wants out' : 'Unhappy';
-  if (p.contract && askingSalary(p) > p.contract.salary * 1.3 && p.morale < 62) return 'Wants a better contract';
+  if (contractConcern(p) && p.morale < 62) return 'Concerned about contract terms';
+  if (p.morale < 45) return p.morale < 30 ? 'Seriously unsettled' : 'Unhappy';
   return null;
 }
 function teamMorale(teamId) { return Math.round(mean(squadOf(teamId).map(p => { ensurePersona(p); return p.morale; }))); }
@@ -4077,8 +4104,10 @@ function pill(v) { return `<span class="pill ${v >= 82 ? 'elite' : v >= 74 ? 'go
 function badge(id, lg) { const t = teamDef(id); return t ? `<span class="badge ${lg ? 'lg' : ''}" style="border-color:${t.color}">${t.short || t.id}</span>` : `<span class="badge">?</span>`; }
 function tdot(id) { const t = teamDef(id); return t ? `<span class="dot" style="background:${t.color}"></span>${t.short || t.id}` : '<span class="dim">FA</span>'; }
 function av(p) { return `<span class="av">${p.first[0]}${p.last[0]}</span>`; }
-function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${esc(txt || pname(p))}</span>` : '–'; }
-function natTag(p) { return p.nat !== 'AUS' ? ' ' + chip('os', p.nat) : ''; }
+function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${natTag(p)} ${esc(txt || pname(p))}</span>` : '–'; }
+const NAT_FLAGS = { AUS:'🇦🇺', ENG:'🏴', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', WI:'🌴', AFG:'🇦🇫' };
+function flagFor(n) { return NAT_FLAGS[n] || '🌐'; }
+function natTag(p) { return ' <span class="nat-flag" title="' + esc(NATIONS[p.nat] || p.nat) + '">' + flagFor(p.nat) + '</span>'; }
 // Status is plain coloured text, and nothing at all when the player is fit and available.
 function statusChip(p) {
   if (p.retired) return '<span class="tag">Retired</span>';
@@ -4329,7 +4358,7 @@ function playerRow(p, o) {
   const f = o.fmt || ui.listFmt;
   const sub = o.sub || identityLine(p);
   return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}
-    <div class="stack"><div class="main-t ell">${esc(pname(p))}${p.nat !== 'AUS' && !(p.teamId || '').startsWith('X_') ? ` <span class="dim xs">${p.nat}</span>` : ''}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
+    <div class="stack"><div class="main-t ell">${natTag(p)} ${esc(pname(p))}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
     <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? `<span class="tag bad">${p.wantsOut ? 'Wants out' : 'Unhappy'}</span>` : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
 }
 
@@ -4792,14 +4821,17 @@ function showPlayer(id, tab) {
   const sk = p.sk, own = p.teamId === U();
   const bar = (l, v) => { v = Math.round(v); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
   const tcol = teamDef(p.teamId) ? teamDef(p.teamId).color : '#3b5568';
-  const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label}${styleLabel(p) ? ' · <b>' + esc(styleLabel(p)) + '</b>' : ''} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
+  const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="profile-name">${natTag(p)} ${esc(pname(p))}</div><div class="s">${ROLES[p.role].label}${styleLabel(p) ? ' · <b>' + esc(styleLabel(p)) + '</b>' : ''} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${natTag(p)}</div></div>${statusChip(p)}</div>
     <div class="ratings3">${(() => { const sp = specialistOf(p); return FMT_LIST.map(f => `<div class="${sp.label && sp.best === f ? 'best' : ''}"><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join(''); })()}</div>
     ${(() => { const sp = specialistOf(p), st = styleOf(p); return sp.label || st ? `<div class="xs muted" style="margin-top:6px">${st ? esc(st.desc) : ''}${sp.label ? `${st ? ' ' : ''}<b class="spec ${sp.best}">${sp.label}</b>.` : ''}</div>` : ''; })()}<div style="height:10px"></div>
-    ${seg([['over','Overview'],['stats','Stats'],['hist','History']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
+    ${seg([['over','Overview'],['stats','Statistics'],['hist','Career'],['contract','Contract']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
   let body;
   if (tab === 'stats') {
     const t = src => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>M</th><th>Runs</th><th>Avg</th><th>SR</th><th>100/50</th><th>HS</th><th>W</th><th>Avg</th><th>Econ</th><th>BB</th><th>Ct</th></tr></thead><tbody>${FMT_LIST.map(f => { const s = src[f]; return `<tr><td>${compName(f)}</td><td>${s.m}</td><td>${s.r}</td><td>${fmtNum(batAvgOf(s))}</td><td>${fmtNum(srOf(s), 0)}</td><td>${s.c100}/${s.c50}</td><td>${hsStr(s)}</td><td>${s.w}</td><td>${fmtNum(bowlAvgOf(s))}</td><td>${fmtNum(econOf(s))}</td><td>${bbStr(s)}</td><td>${s.ct}${s.st ? '/' + s.st : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
     body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Domestic career</h3></div>${t(p.stats.career)}</div>${p.stats.intl ? `<div style="height:8px"></div><div class="panel"><div class="ph"><h3>International (in this career)</h3></div>${t(p.stats.intl).replace(/>Shield</, '>Test<').replace(/>One-Day</, '>ODI<').replace(/>T20</, '>T20I<')}</div>` : ''}`;
+  } else if (tab === 'contract') {
+    const value = askingSalary(p), salary = p.contract ? p.contract.salary : null;
+    body = `<div class="panel"><div class="rows"><div class="kv"><span>Nationality</span><span>${natTag(p)} ${esc(NATIONS[p.nat] || p.nat)}</span></div><div class="kv"><span>Club</span><span>${esc(p.teamId ? teamName(p.teamId) : 'Free agent')}</span></div><div class="kv"><span>Personality</span><span>${PERSONAS[ensurePersona(p)].label}</span></div><div class="kv"><span>Current deal</span><span>${salary == null ? 'Not contracted' : money(salary) + ' × ' + p.contract.years + ' yr'}</span></div><div class="kv"><span>Estimated market salary</span><span>${money(value)}</span></div>${salary != null ? `<div class="kv"><span>Annual contract value to club</span><span class="${value > salary ? 'win' : ''}">${value > salary ? money(value - salary) + ' below market' : value < salary ? money(salary - value) + ' above market' : 'Market rate'}</span></div>` : ''}<div class="kv"><span>Contract expectations</span><span>${contractConcern(p) ? 'Concerns raised' : 'No active grievance'}</span></div></div></div>`;
   } else if (tab === 'hist') {
     body = `${careerChart(p)}<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
       <div class="kv"><span>International caps</span><span>Tests ${p.caps.FC} · ODIs ${p.caps.OD} · T20Is ${p.caps.T20}</span></div></div></div>`;
@@ -5531,7 +5563,7 @@ function renderLegacyRecords() {
   const cats = Object.keys(tabs);
   const cat = cats.includes(ui.rrCat) ? ui.rrCat : cats[0];
   const m = mergedTable(set, cat, aus);
-  const rows = m.rows.map((x, i) => `<tr class="${x.real ? '' : 'me tap'}" ${x.id ? `onclick="showPlayer('${x.id}')"` : ''}><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${esc(x.t || '')}</span>${x.real ? (x.active ? ' <span class="xs dim">active</span>' : '') : ' ' + chip('good', 'This save')}${x.real && m.beaten && x === m.top ? ' ' + chip('', 'Previous record') : ''}<div class="xs dim">${esc(x.note || '')}</div></td><td class="b big">${x.d}</td></tr>`).join('');
+  const rows = m.rows.map((x, i) => `<tr class="${x.real ? '' : 'me tap'}" ${x.id ? `onclick="showPlayer('${x.id}')"` : ''}><td class="n2">${i + 1}</td><td class="l"><b>${x.id && P(x.id) ? natTag(P(x.id)) + ' ' : ''}${esc(x.n)}</b> <span class="dim xs">${esc(x.t || '')}</span>${x.real ? '' : ' ' + chip('good', 'This save')}${x.real && m.beaten && x === m.top ? ' ' + chip('', 'Previous record') : ''}<div class="xs dim">${esc(x.note || '')}</div></td><td class="b big">${x.d}</td></tr>`).join('');
   const best = m.best && !m.rows.includes(m.rows.find(r => !r.real)) ? `<div class="note" style="margin-top:8px">Best in this save: <b>${esc(m.best.n)}</b> ${m.best.d}${m.best.note ? ' · ' + esc(m.best.note) : ''}, which would rank ${ordinal(m.best.rank)}.</div>` : !m.best ? '<div class="note" style="margin-top:8px">No one in this save has an entry here yet.</div>' : '';
   const broken = (game.legacyLog || []).slice(0, 8);
   const brokenP = broken.length ? panel(`Records broken · ${broken.length}`, `<div class="rows">${broken.map(e => `<div class="row"><div class="stack"><div class="main-t" style="white-space:normal">${esc(e.text)}</div><div class="sub-t">${e.year}</div></div></div>`).join('')}</div>`, { flush: true }) : '';
@@ -5540,7 +5572,7 @@ function renderLegacyRecords() {
     <div style="height:8px"></div>${sel(cats.map(c => [c, RR_CATS[c]]), cat, 'ui.rrCat=this.value;render()', 'full')}<div style="height:8px"></div>
     ${panel(`${aus ? 'Australia · ' : ''}${RR_LABEL[set]} · ${RR_CATS[cat]}`, `<table class="tbl rec"><tbody>${rows}</tbody></table>`, { flush: true, end: `<span class="xs dim">as of ${m.tab.asOf}</span>` })}
     ${best}${m.tab.note ? `<div class="xs dim" style="margin-top:6px">${esc(m.tab.note)}</div>` : ''}
-    <div class="xs dim" style="margin-top:6px">Real figures: ${RR_SRC}. Players marked active may have added to their totals since that date. Save players count matches before your career began.</div>
+    <div class="xs dim" style="margin-top:6px">Real figures: ${RR_SRC}. Historical benchmarks are separate from the fictional squads. Save players count matches before your career began.</div>
     ${brokenP ? `<div style="height:8px"></div>${brokenP}` : ''}`;
 }
 function renderRecords() {
