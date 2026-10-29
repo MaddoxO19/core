@@ -337,6 +337,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 
 /* v0.8.1 unified player identity */
 .nat-flag{display:inline-block;font-size:1.05em;vertical-align:-.06em;margin-right:2px}
+.cricket-flag-svg{display:inline-block;width:1.36em;height:.88em;vertical-align:-.04em;overflow:visible;border-radius:1px;box-shadow:0 0 0 .5px rgba(255,255,255,.28)}
 .profile-name{font-size:17px;font-weight:850;letter-spacing:-.015em;margin-bottom:2px}
 </style>
 </head>
@@ -390,7 +391,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.8.1', title: 'Player Expectations & Profiles', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.8.2', title: 'Flag Compatibility Fix', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4105,8 +4106,15 @@ function badge(id, lg) { const t = teamDef(id); return t ? `<span class="badge $
 function tdot(id) { const t = teamDef(id); return t ? `<span class="dot" style="background:${t.color}"></span>${t.short || t.id}` : '<span class="dim">FA</span>'; }
 function av(p) { return `<span class="av">${p.first[0]}${p.last[0]}</span>`; }
 function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit;color:inherit" onclick="event.stopPropagation();showPlayer('${p.id}')">${natTag(p)} ${esc(txt || pname(p))}</span>` : '–'; }
-const NAT_FLAGS = { AUS:'🇦🇺', ENG:'🏴', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', WI:'🌴', AFG:'🇦🇫' };
-function flagFor(n) { return NAT_FLAGS[n] || '🌐'; }
+// England's Unicode tag-sequence flag can display as a black flag in iOS Safari.
+// West Indies has no country-flag emoji. Render both as self-contained SVGs instead.
+// Other nations retain native flag emoji. These are presentation-only; nationality IDs never change.
+const NAT_FLAGS = { AUS:'🇦🇺', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', AFG:'🇦🇫' };
+const CRICKET_FLAGS = {
+  ENG: `<svg class="cricket-flag-svg" viewBox="0 0 60 36" role="img" aria-label="England" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="36" rx="1.4" fill="#fff"/><path d="M25 0h10v36H25zM0 13h60v10H0z" fill="#ce1124"/></svg>`,
+  WI: `<svg class="cricket-flag-svg" viewBox="0 0 60 36" role="img" aria-label="West Indies cricket" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="36" rx="1.4" fill="#7b183a"/><circle cx="39" cy="13" r="7" fill="#ffce51"/><path d="M8 28Q30 19 53 28v8H8z" fill="#f3f0e0"/><path d="M23 29q5-12 5-20l3 .4q-2 11-4 19z" fill="#165a44"/><path d="M29 11q-8-8-15-3 11-1 14 6M29 11q0-11 8-10-5 4-6 12M29 11q8-7 14-1-10-1-13 5M29 12q-9-2-11 5 6-4 12-2" fill="#168153" stroke="#168153" stroke-width="1.2" stroke-linejoin="round"/></svg>`
+};
+function flagFor(n) { return CRICKET_FLAGS[n] || NAT_FLAGS[n] || '🌐'; }
 function natTag(p) { return ' <span class="nat-flag" title="' + esc(NATIONS[p.nat] || p.nat) + '">' + flagFor(p.nat) + '</span>'; }
 // Status is plain coloured text, and nothing at all when the player is fit and available.
 function statusChip(p) {
