@@ -429,7 +429,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.8.4', title: 'Match Visuals & UX Refinement', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.4', title: 'World Stability & Qualification', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -524,8 +524,8 @@ const CAL = {
   ]
 };
 
-const NATIONS = { AUS:'Australia', ENG:'England', IND:'India', PAK:'Pakistan', SL:'Sri Lanka', SA:'South Africa', NZ:'New Zealand', WI:'West Indies', AFG:'Afghanistan' };
-const NATION_STRENGTH = { IND:82, ENG:80, SA:79, NZ:77, PAK:76, SL:73, WI:72, AFG:71 };
+const NATIONS = { AUS:'Australia', ENG:'England', IND:'India', PAK:'Pakistan', SL:'Sri Lanka', SA:'South Africa', NZ:'New Zealand', WI:'West Indies', AFG:'Afghanistan', BAN:'Bangladesh', IRE:'Ireland', ZIM:'Zimbabwe', SCO:'Scotland', NED:'Netherlands', NEP:'Nepal', USA:'United States', CAN:'Canada', NAM:'Namibia', OMA:'Oman', UAE:'United Arab Emirates' };
+const NATION_STRENGTH = { IND:82, ENG:80, SA:79, NZ:77, PAK:76, SL:73, WI:72, AFG:71, BAN:70, IRE:67, ZIM:66, SCO:65, NED:64, NEP:63, USA:62, CAN:59, NAM:61, OMA:60, UAE:61 };
 const NAMES = {
   AUS: { first:['Jack','Lachlan','Cooper','Henry','Oliver','Thomas','Mitchell','Nathan','Samuel','William','Noah','Oscar','James','Daniel','Ethan','Max','Harrison','Ben','Riley','Callum','Joshua','Alex','Matthew','Luke','Charlie','Bailey','Finn','Patrick','Ryan','Cameron','Angus','Marcus','Xavier','Jordan','Tyler','Hamish','Fergus','Liam','Zac','Kieran','Brody','Toby','Declan','Jake','Hugo','Archie','Lewis','Darcy','Flynn','Rhys'],
          last:['Fraser','Collins','Murray','Bennett','Hayes','Walker','Fletcher','Reid','Lawson','Turner','Parker','Marshall','Dawson','Clarke','Webster','Gibson','Morris','Andrews','Carter','Stewart','Richards','Bell','Ferguson','McKenzie','Wright','Young','Sullivan','Grant','Roberts','Watson','Gray','Brooks','Doyle','Quinn','Kerr','Nolan','Hart','Barnes','Pearce','Moran','Hale','Cross','Burke','Ellis','Kemp','Tait','Mahoney','Rowe','Ashby','Tully','Vickers','Dunn','Gilmour','Pryor','Sinclair','Ward','Lindsay','Coates','Whitfield','Barlow'] },
@@ -871,9 +871,14 @@ function buildSeason(year) {
     const plan = w.id === 'TEST' ? [[52,'TEST'],[62,'TEST'],[72,'TEST'],[82,'TEST'],[93,'TEST']] : [[121,'ODI'],[125,'ODI'],[129,'ODI'],[134,'T20I'],[137,'T20I'],[140,'T20I']];
     plan.forEach(([d, c], i) => { const id = year + '-i' + (n++); w.fx.push(id); fixtures.push({ id, comp: c, round: `${COMPS[c].short} ${plan.filter((x, j) => j <= i && x[1] === c).length}`, day: d, home: 'AUS', away: 'X_' + w.opp, venue: venues[i % venues.length], stage: 'intl', win: w.id, result: null }); });
   });
-  addWorldFixtures(year, fixtures, windows, () => n++);
+  const worldTours = addWorldFixtures(year, fixtures, windows, () => n++);
+  // The championship final is resolved only after the two-season league finishes.
+  if (year % 2 === 1) fixtures.push({ id:year+'-wtcf', comp:'TEST', round:'WTC Final', day:215,
+    home:null, away:null, venue:'X_ENG', stage:'wtcfinal', result:null });
+  addAssociateQualificationFixtures(year, fixtures);
+  addGlobalTournamentFixtures(year, fixtures);
   fixtures.sort((a, b) => a.day - b.day);
-  return { year, label: year + '–' + String(year + 1).slice(2), fixtures, standings, windows, champions: {}, userWins: 0, userLosses: 0 };
+  return { year, label: year + '–' + String(year + 1).slice(2), fixtures, standings, windows, worldTours, champions: {}, userWins: 0, userLosses: 0 };
 }
 function seasonEndDay() { return Math.max(...game.season.fixtures.map(f => f.day)) + 4; }
 
@@ -903,7 +908,7 @@ function U() { return game.gm.teamId; }
 function teamDef(id) { return TEAM_DEFS.find(t => t.id === id) || intlDef(id); }
 function teamName(id) { const t = teamDef(id); return t ? t.name : (id || 'TBC'); }
 function squadOf(teamId) {
-  if (teamId === 'AUS') { const w = activeWindow(); return w ? w.squad.map(P).filter(p => p && !p.retired) : []; }
+  if (teamId === 'AUS') { const w = activeWindow(); if (w && w.squad && w.squad.length >= 11) return w.squad.map(P).filter(p => p && !p.retired); const pool = Object.values(game.players).filter(p => !p.retired && p.nat === 'AUS' && p.teamId && !p.teamId.startsWith('X_') && !p.injury); return pool.sort((a,b)=>peakOvr(b)-peakOvr(a)).slice(0,20); }
   return Object.values(game.players).filter(p => p.teamId === teamId && !p.retired);
 }
 function isAvailable(p) { return !p.injury && !p.natDuty && !p.retired && !p.rest; }
@@ -1026,7 +1031,7 @@ function createMatch(fx) {
     done: false, result: null, potm: null, log: [], live: false, timeUp: false, inningsWin: null, notes: [] };
   [fx.home, fx.away].forEach(t => {
     const s = selectXI(t, fmt, fx);
-    M.xi[t] = s.order; M.keeper[t] = s.keeper; M.captain[t] = s.captain;
+    if (!s.order || s.order.length < 11) throw new Error('Insufficient available XI for '+teamName(t)+' in '+fx.id+' ('+(s.order||[]).length+' players)'); M.xi[t] = s.order; M.keeper[t] = s.keeper; M.captain[t] = s.captain;
     M.fieldAvg[t] = mean(s.order.map(id => P(id).sk.field));
     M.bowlRank[t] = s.order.slice().sort((a, b) => bowlRating(P(b), fmt) - bowlRating(P(a), fmt)).slice(0, 2);
     if (t === U() && s.replaced && s.replaced.length) M.notes.push(s.replaced.map(([o, n]) => `${pname(o)} unavailable, ${pname(n)} comes in`).join('; '));
@@ -1940,6 +1945,13 @@ function migrateGame(g) {
   const prev = game; game = g;
   if (!g.staff) { g.staff = {}; ensureStaff(); }
   if (!g.nation) g.nation = { gm: false, conf: 60, rankings: initRankings(), history: [] };
+  if (!g.nation.rankings) g.nation.rankings = initRankings();
+  Object.entries(initRankings()).forEach(([n, r]) => { if (!Number.isFinite(g.nation.rankings[n])) g.nation.rankings[n] = r; });
+  g.worldSeriesHistory = g.worldSeriesHistory || [];
+  g.globalTournamentHistory = g.globalTournamentHistory || [];
+  g.associateQualificationHistory = g.associateQualificationHistory || [];
+  g.wtcHistory = g.wtcHistory || [];
+  if (!g.wtc) g.wtc = blankWtc(g.year);
   if (!g.fin) g.fin = initFinances();
   if (!g.inbox) g.inbox = [];
   Object.values(g.staff).forEach(ensureStaffAttrs);
@@ -2161,7 +2173,7 @@ function aiBrief(teamId) {
 function drinksEvery(fmt) { return fmt === 'FC' ? 30 : fmt === 'OD' ? 10 : 5; }
 
 // ---- National team ----
-const INTL_COLORS = { AUS:'#f4c542', IND:'#3b82f6', ENG:'#e11d48', SA:'#16a34a', NZ:'#94a3b8', PAK:'#15803d', SL:'#1d4ed8', WI:'#9f1239', AFG:'#2563eb' };
+const INTL_COLORS = { AUS:'#f4c542', IND:'#3b82f6', ENG:'#e11d48', SA:'#16a34a', NZ:'#94a3b8', PAK:'#15803d', SL:'#1d4ed8', WI:'#9f1239', AFG:'#2563eb', BAN:'#047857', IRE:'#16a34a', ZIM:'#ca3030' };
 function intlDef(id) {
   if (!id) return null;
   const nat = id === 'AUS' ? 'AUS' : id.startsWith('X_') ? id.slice(2) : null;
@@ -2408,74 +2420,334 @@ const INTL_VENUES = {
   IND: { ground:'Mumbai', pace:0.94, spin:1.14, bat:1.03 }, ENG: { ground:"Lord's", pace:1.08, spin:0.95, bat:0.97 },
   SA:  { ground:'Johannesburg', pace:1.09, spin:0.93, bat:1.00 }, NZ: { ground:'Wellington', pace:1.07, spin:0.94, bat:0.98 },
   PAK: { ground:'Lahore', pace:0.97, spin:1.07, bat:1.05 }, SL: { ground:'Colombo', pace:0.93, spin:1.15, bat:1.01 },
-  WI:  { ground:'Barbados', pace:1.04, spin:0.98, bat:1.01 }, AFG: { ground:'Sharjah', pace:0.95, spin:1.11, bat:1.00 }
+  WI:  { ground:'Barbados', pace:1.04, spin:0.98, bat:1.01 }, AFG: { ground:'Sharjah', pace:0.95, spin:1.11, bat:1.00 },
+  BAN: { ground:'Dhaka', pace:0.94, spin:1.13, bat:0.98 }, IRE: { ground:'Dublin', pace:1.11, spin:0.93, bat:0.97 },
+  ZIM: { ground:'Harare', pace:1.00, spin:1.05, bat:0.99 }
 };
 function isWorldCupYear(year) { return year % 2 === 1; }
-// Background series between other nations, plus a T20 World Cup in odd-year seasons.
+// FTP-style rotating international tours. Dates are simulation windows, NOT an imported
+// official fixture-by-fixture ICC FTP. All twelve Full Members participate, including
+// Australia through its separately managed windows. Pairings rotate by season and block.
+// IDs and the existing match engine remain unchanged for save compatibility.
+function worldTourPairs(year, block) {
+  const ids = Object.keys(NATION_STRENGTH).slice().sort();
+  // Eleven opposition countries: a round-robin rotation with one bye per block.
+  // Using a twelfth dummy keeps pairing deterministic and avoids global RNG changes.
+  ids.push('BYE');
+  const turns = ((year - 2026) * 3 + block) % 11;
+  for (let i = 0; i < turns; i++) ids.splice(1, 0, ids.pop());
+  const result = [];
+  for (let j = 0; j < 6; j++) {
+    const a = ids[j], b = ids[11-j];
+    if (a !== 'BYE' && b !== 'BYE') result.push((year + block + j) % 2 ? [a,b] : [b,a]);
+  }
+  return result;
+}
 function addWorldFixtures(year, fixtures, windows, nextId) {
-  const others = shuffle(Object.keys(NATION_STRENGTH));
-  const pairs = [[others[0], others[1]], [others[2], others[3]], [others[4], others[5]], [others[6], others[7]]];
-  pairs.forEach(([h, a], i) => {
-    const tests = i < 2, days = tests ? [10, 22, 34].map(d => d + i * 2) : [150, 153, 156, 159, 162, 165].map(d => d + (i - 2));
-    days.forEach((d, j) => {
-      const comp = tests ? 'TEST' : j < 3 ? 'ODI' : 'T20I';
-      fixtures.push({ id: year + '-w' + nextId(), comp, round: `${COMPS[comp].short} ${tests ? j + 1 : j % 3 + 1}`, day: d, home: 'X_' + h, away: 'X_' + a, venue: 'X_' + h, stage: 'world', result: null });
+  const seasonTours = [];
+  // Three distinct tour windows, with a natural short gap between multi-format series.
+  // Each country faces rotating opponents instead of only one annual pairing.
+  const starts = [7, 77, 147];
+  starts.forEach((base, block) => worldTourPairs(year, block).forEach(([home, away], idx) => {
+    const tourId = `${year}-tour-${block}-${idx}`;
+    const formats = block === 1 ? [['ODI',3],['T20I',3]] : [['TEST',2],['ODI',3],['T20I',3]];
+    let offset = 0;
+    const schedule = [];
+    formats.forEach(([comp, count]) => {
+      for (let m = 0; m < count; m++) {
+        const day = base + idx * 2 + offset + m * (comp === 'TEST' ? 7 : 2);
+        const f = {id:year+'-w'+nextId(), comp, round:`${COMPS[comp].short} ${m+1}`, day,
+          home:'X_'+home, away:'X_'+away, venue:'X_'+home, stage:'world', tourId,
+          seriesId:tourId+'-'+comp, result:null};
+        fixtures.push(f); schedule.push(f.id);
+      }
+      offset += count * (comp === 'TEST' ? 7 : 2) + 3;
     });
-  });
+    seasonTours.push({id:tourId,home:'X_'+home,away:'X_'+away,start:base+idx*2,
+      end:base+idx*2+offset,formats:formats.map(x=>x[0]),fixtures:schedule});
+  }));
   if (isWorldCupYear(year)) {
     const wb = windows.find(w => w.id === 'WB');
-    wb.id = 'WC'; wb.label = 'T20 World Cup'; wb.fmt = 'T20'; wb.wc = true; wb.opp = 'IND';
-    // Drop Australia's bilateral white-ball fixtures in a World Cup year.
-    for (let i = fixtures.length - 1; i >= 0; i--) if (fixtures[i].win === 'WB') fixtures.splice(i, 1);
-    wb.fx = [];
+    if (wb) {
+      wb.id = 'WC'; wb.label = 'T20 World Cup'; wb.fmt = 'T20'; wb.wc = true; wb.opp = 'IND';
+      for (let i=fixtures.length-1;i>=0;i--) if (fixtures[i].win === 'WB') fixtures.splice(i,1);
+      wb.fx = [];
+    }
   }
+  return seasonTours;
 }
-function setupWorldCup(w) {
-  const R = game.nation.rankings;
-  const field = ['AUS', ...Object.keys(NATION_STRENGTH).sort((a, b) => R[b] - R[a]).slice(0, 7)];
-  const seeded = field.slice().sort((a, b) => R[b] - R[a]);
-  const A = [], B = []; seeded.forEach((n, i) => ((i % 4 === 0 || i % 4 === 3) ? A : B).push(n));
-  const tid = n => n === 'AUS' ? 'AUS' : 'X_' + n;
-  w.groups = { A: A.map(tid), B: B.map(tid) };
-  let day = 120, k = 0;
-  const host = pick(TEAM_DEFS).id;
-  ['A','B'].forEach(g => { const t = w.groups[g]; [[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach(([x, y], i) => {
-    const id = game.year + '-wc' + (k++);
-    game.season.fixtures.push({ id, comp: 'WC', round: `Group ${g}`, day: 120 + Math.floor(i / 2) * 3 + (g === 'B' ? 1 : 0), home: t[x], away: t[y], venue: shuffle(TEAM_DEFS)[0].id, stage: 'wcgroup', group: g, result: null, win: 'WC' });
-  }); });
-  ['Semi-final 1','Semi-final 2'].forEach((r, i) => game.season.fixtures.push({ id: game.year + '-wcs' + i, comp: 'WC', round: r, day: 136, home: null, away: null, venue: i ? 'NSW' : 'VIC', stage: 'wcsemi' + (i + 1), result: null, win: 'WC' }));
-  game.season.fixtures.push({ id: game.year + '-wcf', comp: 'WC', round: 'Final', day: 140, home: null, away: null, venue: 'VIC', stage: 'wcfinal', result: null, win: 'WC' });
-  game.season.fixtures.sort((a, b) => a.day - b.day);
-  w.fx = game.season.fixtures.filter(f => f.comp === 'WC').map(f => f.id);
-  addNews('World', 'T20 World Cup draw', `Group A: ${w.groups.A.map(t => teamDef(t).name).join(', ')}. Group B: ${w.groups.B.map(t => teamDef(t).name).join(', ')}.`);
+
+// ---- World Test Championship (two-year cycles) ------------------------------
+// Nine participants; Afghanistan, Ireland and Zimbabwe retain bilateral Tests
+// without entering the WTC. These are simulated championship fixtures rather
+// than an assertion of the official ICC Future Tours Programme.
+const WTC_TEAMS = ['AUS','ENG','IND','NZ','PAK','SA','SL','WI','BAN'];
+function wtcCycle(year) { return year - year % 2; }
+function blankWtc(year) {
+  const teams={}; WTC_TEAMS.forEach(n=>teams[n]={p:0,w:0,l:0,d:0,t:0,nr:0,pts:0,max:0,series:0});
+  return {start:wtcCycle(year),teams,seen:[],final:null};
 }
-function wcTable(w, g) {
-  const rows = w.groups[g].map(t => ({ t, P:0, W:0, L:0, NR:0, Pts:0, rf:0, bf:0, ra:0, ba:0 }));
-  const by = t => rows.find(r => r.t === t);
-  game.season.fixtures.filter(f => f.stage === 'wcgroup' && f.group === g && f.result).forEach(f => {
-    const h = by(f.home), a = by(f.away); h.P++; a.P++;
-    if (f.result.winner) { by(f.result.winner).W++; by(f.result.winner).Pts += 2; (f.result.winner === f.home ? a : h).L++; } else { h.NR++; a.NR++; h.Pts++; a.Pts++; }
-    (f.result.inns || []).forEach(i => { const bt = by(i.bat), bw = by(i.bowl); if (bt) { bt.rf += i.runs; bt.bf += i.balls; } if (bw) { bw.ra += i.runs; bw.ba += i.balls; } });
+function ensureWtc() {
+  if (!game.wtc) game.wtc=blankWtc(game.year);
+  if (!game.wtcHistory) game.wtcHistory=[];
+  return game.wtc;
+}
+function wtcRows() {
+  const w=ensureWtc();
+  return WTC_TEAMS.map(n=>({nat:n,...w.teams[n],pct:w.teams[n].max ? 100*w.teams[n].pts/w.teams[n].max:0}))
+    .sort((a,b)=>b.pct-a.pct || b.pts-a.pts || b.w-a.w || a.nat.localeCompare(b.nat));
+}
+function trackWtcResult(fx) {
+  if (fx.comp!=='TEST'||fx.stage==='wtcfinal'||!fx.result) return;
+  const a=teamNat(fx.home),b=teamNat(fx.away);
+  if (!WTC_TEAMS.includes(a)||!WTC_TEAMS.includes(b)) return;
+  const w=ensureWtc();
+  if (w.start!==wtcCycle(game.year)||w.seen.includes(fx.id)) return;
+  w.seen.push(fx.id);
+  const A=w.teams[a], B=w.teams[b];
+  A.p++; B.p++;
+  if (fx.result.noResult) { A.nr++; B.nr++; return; }
+  A.max+=12; B.max+=12;
+  if (fx.result.winner===fx.home) { A.w++; B.l++; A.pts+=12; }
+  else if (fx.result.winner===fx.away) { B.w++; A.l++; B.pts+=12; }
+  else if (fx.result.tie) { A.t++;B.t++;A.pts+=6;B.pts+=6; }
+  else { A.d++;B.d++;A.pts+=4;B.pts+=4; }
+}
+function prepareWtcFinal() {
+  if (game.year%2!==1) return;
+  const fx=game.season.fixtures.find(f=>f.stage==='wtcfinal');
+  if (!fx||fx.result||fx.home) return;
+  const qualified=wtcRows().filter(r=>r.p>0);
+  if (qualified.length<2) { fx.result={winner:null,noResult:true,text:'WTC final not contested'};return; }
+  fx.home=qualified[0].nat==='AUS'?'AUS':'X_'+qualified[0].nat;
+  fx.away=qualified[1].nat==='AUS'?'AUS':'X_'+qualified[1].nat;
+  addNews('World','World Test Championship final',`${NATIONS[qualified[0].nat]} v ${NATIONS[qualified[1].nat]} · ${dateStr(fx.day)}.`);
+}
+function archiveWtcFinal(fx) {
+  const w=ensureWtc();
+  const winner=fx.result.winner || null;
+  w.final={home:fx.home,away:fx.away,winner,year:game.year};
+  game.wtcHistory.unshift({start:w.start,end:game.year,home:fx.home,away:fx.away,winner,
+    rows:wtcRows().map(r=>({nat:r.nat,p:r.p,pts:r.pts,max:r.max,pct:Math.round(r.pct*10)/10}))});
+  game.wtcHistory=game.wtcHistory.slice(0,12);
+  addNews('World','World Test Championship completed',winner?`${teamDef(winner).name} win the championship.`:'WTC final ends without a winner.');
+}
+function rolloverWtc(year) {
+  ensureWtc();
+  if (wtcCycle(year)!==game.wtc.start) game.wtc=blankWtc(year);
+}
+
+function worldSeriesStandings() {
+  const groups = {};
+  (game.season.fixtures || []).forEach(f => {
+    if (!f.seriesId || !f.home || !f.away) return;
+    const s = groups[f.seriesId] || (groups[f.seriesId]={id:f.seriesId,comp:f.comp,home:f.home,away:f.away,
+      winsHome:0,winsAway:0,draws:0,played:0,total:0});
+    s.total++;
+    if (!f.result) return;
+    s.played++;
+    if (f.result.winner===f.home) s.winsHome++;
+    else if (f.result.winner===f.away) s.winsAway++;
+    else s.draws++;
   });
-  return rows.sort((x, y) => y.Pts - x.Pts || nrr(y) - nrr(x));
+  return Object.values(groups).sort((a,b)=>a.id.localeCompare(b.id));
 }
-function updateWorldCup() {
-  const w = game.season.windows.find(x => x.wc); if (!w || !w.groups) return;
-  const fx = game.season.fixtures.filter(f => f.comp === 'WC');
-  const s1 = fx.find(f => f.stage === 'wcsemi1'), s2 = fx.find(f => f.stage === 'wcsemi2'), fin = fx.find(f => f.stage === 'wcfinal');
-  if (!s1.home && fx.filter(f => f.stage === 'wcgroup').every(f => f.result)) {
-    const A = wcTable(w, 'A'), B = wcTable(w, 'B');
-    s1.home = A[0].t; s1.away = B[1].t; s2.home = B[0].t; s2.away = A[1].t;
-    addNews('World', 'World Cup semi-finals set', `${teamDef(s1.home).name} v ${teamDef(s1.away).name}; ${teamDef(s2.home).name} v ${teamDef(s2.away).name}.`);
+function archiveWorldSeries() {
+  const complete = worldSeriesStandings().filter(s=>s.total===s.played);
+  game.worldSeriesHistory = game.worldSeriesHistory || [];
+  for (const s of complete) {
+    if (game.worldSeriesHistory.some(x=>x.id===s.id)) continue;
+    const winner = s.winsHome>s.winsAway ? s.home : s.winsAway>s.winsHome ? s.away : null;
+    game.worldSeriesHistory.unshift({id:s.id,year:game.year,comp:s.comp,home:s.home,away:s.away,
+      winner,winsHome:s.winsHome,winsAway:s.winsAway,draws:s.draws});
   }
-  if (s1.result && s2.result && !fin.home) { fin.home = s1.result.winner; fin.away = s2.result.winner; addNews('World', 'World Cup final set', `${teamDef(fin.home).name} v ${teamDef(fin.away).name}.`); }
-  if (fin.result && !w.champion) {
-    w.champion = fin.result.winner;
-    game.worldHistory = game.worldHistory || [];
-    game.worldHistory.unshift({ year: game.year, event: 'T20 World Cup', winner: teamNat(w.champion), runnerUp: teamNat(w.champion === fin.home ? fin.away : fin.home) });
+  if (game.worldSeriesHistory.length>120) game.worldSeriesHistory.length=120;
+}
+
+// ---- Global ODI competitions and qualification ----
+// The historical/fixture calendar is a fictional FTP-style world. Qualification is
+// seeded from world rankings at draw time; future cycles reselect the strongest teams.
+const ASSOCIATE_NATIONS = ['SCO','NED','NEP','USA','CAN','NAM','OMA','UAE'];
+// Two associate qualification leagues run independently of bilateral Full Member tours.
+// Their standings from the previous season seed the next global tournament draw.
+function addAssociateQualificationFixtures(year, fixtures) {
+  const ids=ASSOCIATE_NATIONS.map(n=>'X_'+n);
+  let k=0;
+  for (const [comp,event,base] of [['ODI','CWCQ',28],['T20I','T20Q',88]]) {
+    for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++) {
+      fixtures.push({id:`${year}-${event}-${k++}`,comp,round:'Qualifying league',day:base+Math.floor((k-1)/3),
+        home:ids[(year+i)%ids.length],away:ids[(year+j)%ids.length],venue:ids[(year+i)%ids.length],stage:'associatequal',event, result:null});
+    }
+  }
+}
+function associateQualificationTable(event) {
+  const fx=game.season.fixtures.filter(f=>f.stage==='associatequal'&&f.event===event);
+  return internationalTable(fx,ASSOCIATE_NATIONS.map(n=>'X_'+n));
+}
+function archiveAssociateQualification(){
+  const history=game.associateQualificationHistory||(game.associateQualificationHistory=[]);
+  for(const event of ['CWCQ','T20Q']){
+    if(history.some(x=>x.year===game.year&&x.event===event))continue;
+    const fx=game.season.fixtures.filter(f=>f.stage==='associatequal'&&f.event===event);
+    if(!fx.length||!fx.every(f=>f.result))continue;
+    history.unshift({year:game.year,event,rank:associateQualificationTable(event).map(r=>r.t)});
+  }
+  game.associateQualificationHistory=history.slice(0,16);
+}
+function globalTournamentDef(year) {
+  if (year % 4 === 3) return {key:'ODIWC',title:'ODI World Cup',size:14,day:225};
+  if (year % 4 === 1) return {key:'CT',title:'Champions Trophy',size:8,day:225};
+  return null;
+}
+function globalTournamentField(year,size) {
+  const rankings=game.nation.rankings||initRankings();
+  const members=['AUS',...Object.keys(NATION_STRENGTH).filter(n=>!ASSOCIATE_NATIONS.includes(n))];
+  const rankedMembers=members.sort((a,b)=>(rankings[b]||0)-(rankings[a]||0)||a.localeCompare(b));
+  if(size===20) return Object.keys(NATIONS).sort((a,b)=>(rankings[b]||0)-(rankings[a]||0)||a.localeCompare(b)).slice(0,20).map(n=>n==='AUS'?'AUS':'X_'+n);
+  const latest=(game.associateQualificationHistory||[]).filter(h=>h.event===(size===14?'CWCQ':'T20Q')).sort((a,b)=>b.year-a.year)[0];
+  const associatePlaces=size===14?2:0;
+  const qualified=(latest?.rank||ASSOCIATE_NATIONS.map(n=>'X_'+n).sort((a,b)=>(rankings[b.slice(2)]||0)-(rankings[a.slice(2)]||0))).slice(0,associatePlaces);
+  return rankedMembers.slice(0,size-associatePlaces).map(n=>n==='AUS'?'AUS':'X_'+n).concat(qualified);
+}
+function globalStageMatches(year,key,stage,round,day,count,fixtures) {
+  for(let i=0;i<count;i++)fixtures.push({id:`${year}-${key}-${stage}-${i}`,comp:'ODI',round:round+(count>1?' '+(i+1):''),day,
+    home:null,away:null,venue:'X_ENG',stage,event:key,result:null});
+}
+function addGlobalTournamentFixtures(year,fixtures) {
+  const d=globalTournamentDef(year);if(!d)return;
+  const field=globalTournamentField(year,d.size),groups={A:[],B:[]};
+  field.forEach((n,i)=>groups[i%2?'B':'A'].push(n));
+  let k=0;
+  for(const group of ['A','B'])for(let a=0;a<groups[group].length;a++)for(let b=a+1;b<groups[group].length;b++){
+    fixtures.push({id:`${year}-${d.key}-g${k}`,comp:'ODI',round:'Group '+group,day:d.day+Math.floor(k/4),
+      home:groups[group][a],away:groups[group][b],venue:groups[group][a],stage:'globalgroup',event:d.key,group,result:null});k++;
+  }
+  if(d.key==='ODIWC'){
+    // Six qualifiers: top three from each group, carry across head-to-head group results.
+    // Three cross-group matches per team, followed by semi-finals and final.
+    globalStageMatches(year,d.key,'globalsuper','Super Six',d.day+14,9,fixtures);
+    globalStageMatches(year,d.key,'globalsemi','Semi-final',d.day+24,2,fixtures);
+    globalStageMatches(year,d.key,'globalfinal','Final',d.day+28,1,fixtures);
+  }else{
+    globalStageMatches(year,d.key,'globalsemi','Semi-final',d.day+15,2,fixtures);
+    globalStageMatches(year,d.key,'globalfinal','Final',d.day+19,1,fixtures);
+  }
+}
+function internationalTable(fixtures,teams){
+  const rows=teams.map(t=>({t,P:0,W:0,L:0,NR:0,Pts:0,rf:0,bf:0,ra:0,ba:0}));
+  const by=t=>rows.find(r=>r.t===t);
+  fixtures.filter(f=>f.result && by(f.home) && by(f.away)).forEach(f=>{
+    const a=by(f.home),b=by(f.away);a.P++;b.P++;
+    if(f.result.winner && by(f.result.winner)){const win=by(f.result.winner);win.W++;win.Pts+=2;(win===a?b:a).L++;}
+    else{a.NR++;b.NR++;a.Pts++;b.Pts++;}
+    for(const i of f.result.inns||[]){const r=by(i.bat),opp=by(i.bowl);
+      if(r){r.rf+=i.runs;r.bf+=i.balls;}if(opp){opp.ra+=i.runs;opp.ba+=i.balls;}}
+  });
+  return rows.sort((a,b)=>b.Pts-a.Pts||nrr(b)-nrr(a)||a.t.localeCompare(b.t));
+}
+function globalTournamentTable(event,group){
+  const fx=game.season.fixtures.filter(f=>f.event===event&&f.stage==='globalgroup'&&f.group===group);
+  return internationalTable(fx,[...new Set(fx.flatMap(f=>[f.home,f.away]))]);
+}
+function updateGlobalTournament(){
+  const fxs=game.season.fixtures.filter(f=>f.event==='ODIWC'||f.event==='CT');if(!fxs.length)return;
+  const event=fxs[0].event,group=fxs.filter(f=>f.stage==='globalgroup');
+  if(!group.every(f=>f.result))return;
+  const A=globalTournamentTable(event,'A'),B=globalTournamentTable(event,'B');
+  if(event==='ODIWC'){
+    const superFx=fxs.filter(f=>f.stage==='globalsuper');
+    if(superFx.length && !superFx[0].home){let k=0;
+      for(let a=0;a<3;a++)for(let b=0;b<3;b++){
+        const f=superFx[k++];f.home=A[a].t;f.away=B[b].t;
+      }
+    }
+    if(!superFx.every(f=>f.result))return;
+    const qualified=A.slice(0,3).concat(B.slice(0,3)).map(x=>x.t);
+    const carried=group.filter(f=>qualified.includes(f.home)&&qualified.includes(f.away));
+    const ranking=internationalTable(carried.concat(superFx),qualified);
+    const semis=fxs.filter(f=>f.stage==='globalsemi');
+    if(semis.length===2&&!semis[0].home){semis[0].home=ranking[0].t;semis[0].away=ranking[3].t;
+      semis[1].home=ranking[1].t;semis[1].away=ranking[2].t;}
+  }else{
+    const semis=fxs.filter(f=>f.stage==='globalsemi');
+    if(semis.length===2&&!semis[0].home){semis[0].home=A[0].t;semis[0].away=B[1].t;
+      semis[1].home=B[0].t;semis[1].away=A[1].t;}
+  }
+  const semis=fxs.filter(f=>f.stage==='globalsemi'),fin=fxs.find(f=>f.stage==='globalfinal');
+  if(semis.every(f=>f.result)&&!fin.home){fin.home=semis[0].result.winner||semis[0].home;
+    fin.away=semis[1].result.winner||semis[1].home;}
+  if(fin.result&&!game.globalTournamentHistory?.some(h=>h.year===game.year&&h.event===event)){
+    const winner=fin.result.winner||fin.home;game.globalTournamentHistory=game.globalTournamentHistory||[];
+    game.globalTournamentHistory.unshift({year:game.year,event,winner,runnerUp:winner===fin.home?fin.away:fin.home});
+    game.globalTournamentHistory=game.globalTournamentHistory.slice(0,24);
+    addNews('World',(event==='ODIWC'?'ODI World Cup':'Champions Trophy')+' champions',teamDef(winner).name+' lift the trophy.');
+  }
+}
+
+// ---- Men's T20 World Cup: 20 teams -> four groups of five -> Super Eight -> semis -> final.
+function setupWorldCup(w){
+  const field=globalTournamentField(game.year,20);
+  // Avoid repeated seeding of the same group by distributing on a serpentine pattern.
+  const names=['A','B','C','D'];w.groups={A:[],B:[],C:[],D:[]};
+  field.forEach((id,i)=>{const row=Math.floor(i/4),col=i%4;
+    w.groups[names[row%2?3-col:col]].push(id);});
+  let k=0;
+  for(const g of names){const teams=w.groups[g];for(let i=0;i<teams.length;i++)for(let j=i+1;j<teams.length;j++){
+    game.season.fixtures.push({id:`${game.year}-wc${k}`,comp:'WC',round:'Group '+g,
+      day:120+Math.floor(k/5),home:teams[i],away:teams[j],venue:'VIC',stage:'wcgroup',group:g,result:null,win:'WC'});k++;
+  }}
+  for(let i=0;i<12;i++)game.season.fixtures.push({id:`${game.year}-w8${i}`,comp:'WC',round:'Super Eight',day:132+Math.floor(i/4),
+    home:null,away:null,venue:'VIC',stage:'wcsuper',group:i<6?'E':'F',result:null,win:'WC'});
+  for(let i=0;i<2;i++)game.season.fixtures.push({id:`${game.year}-wcs${i}`,comp:'WC',round:'Semi-final '+(i+1),day:139,
+    home:null,away:null,venue:'VIC',stage:'wcsemi'+(i+1),result:null,win:'WC'});
+  game.season.fixtures.push({id:`${game.year}-wcf`,comp:'WC',round:'Final',day:142,
+    home:null,away:null,venue:'VIC',stage:'wcfinal',result:null,win:'WC'});
+  game.season.fixtures.sort((a,b)=>a.day-b.day);
+  w.fx=game.season.fixtures.filter(f=>f.comp==='WC').map(f=>f.id);
+  addNews('World','T20 World Cup draw','Twenty teams contest four groups before the Super Eight.');
+}
+function wcTable(w,g){
+  const groupFx=game.season.fixtures.filter(f=>(g==='E'||g==='F')?f.stage==='wcsuper'&&f.group===g:f.stage==='wcgroup'&&f.group===g);
+  const participants=(w.groups&&w.groups[g])||[...new Set(groupFx.flatMap(f=>[f.home,f.away]).filter(Boolean))];
+  return internationalTable(groupFx,participants);
+}
+function updateWorldCup(){
+  const w=game.season.windows.find(x=>x.wc);if(!w||!w.groups)return;
+  const fx=game.season.fixtures.filter(f=>f.comp==='WC');
+  const group=fx.filter(f=>f.stage==='wcgroup'),superFx=fx.filter(f=>f.stage==='wcsuper');
+  if(!group.every(f=>f.result))return;
+  // Careers upgraded mid-tournament retain the original 8-team knockout structure.
+  if(!superFx.length){
+    const s1=fx.find(f=>f.stage==='wcsemi1'),s2=fx.find(f=>f.stage==='wcsemi2'),fin=fx.find(f=>f.stage==='wcfinal');
+    if(!s1.home){const A=wcTable(w,'A'),B=wcTable(w,'B');s1.home=A[0].t;s1.away=B[1].t;s2.home=B[0].t;s2.away=A[1].t;}
+    if(s1.result&&s2.result&&!fin.home){fin.home=s1.result.winner||s1.home;fin.away=s2.result.winner||s2.home;}
+    if(fin.result&&!w.champion){w.champion=fin.result.winner||fin.home;game.worldHistory=game.worldHistory||[];
+      game.worldHistory.unshift({year:game.year,event:'T20 World Cup',winner:teamNat(w.champion),runnerUp:teamNat(w.champion===fin.home?fin.away:fin.home)});
+      archiveWorldCup(w);}
+    return;
+  }
+  if(superFx.length&&!superFx[0].home){
+    const A=wcTable(w,'A'),B=wcTable(w,'B'),C=wcTable(w,'C'),D=wcTable(w,'D');
+    // Group E: A1 B2 C1 D2; Group F: A2 B1 C2 D1.
+    w.groups.E=[A[0].t,B[1].t,C[0].t,D[1].t];
+    w.groups.F=[A[1].t,B[0].t,C[1].t,D[0].t];
+    let k=0;for(const g of ['E','F']){const ids=w.groups[g];
+      for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
+        const f=superFx[k++];f.group=g;f.home=ids[i];f.away=ids[j];
+      }
+    }
+  }
+  if(!superFx.every(f=>f.result))return;
+  const s1=fx.find(f=>f.stage==='wcsemi1'),s2=fx.find(f=>f.stage==='wcsemi2'),fin=fx.find(f=>f.stage==='wcfinal');
+  if(!s1.home){const E=wcTable(w,'E'),F=wcTable(w,'F');
+    s1.home=E[0].t;s1.away=F[1].t;s2.home=F[0].t;s2.away=E[1].t;}
+  if(s1.result&&s2.result&&!fin.home){fin.home=s1.result.winner||s1.home;fin.away=s2.result.winner||s2.home;}
+  if(fin.result&&!w.champion){w.champion=fin.result.winner||fin.home;
+    game.worldHistory=game.worldHistory||[];
+    game.worldHistory.unshift({year:game.year,event:'T20 World Cup',winner:teamNat(w.champion),
+      runnerUp:teamNat(w.champion===fin.home?fin.away:fin.home)});
     archiveWorldCup(w);
-    addNews('World', `${teamDef(w.champion).name} win the T20 World Cup`, fin.result.text + '.');
-  }
+    addNews('World',`${teamDef(w.champion).name} win the T20 World Cup`,fin.result.text+'.');}
 }
 // Tournament stats: runs and wickets for every player across the World Cup.
 function trackWorldCupStats(M) {
@@ -2499,7 +2771,7 @@ function archiveWorldCup(w) {
   const L = wcLeaders(w, 5);
   const entry = {
     year: game.year, label: game.season.label, champion: w.champion,
-    groups: { A: wcTable(w, 'A').map(r => Object.assign({}, r)), B: wcTable(w, 'B').map(r => Object.assign({}, r)) },
+    groups: Object.fromEntries(Object.keys(w.groups).map(g => [g, wcTable(w,g).map(r=>Object.assign({},r))])),
     ko: fx.filter(f => f.stage !== 'wcgroup').map(f => ({ round: f.round, home: f.home, away: f.away, text: f.result ? f.result.text : '', winner: f.result ? f.result.winner : null, id: f.id })),
     aus: fx.filter(f => f.home === 'AUS' || f.away === 'AUS').map(f => ({ round: f.round, opp: f.home === 'AUS' ? f.away : f.home, text: f.result ? f.result.text : '', won: f.result && f.result.winner === 'AUS', id: f.id })),
     bat: L.bat.map(x => Object.assign({ name: pname(P(x.id)), team: P(x.id) ? (P(x.id).teamId || '').replace('X_', '') || P(x.id).nat : '' }, x)),
@@ -3185,10 +3457,14 @@ function applyIntlMatch(M) {
   recordMatch(M); logMatchForPlayers(M);
   fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
-  if (/^wc(semi|final)/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
-  if (M.home === 'AUS' || M.away === 'AUS' || /^wc(semi|final)/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
+  if (/^(wc(semi|final)|global(semi|final))/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
+  if (M.home === 'AUS' || M.away === 'AUS' || /^(wc(semi|final)|global(semi|final))/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
   if (!fx.result.noResult) rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5);
+  if (fx.stage === 'world') archiveWorldSeries();
+  trackWtcResult(fx);
+  if (fx.stage === 'wtcfinal') archiveWtcFinal(fx);
   if (M.comp === 'WC') { trackWorldCupStats(M); updateWorldCup(); }
+  if (fx.event) updateGlobalTournament();
   const potm = M.potm ? P(M.potm) : null;
   if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
 }
@@ -3344,6 +3620,7 @@ function quickPlay(fx) {
   return M;
 }
 function playAIFixturesToday() {
+  updateGlobalTournament();
   for (const fx of game.season.fixtures) {
     if (fx.day !== game.day || fx.result || !fx.home || isUserTeam(fx.home) || isUserTeam(fx.away)) continue;
     if ((fx.stage === 'intl' || (fx.comp === 'WC' && (fx.home === 'AUS' || fx.away === 'AUS'))) && !activeWindow()) { fx.result = { winner: null, noResult: true, text: 'Not played', summary: '' }; continue; }
@@ -3356,6 +3633,7 @@ function seasonDone() { return game.season.fixtures.every(f => f.result); }
 
 function nextDay() {
   game.day++;
+  if (game.year % 2 === 1 && game.day === 212) prepareWtcFinal();
   let stop = false;
   const rec = game.training === 'fitness' ? 1.25 : 1;
   const phys = {}; TEAM_DEFS.forEach(t => phys[t.id] = 0.85 + staffEff(t.id, 'physio') / 300);
@@ -3777,6 +4055,7 @@ function aiFreeAgency() {
 
 // §13 OFF-SEASON ------------------------------------------------------------------
 function endSeason() {
+  archiveAssociateQualification();
   game.phase = 'review';
   settleSeasonFinances();
   const awards = computeAwards();
@@ -3973,6 +4252,7 @@ function startNewSeason() {
   Object.values(game.players).forEach(p => { p.stats.season = blankStats3(); p.natDuty = null; });
   game.year++;
   game.season = buildSeason(game.year);
+  rolloverWtc(game.year);
   game.day = 0; game.scorecards = {}; game.pendingFx = null; game.offers = []; game.live = null;
   if (game.fin) game.fin.ledger = blankLedger();
   Object.values(game.players).forEach(p => { p.rest = false; p.noTalksUntil = null; });
@@ -4147,7 +4427,7 @@ function plink(p, txt) { return p ? `<span class="link" style="font-size:inherit
 // England's Unicode tag-sequence flag can display as a black flag in iOS Safari.
 // West Indies has no country-flag emoji. Render both as self-contained SVGs instead.
 // Other nations retain native flag emoji. These are presentation-only; nationality IDs never change.
-const NAT_FLAGS = { AUS:'🇦🇺', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', AFG:'🇦🇫' };
+const NAT_FLAGS = { AUS:'🇦🇺', IND:'🇮🇳', PAK:'🇵🇰', SL:'🇱🇰', SA:'🇿🇦', NZ:'🇳🇿', AFG:'🇦🇫', BAN:'🇧🇩', IRE:'🇮🇪', ZIM:'🇿🇼' };
 const CRICKET_FLAGS = {
   ENG: `<svg class="cricket-flag-svg" viewBox="0 0 60 36" role="img" aria-label="England" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="36" rx="1.4" fill="#fff"/><path d="M25 0h10v36H25zM0 13h60v10H0z" fill="#ce1124"/></svg>`,
   WI: `<svg class="cricket-flag-svg" viewBox="0 0 60 36" role="img" aria-label="West Indies cricket" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="36" rx="1.4" fill="#7b183a"/><circle cx="39" cy="13" r="7" fill="#ffce51"/><path d="M8 28Q30 19 53 28v8H8z" fill="#f3f0e0"/><path d="M23 29q5-12 5-20l3 .4q-2 11-4 19z" fill="#165a44"/><path d="M29 11q-8-8-15-3 11-1 14 6M29 11q0-11 8-10-5 4-6 12M29 11q8-7 14-1-10-1-13 5M29 12q-9-2-11 5 6-4 12-2" fill="#168153" stroke="#168153" stroke-width="1.2" stroke-linejoin="round"/></svg>`
@@ -4297,7 +4577,7 @@ function showHelp() {
     <h4>Australia</h4><p>Take on the national selector role to pick every Australia squad. Tests and white-ball matches are played out in full. Picking your own state's players weakens your state while they are away.</p>
     <h4>The locker</h4><p>Every player has a personality and a mood. Mood moves with playing time, results, pay and how well your head coach manages people. The coach settles unsettled players each week. You step in when a player asks for a trade, is Unhappy, was let down on a promise or wants a better contract: talk to him to reassure him, promise him games or challenge him. Unhappy players lose form, refuse new contracts and eventually ask for a trade.</p>
     <h4>Development</h4><p>Put players on individual programmes (technique, power, bowling, control, variations, keeping, fitness, or learning to bowl). Your head coach decides how many programmes you can run. Programmes add monthly progress during the season and faster growth in the off-season.</p>
-    <h4>World cricket</h4><p>Other nations play their own series, the rankings move with every international, and a T20 World Cup is held in odd-year seasons.</p>
+    <h4>World cricket</h4><p>International tours run throughout the season, with rankings and series results tracked.</p>
     <h4>Club business</h4><p>The Club tab in the Office shows your bank balance, gate takings, sponsorship and wages. Set ticket prices and upgrade the training centre, medical centre, youth academy and stadium. The board now judges profit and debt as well as results. Decisions also arrive in your inbox: sponsors, media, discipline and rival clubs circling your players.</p>
     <h4>Contract talks</h4><p>Every player has an agent. Make an offer, hear a counter, and settle or walk away. Hard-nosed agents give little ground; lowball offers burn their patience.</p>
     <h4>Records and profiles</h4><p>The League tab holds the records book (highest scores, best bowling, team totals, partnerships and career leaders). Tap a team on any ladder for its profile.</p>
@@ -4842,7 +5122,7 @@ function renderNational() {
     : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
   return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
     ${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${N.rankings[n]}</span></div>`).join('')}</div>`, { flush: true })}
-    ${game.season.windows.filter(w => w.wc && w.groups).map(w => panel('T20 World Cup', ['A','B'].map(g => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Group ${g}</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${wcTable(w, g).map(r => `<tr class="${r.t === 'AUS' ? 'me' : ''}"><td>${tdot(r.t)} ${teamDef(r.t).name}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`).join('') + (w.champion ? `<div class="kv"><span>Champions</span><span class="b">${teamDef(w.champion).name}</span></div>` : ''), { flush: true })).join('')}
+    ${game.season.windows.filter(w => w.wc && w.groups).map(w => panel('T20 World Cup', Object.keys(w.groups).map(g => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Group ${g}</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${wcTable(w, g).map(r => `<tr class="${r.t === 'AUS' ? 'me' : ''}"><td>${tdot(r.t)} ${teamDef(r.t).name}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`).join('') + (w.champion ? `<div class="kv"><span>Champions</span><span class="b">${teamDef(w.champion).name}</span></div>` : ''), { flush: true })).join('')}
     ${game.season.windows.map(w => panel(`${w.label}${w.wc ? '' : ' v ' + NATIONS[w.opp]}`, `<div class="kv"><span>${dateStr(w.start)} – ${dateStr(w.end)}</span><span>${w.result ? `<span class="${w.result.wins > w.result.losses ? 'win' : w.result.wins < w.result.losses ? 'loss' : 'draw'} b">${w.result.wins}–${w.result.losses}${w.result.draws ? ' (' + w.result.draws + 'D)' : ''}</span>` : w.size + ' players'}</span></div>
       <div class="rows">${(w.fx || []).map(id => fixtureById(id)).filter(Boolean).map(f => fixtureRow(f, false)).join('')}</div>
       ${w.squad.length ? `<div class="kv"><span>Squad</span><span class="xs" style="text-align:right">${w.squad.map(id => P(id) ? esc(P(id).last) : '').join(', ')}</span></div>` : w.locked ? `<div class="kv"><span>Squad</span><span class="xs">Confirmed (${w.locked.length})</span></div>` : '<div class="kv"><span>Squad</span><span class="xs dim">Not named yet</span></div>'}`, { flush: true })).join('')}
@@ -5431,27 +5711,19 @@ function bracketBox(round, home, away, res, fxId) {
   return `<div class="bk ${fxId && game.scorecards[fxId] ? 'tap' : ''}" ${fxId && game.scorecards[fxId] ? `onclick="showScorecard('${fxId}',0)"` : ''}><div class="bk-r">${esc(round)}</div>${side(home)}${side(away)}${res ? `<div class="bk-x">${esc(displayInternationalSummary(res.text || ''))}</div>` : ''}</div>`;
 }
 function renderWorldCup() {
-  const w = game.season.windows.find(x => x.wc && x.groups);
-  const arch = game.wcArchive || [];
-  if (!w) {
-    const nextYear = game.year % 2 === 1 ? game.year + 2 : game.year + 1;
-    const last = arch[0];
-    return `${last ? renderWCArchive(last) : `<div class="note">The T20 World Cup is held in odd-year seasons. The next one is in ${nextYear}–${String(nextYear + 1).slice(2)}.</div>`}
-      ${pastWinners()}`;
-  }
-  const fx = game.season.fixtures.filter(f => f.comp === 'WC');
-  const ko = s => fx.find(f => f.stage === s) || {};
-  const s1 = ko('wcsemi1'), s2 = ko('wcsemi2'), fin = ko('wcfinal');
-  const aus = fx.filter(f => f.home === 'AUS' || f.away === 'AUS');
-  const L = wcLeaders(w, 5);
-  const stage = fin.result ? `Champions: ${wcName(w.champion)}` : fin.home ? 'Final' : s1.home ? 'Semi-finals' : 'Group stage';
-  return `<div class="note">T20 World Cup ${game.season.label} · <b>${stage}</b>. The top two in each group reach the semi-finals.</div><div style="height:8px"></div>
-    <div class="grid g2">${panel('Group A', wcGroupTable(wcTable(w, 'A'), w), { flush: true })}${panel('Group B', wcGroupTable(wcTable(w, 'B'), w), { flush: true })}</div><div style="height:8px"></div>
-    ${panel('Knockouts', `<div class="bracket"><div class="bk-col">${bracketBox('Semi-final 1 · A1 v B2', s1.home, s1.away, s1.result, s1.id)}${bracketBox('Semi-final 2 · B1 v A2', s2.home, s2.away, s2.result, s2.id)}</div><div class="bk-col fin">${bracketBox('Final', fin.home, fin.away, fin.result, fin.id)}</div></div>`)}
-    <div style="height:8px"></div><div class="grid g2">
-    ${panel("Australia's path", `<div class="rows">${aus.map(f => fixtureRow(f, false)).join('') || '<div class="empty">Australia are not in this tournament.</div>'}</div>`, { flush: true })}
-    ${panel('Tournament leaders', wcLeaderRows(L.bat.map(x => ({ id: x.id, v: `${x.r} runs`, sub: `${x.inn} inns · HS ${x.hs}` })), L.bowl.map(x => ({ id: x.id, v: `${x.w} wkts`, sub: `${oversStr(x.balls)} ov · ${x.r} runs` }))), { flush: true })}</div>
-    <div style="height:8px"></div>${panel('All World Cup results', `<div class="rows">${fx.filter(f => f.result).slice().reverse().map(f => fixtureRow(f, false)).join('') || '<div class="empty">No results yet.</div>'}</div>`, { flush: true })}
+  const w=game.season.windows.find(x=>x.wc&&x.groups),arch=game.wcArchive||[];
+  if(!w){const next=game.year%2===1?game.year+2:game.year+1;
+    return `${arch.length?renderWCArchive(arch[0]):`<div class="note">Next T20 World Cup: ${next}.</div>`}${pastWinners()}`;}
+  const fx=game.season.fixtures.filter(f=>f.comp==='WC');
+  const allGroups=Object.keys(w.groups),knock=fx.filter(f=>f.stage.startsWith('wcsemi')||f.stage==='wcfinal');
+  const aus=fx.filter(f=>f.home==='AUS'||f.away==='AUS');const L=wcLeaders(w,5);
+  const phase=w.champion?'Champions: '+wcName(w.champion):knock.some(f=>f.home)?'Knockouts':w.groups.E?'Super Eight':'Group stage';
+  return `<div class="note">T20 World Cup ${game.season.label} · <b>${esc(phase)}</b> · 20 teams</div>
+    <div class="grid g2">${allGroups.map(g=>panel('Group '+g,wcGroupTable(wcTable(w,g),w),{flush:true})).join('')}</div>
+    ${panel('Knockouts',`<div class="bracket">${knock.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
+    <div class="grid g2">${panel("Australia's path",`<div class="rows">${aus.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures.</div>'}</div>`,{flush:true})}
+    ${panel('Tournament leaders',wcLeaderRows(L.bat.map(x=>({id:x.id,v:x.r+' runs',sub:x.inn+' inns'})),L.bowl.map(x=>({id:x.id,v:x.w+' wkts',sub:oversStr(x.balls)+' ov'}))),{flush:true})}</div>
+    ${panel('Results',`<div class="rows">${fx.filter(f=>f.result).slice().reverse().map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No results yet.</div>'}</div>`,{flush:true})}
     ${pastWinners()}`;
 }
 function wcLeaderRows(bat, bowl) {
@@ -5463,7 +5735,7 @@ function renderWCArchive(e) {
   const semis = e.ko.filter(k => /Semi/.test(k.round)), fin = e.ko.find(k => k.round === 'Final');
   const lead = (arr, f) => arr.map(x => `<div class="kv"><span>${esc(x.name)} <span class="xs dim">${esc(x.team || '')}</span></span><span class="b">${f(x)}</span></div>`).join('') || '<div class="empty">—</div>';
   return `<div class="note">Last tournament: T20 World Cup ${e.label}. Champions <b>${wcName(e.champion)}</b>. Australia: ${esc(e.ausFinish)}.</div><div style="height:8px"></div>
-    <div class="grid g2">${panel('Group A · final table', wcGroupTable(e.groups.A), { flush: true })}${panel('Group B · final table', wcGroupTable(e.groups.B), { flush: true })}</div><div style="height:8px"></div>
+    <div class="grid g2">${Object.keys(e.groups).map(g=>panel('Group '+g+' · final',wcGroupTable(e.groups[g]),{flush:true})).join('')}</div><div style="height:8px"></div>
     ${panel('Knockouts', `<div class="bracket"><div class="bk-col">${semis.map(box).join('')}</div><div class="bk-col fin">${fin ? box(fin) : ''}</div></div>`)}<div style="height:8px"></div>
     <div class="grid g2">${panel("Australia's path", `<div class="rows">${e.aus.map(a => `<div class="kv ${game.scorecards[a.id] ? 'tap' : ''}" ${game.scorecards[a.id] ? `onclick="showScorecard('${a.id}',0)"` : ''}><span>${esc(a.round)} v ${wcName(a.opp)}</span><span class="${a.won ? 'win' : a.text ? 'loss' : 'dim'}">${esc(displayInternationalSummary(a.text) || '—')}</span></div>`).join('') || '<div class="empty">Australia did not take part.</div>'}</div>`, { flush: true })}
     ${panel('Tournament leaders', `<div class="lbl" style="padding:10px 14px 2px">Most runs</div><div class="rows">${lead(e.bat, x => x.r + ' runs')}</div><div class="lbl" style="padding:10px 14px 2px">Most wickets</div><div class="rows">${lead(e.bowl, x => x.w + ' wkts')}</div>`, { flush: true })}</div>`;
@@ -5476,17 +5748,45 @@ function pastWinners() {
 function wcHomeCard() {
   const w = game.season.windows.find(x => x.wc && x.groups);
   if (!w || w.champion && game.day > w.end) return '';
-  const g = w.groups.A.includes('AUS') ? 'A' : w.groups.B.includes('AUS') ? 'B' : null;
+  const g = Object.keys(w.groups).find(k=>w.groups[k].includes('AUS')) || null;
   const pos = g ? wcTable(w, g).findIndex(r => r.t === 'AUS') + 1 : 0;
   const nxt = game.season.fixtures.filter(f => f.comp === 'WC' && !f.result && (f.home === 'AUS' || f.away === 'AUS'))[0];
   return panel('T20 World Cup', `<div class="rows"><div class="row tap" onclick="ui.intlTab='wc';go('intl')"><div class="stack"><div class="main-t">${w.champion ? `Champions: ${wcName(w.champion)}` : g ? `Australia ${ordinal(pos)} in Group ${g}` : 'Tournament under way'}</div><div class="sub-t">${nxt ? `Next: v ${wcName(nxt.home === 'AUS' ? nxt.away : nxt.home)} · ${esc(nxt.round)} · ${dateStr(nxt.day)}` : 'Tables, bracket and leaders'}</div></div><span class="dim">›</span></div></div>`, { flush: true });
+}
+function globalTournamentPanel() {
+ const fxs=game.season.fixtures.filter(f=>f.event==='ODIWC'||f.event==='CT');
+ const hist=(game.globalTournamentHistory||[]);
+ if(!fxs.length && !hist.length)return '';
+ let sections='';
+ if(fxs.length){const ev=fxs[0].event, title=ev==='ODIWC'?'ODI World Cup':'Champions Trophy';
+  const table=g=>globalTournamentTable(ev,g).map(r=>`<div class="row" style="padding:7px 10px"><div class="grow s">${tdot(r.t)} ${esc(teamDef(r.t).name)}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('');
+  const knock=fxs.filter(f=>f.stage==='globalsuper'||f.stage.startsWith('globalsemi')||f.stage==='globalfinal');
+  sections=panel(title,`<div class="note">${ev==='ODIWC'?'14 teams · Super Six · Knockouts':'8 teams · Knockouts'}</div><div class="grid g2"><div><div class="lbl">Group A</div>${table('A')}</div><div><div class="lbl">Group B</div>${table('B')}</div></div><div class="lbl" style="padding-top:10px">Knockouts</div>${knock.map(f=>`<div class="kv"><span>${esc(f.round)}: ${f.home?esc(teamDef(f.home).name):'TBC'} v ${f.away?esc(teamDef(f.away).name):'TBC'}</span><span>${f.result?esc(displayInternationalSummary(f.result.text)):'–'}</span></div>`).join('')}`,{flush:true});
+ }
+ return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(teamDef(h.winner).name)}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
 }
 function renderWorld() {
   const R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]);
   const intl = game.season.fixtures.filter(f => f.result && !f.result.noResult && (f.stage === 'intl' || f.stage === 'world' || f.comp === 'WC')).slice(-14).reverse();
   const nat = ui.worldNat || rk.find(n => n !== 'AUS');
   const sq = nat === 'AUS' ? [] : Object.values(game.players).filter(p => p.teamId === 'X_' + nat && !p.retired).sort((a, b) => peakOvr(b) - peakOvr(a));
-  return `<div class="grid g2">${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
+  const qualEvents=[['CWCQ','ODI qualification'],['T20Q','T20I qualification']];
+  const qualificationPanel=panel('Associate qualification',qualEvents.map(([key,label])=>{
+    const rows=associateQualificationTable(key),complete=game.season.fixtures.filter(f=>f.stage==='associatequal'&&f.event===key).every(f=>f.result);
+    return `<div class="lbl" style="padding:8px 12px">${label}${complete?' · Completed':''}</div><div class="rows">${rows.slice(0,5).map((r,i)=>`<div class="row" style="padding:5px 12px"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('')}</div>`;
+  }).join(''),{flush:true});
+  const series = worldSeriesStandings();
+  const wtc=wtcRows(), currentWtc=ensureWtc();
+  const wtcFinal=game.season.fixtures.find(f=>f.stage==='wtcfinal');
+  const wtcPanel=panel('World Test Championship', `<div class="xs dim" style="padding:8px 12px">${currentWtc.start}–${currentWtc.start+1} cycle · Percentage of points earned</div>
+    <div class="rows">${wtc.map((r,i)=>`<div class="row" style="padding:7px 12px"><span class="n">${i+1}</span><div class="grow s">${esc(NATIONS[r.nat])}</div><span class="xs dim">${r.p} Tests</span><span class="b s" style="min-width:52px;text-align:right">${r.pct.toFixed(1)}%</span></div>`).join('')}</div>
+    ${wtcFinal ? `<div class="xs dim" style="padding:10px 12px">${wtcFinal.home ? `Final: ${esc(teamDef(wtcFinal.home).name)} v ${esc(teamDef(wtcFinal.away).name)}` : 'Finalists determined after the league phase'}${wtcFinal.result&&wtcFinal.result.winner?' · Champions: '+esc(teamDef(wtcFinal.result.winner).name):''}</div>` : ''}
+    ${(game.wtcHistory||[]).slice(0,3).map(h=>`<div class="xs dim" style="padding:6px 12px">${h.start}–${h.end}: ${h.winner?esc(teamDef(h.winner).name):'Drawn'} · ${esc(teamDef(h.home).name)} v ${esc(teamDef(h.away).name)}</div>`).join('')}`,{flush:true});
+  const formatLine = x => `${COMPS[x.comp].short}: ${x.winsHome}–${x.winsAway}${x.draws ? ` (${x.draws} drawn)` : ''}`;
+  const ongoing = series.filter(x=>x.played>0&&x.played<x.total).slice(0,7);
+  const history = (game.worldSeriesHistory || []).slice(0,12);
+  const seriesPanel = panel('International series', `<div class="rows">${ongoing.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)}</span><span>${esc(formatLine(x))}</span></div>`).join('') || '<div class="empty">No series in progress.</div>'}${history.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)} · ${esc(COMPS[x.comp].short)}</span><span>${x.winner ? esc(teamDef(x.winner).name) : 'Drawn'} · ${x.winsHome}–${x.winsAway}</span></div>`).join('')}</div>`, {flush:true});
+  return `${globalTournamentPanel()}${qualificationPanel}<div class="grid g2">${wtcPanel}${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s"><span class="dot" style="background:${INTL_COLORS[n]}"></span>${NATIONS[n]}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
     ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
     ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
     ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
