@@ -595,6 +595,11 @@ button,select,[onclick]{touch-action:manipulation}
 .nat-flag,.team-flag {display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
 .badge.nation-badge .legacy-flag,.hero .badge.nation-badge .legacy-flag {width:39px;height:27px}
 .broadcast-panel .legacy-flag,.broadcast-innings-head .legacy-flag {width:27px;height:19px}
+
+/* Build 025: intrinsic image sizing, including England and West Indies. */
+.legacy-flag { width:25px!important;height:17px!important;min-width:25px!important;max-width:25px!important;min-height:17px!important;max-height:17px!important;object-fit:fill!important;display:inline-block!important;vertical-align:middle!important; }
+.broadcast-panel .legacy-flag,.broadcast-innings-head .legacy-flag{width:27px!important;height:18px!important;min-width:27px!important;max-width:27px!important;min-height:18px!important;max-height:18px!important}
+.badge.nation-badge .legacy-flag{width:39px!important;height:26px!important;min-width:39px!important;max-width:39px!important;min-height:26px!important;max-height:26px!important}
 </style>
 </head>
 <body>
@@ -647,7 +652,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 024', title: 'World Cup Scheduling & National Flags', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 025', title: 'Flags, Milestones & Name Diversity', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -757,6 +762,33 @@ const NAMES = {
   AFG: { first:['Farid','Nasir','Karim','Sami','Waheed','Zubair','Hamid','Javed'], last:['Stanikzai','Hotak','Wardak','Popal','Durrani','Sultani','Noori','Kakar'] }
 };
 
+// Build 025: extended national naming pools. Used only for NEW players; old careers are unchanged.
+const EXTRA_NAMES = {
+ ENG: [['Ben','Joe','Sam','Zak','Jacob','Will','Dan','Chris','Reece','Alex','Liam','Jordan','James','Callum','Lewis','Archie','Josh','Elliot'],['Archer','Brook','Pope','Wood','Robinson','Haines','Crawley','Sibley','Stone','Salt','Livingstone','Atkinson','Mahmood','Carse','Jennings','Overton']],
+ IND: [['Rishabh','Shubman','Ruturaj','Shreyas','Ravindra','Ravichandran','Ishan','Devdutt','Abhishek','Tilak','Sai','Shivam','Rinku','Harshit','Mukesh'],['Sharma','Gill','Reddy','Singh','Jaiswal','Pant','Shah','Kishan','Kumar','Bumrah','Rana','Thakur','Chahal','Pandya','Tripathi','Rahul']],
+ PAK: [['Mohammad','Babar','Shaheen','Naseem','Salman','Agha','Imam','Shadab','Mohsin','Saim','Abdullah','Rizwan','Abrar','Azam','Iftikhar'],['Afridi','Khan','Shah','Ali','Hussain','Ahmed','Akram','Aziz','Malik','Nawaz','Ayub','Masood','Haq','Rauf','Ashraf']],
+ SL: [['Pathum','Kusal','Angelo','Dimuth','Dhananjaya','Avishka','Chamika','Dasun','Dunith','Wanindu','Matheesha','Prabath','Ashen','Bhanuka'],['Perera','Mendis','Fernando','de Silva','Wellalage','Hasaranga','Karunaratne','Shanaka','Asalanka','Madushanka','Thushara','Kumara','Rajapaksa']],
+ SA: [['Aiden','Kagiso','Temba','David','Marco','Keshav','Rassie','Tony','Tristan','Ryan','Lungi','Gerald','Dewald','Bjorn'],['Markram','Rabada','Bavuma','Miller','Jansen','Maharaj','van der Dussen','de Zorzi','Stubbs','Ngidi','Coetzee','Brevis','Fortuin','Rickelton','Mulder']],
+ NZ: [['Kane','Devon','Rachin','Daryl','Tom','Glenn','Tim','Mitchell','Michael','Henry','Will','Jacob','Ish','Ajaz','Kyle'],['Williamson','Conway','Ravindra','Mitchell','Latham','Phillips','Southee','Santner','Bracewell','Nicholls','Young','Duffy','Sodhi','Patel','Jamieson']],
+ WI: [['Shai','Kraigg','Jason','Kyle','Alzarri','Rovman','Brandon','Alick','Joshua','Gudakesh','Roston','Sherfane','Nicholas','Shimron','Keacy','Jayden','Tagenarine','Kirk','Rakeem','Amir','Jomel','Jermaine','Johnson','Nyeem'],['Hope','Brathwaite','Holder','Mayers','Joseph','Powell','King','Athanaze','Da Silva','Motie','Chase','Rutherford','Pooran','Hetmyer','Carty','Seales','Chanderpaul','McKenzie','Cornwall','Jangoo','Warrican','Blackwood','Charles','Young','Greaves','Drakes','Louis']],
+ AFG: [['Rashid','Rahmanullah','Ibrahim','Hashmatullah','Azmatullah','Najibullah','Mohammad','Mujeeb','Fazalhaq','Naveen','Noor','Gulbadin','Rahmat','Ikram'],['Khan','Gurbaz','Zadran','Shahidi','Omarzai','Zia','Ur Rahman','Farooqi','Ul Haq','Ahmad','Naib','Shah','Alikhil','Janat']],
+ BAN: [['Shakib','Mehidy','Litton','Najmul','Taskin','Mustafizur','Towhid','Mahmudullah','Tanzid','Soumya','Hasan','Shoriful','Ebadot','Taijul'],['Al Hasan','Hasan','Das','Hossain','Ahmed','Rahman','Hridoy','Sarkar','Islam','Miraz','Mahmud','Shanto']],
+ IRE: [['Paul','Harry','Andrew','Curtis','Mark','Josh','George','Lorcan','Barry','Graham','Ross','Andy','Neil','Craig'],['Stirling','Tector','Balbirnie','Campher','Adair','Little','Dockrell','Tucker','McCarthy','Hume','Young','McBrine','Delany']],
+ ZIM: [['Sikandar','Sean','Craig','Ryan','Blessing','Richard','Wesley','Brian','Tadiwanashe','Clive','Milton','Innocent','Tony','Tendai'],['Raza','Williams','Ervine','Burl','Muzarabani','Ngarava','Madhevere','Bennett','Marumani','Madande','Shumba','Kaia','Munyondo','Chatara']],
+ SCO: [['George','Richie','Brandon','Matthew','Chris','Michael','Mark','Brad','Tom','Safyaan','Jack','Hamza'],['Munsey','Berrington','McMullen','Cross','Greaves','Leask','Watt','Currie','Sole','Sharif','Jarvis','Tahire']],
+ NED: [['Scott','Max','Bas','Logan','Vikramjit','Teja','Ryan','Aryan','Noah','Paul','Colin'],['Edwards','ODowd','de Leede','van Beek','Singh','Nidamanuru','Klein','Dutt','Croes','van Meekeren','Ackermann']],
+ NEP: [['Rohit','Dipendra','Kushal','Sandeep','Aasif','Sompal','Karan','Gulsan','Aarif','Bhim','Pratis','Anil'],['Paudel','Airee','Malla','Lamichhane','Sheikh','Kami','KC','Jha','Rajbanshi','Sharki','Poudel','Sah']],
+ USA: [['Monank','Aaron','Steven','Ali','Nitish','Corey','Saurabh','Andries','Jessy','Shayan','Harmeet','Milind'],['Patel','Jones','Taylor','Khan','Kumar','Anderson','Netravalkar','Gous','Singh','Jahangir','Van Schalkwyk']],
+ CAN: [['Nicholas','Navneet','Pargat','Harsh','Saad','Dillon','Kaleem','Shreyas','Aaron','Rayyan'],['Kirton','Dhaliwal','Singh','Thaker','Bin Zafar','Heyliger','Sana','Movva','Pathan','Khan']],
+ NAM: [['Gerhard','Jan','Ruben','David','JJ','Bernard','Michael','Zane','Nicol','Ben'],['Erasmus','Frylinck','Trumpelmann','Wiese','Smit','Scholtz','van Lingen','Green','Davids','Loftie-Eaton']],
+ OMA: [['Zeeshan','Jatinder','Kashyap','Aqib','Khalid','Ayaan','Bilal','Shoaib','Pratik','Mehran'],['Maqsood','Singh','Prajapati','Ilyas','Kail','Khan','Odedra','Nadeem','Athavale','Samay']],
+ UAE: [['Muhammad','Waseem','Vriitya','Basil','Alishan','Junaid','Aayan','Asif','Rohan','Aryansh'],['Khan','Muhammad','Aravind','Hameed','Sharafu','Siddique','Afzal','Chand','Mustafa','Sharma']]
+};
+for (const [code,lists] of Object.entries(EXTRA_NAMES)) {
+ if (!NAMES[code]) NAMES[code]={first:[],last:[]};
+ NAMES[code].first.push(...lists[0]); NAMES[code].last.push(...lists[1]);
+}
+
 // §2 RNG + UTILITIES ------------------------------------------------------
 let rngState = 1;
 function seedRng(s) { rngState = (s >>> 0) || 1; }
@@ -850,13 +882,14 @@ function styleOf(p) { return p.style && STYLES[p.style] ? STYLES[p.style] : null
 function styleLabel(p) { const st = styleOf(p); return st ? st.label : ''; }
 
 // §4 PLAYER GENERATION + VALUE --------------------------------------------
-function genName(nat) {
+function genName(nat, teamId) {
   const L = NAMES[nat] || NAMES.AUS;
   if (!game._names) { game._names = {}; Object.values(game.players).forEach(p => game._names[p.first + ' ' + p.last] = 1); }
   for (let tries = 0; tries < 40; tries++) {
     const f = pick(L.first), l = pick(L.last);
     const key = f + ' ' + l;
-    if (!game._names[key]) { game._names[key] = 1; return [f, l]; }
+    const sameSurname = teamId && Object.values(game.players).filter(p => p.teamId === teamId && p.last === l).length;
+    if (!game._names[key] && (sameSurname === 0 || (sameSurname === 1 && rand() < 0.12))) { game._names[key] = 1; return [f, l]; }
   }
   return [pick(L.first), pick(L.last)];
 }
@@ -951,7 +984,7 @@ function makePlayer(opts) {
   // Batters who bowl a little are genuine part-timers, roughly 25-30 points below a specialist.
   if (bowlType !== 'NONE' && ['OPEN','TOP','MID'].includes(role)) { const v = (b, sd) => clamp(Math.round(b + randn() * sd), 15, 99); sk.bowl = v(opts.q - 27, 6); sk.acc = v(opts.q - 25, 6); sk.vari = v(opts.q - 28, 6); }
   if (bowlType === 'NONE') { sk.bowl = Math.min(sk.bowl, 25); sk.acc = Math.min(sk.acc, 30); sk.vari = Math.min(sk.vari, 30); sk.death = Math.min(sk.death, 30); }
-  const nm = genName(nat);
+  const nm = genName(nat, opts.teamId);
   const p = {
     id: 'p' + (game.nextPid++), first: nm[0], last: nm[1], age: opts.age, nat, teamId: opts.teamId || null,
     role, hand: rand() < 0.27 ? 'L' : 'R', bowlType, sk, pot: 0,
@@ -1313,7 +1346,7 @@ function startInnings(M, bat, bowl, opts) {
     curBowler: null, lastBowler: null, overBowlers: [], spell: {}, part: { r:0, b:0 }, recent: [], overRuns: [],
     target: opts.target || null, followOn: !!opts.followOn, declared: false, closed: false, allOut: false, startBall: M.balls };
   inn.card[0].in = true; inn.card[1].in = true;
-  M.innings.push(inn);
+  M.innings.push(inn); M.hatTrack={bowler:null,count:0};
   if (M.fmt === 'FC' && M.innings.length > 1) wlBreak(M, 'innings');
   if (M.pendingBrief) applyPendingBrief(M, 'Innings break');
   if (M.cond) coachUpdate(M, M.innings.length > 1 ? 'Innings break' : null);
@@ -1623,6 +1656,51 @@ function dismissal(M, inn, bowler, sc, mix) {
   return how;
 }
 
+// Build 025: milestones are derived from real delivered balls and scorecards.
+// Each record carries player IDs, avoiding ambiguous same-surname commentary.
+function noteMilestone(M, type, playerId, innNo, text) {
+ const arr = M.milestones || (M.milestones=[]);
+ const key = `${type}:${playerId}:${innNo}`;
+ if (arr.some(m=>m.key===key)) return;
+ arr.push({key,type,playerId,innings:innNo,text});
+ if (M.live) { M.log.unshift({cls:'sys', text}); if(M.log.length>80)M.log.length=80; }
+}
+function checkBallMilestones(M, inn, ev, bowler, sc) {
+ const inningsNo=M.innings.length;
+ // Track consecutive LEGAL balls taking a wicket credited to this bowler.
+ // Run outs and non-wicket deliveries reset the sequence; wides/no-balls do not count.
+ if (ev.legal) {
+   const bowlerWicket=!!(ev.wkt && sc.out && sc.out.bowler===bowler.id);
+   const st=M.hatTrack || (M.hatTrack={bowler:null,count:0});
+   if(bowlerWicket) { st.count = st.bowler===bowler.id ? st.count+1 : 1; st.bowler=bowler.id; }
+   else { st.count=0; st.bowler=null; }
+   if(st.count===3) {
+     const text=`HAT-TRICK! ${pname(bowler)} takes three wickets in three consecutive balls.`;
+     noteMilestone(M,'hat-trick',bowler.id,inningsNo,text);
+   }
+ }
+ if(sc.r>=200 && !(inn.milestoneDoubleCenturies||[]).includes(sc.id)) {
+   (inn.milestoneDoubleCenturies||(inn.milestoneDoubleCenturies=[])).push(sc.id);
+   noteMilestone(M,'double-century',sc.id,inningsNo,`${pname(P(sc.id))} reaches a double century!`);
+ }
+ if(sc.r>=50 && !(inn.milestoneFifties||[]).includes(sc.id)) {
+   (inn.milestoneFifties||(inn.milestoneFifties=[])).push(sc.id);
+   noteMilestone(M,'fifty',sc.id,inningsNo,`${pname(P(sc.id))} reaches fifty!`);
+ }
+ if(inn.part.r>=100 && !(inn.milestonePartHundreds||[]).includes(inn.wkts)) {
+   (inn.milestonePartHundreds||(inn.milestonePartHundreds=[])).push(inn.wkts);
+   noteMilestone(M,'hundred-partnership',`${inn.wkts}`,inningsNo,`Century partnership for the ${ordinal(inn.wkts+1)} wicket!`);
+ }
+ if(sc.r>=100 && !(inn.milestoneCenturies||[]).includes(sc.id)) {
+   (inn.milestoneCenturies||(inn.milestoneCenturies=[])).push(sc.id);
+   noteMilestone(M,'century',sc.id,inningsNo,`${pname(P(sc.id))} brings up a century!`);
+ }
+ const fig=bowlerFig(inn,bowler.id);
+ if(fig.w>=5 && !(inn.milestoneFiveFors||[]).includes(bowler.id)) {
+   (inn.milestoneFiveFors||(inn.milestoneFiveFors=[])).push(bowler.id);
+   noteMilestone(M,'five-wicket-haul',bowler.id,inningsNo,`${pname(bowler)} takes five wickets!`);
+ }
+}
 function endOver(M, inn) {
   const id = inn.curBowler;
   const bf = bowlerFig(inn, id);
@@ -1698,6 +1776,7 @@ function simBall(M) {
       }
     }
   }
+  checkBallMilestones(M, inn, ev, bowler, sc);
   bf.r += conceded;
   inn.overConceded += conceded;
   inn.overTally = (inn.overTally || 0) + ev.runs;
@@ -1840,19 +1919,23 @@ const ZONES = {
 };
 function pickZone(runs) { const k = runs >= 6 ? 1 : 0; return weightedPick(Object.keys(ZONES), z => ZONES[z].w[k]); }
 function zoneAngle(z, batter) { const a = ZONES[z].a + (rand() * 22 - 11); return Math.round(batter.hand === 'L' ? (360 - a) % 360 : (a + 360) % 360); }
+function ambiguousSurname(inn,p) {
+ const same=inn.card.filter(c=>P(c.id) && P(c.id).last===p.last);
+ return same.length>1 ? `${p.first} ${p.last}` : p.last;
+}
 function shortComm(M, inn, ev, bowler, batter, sc) {
-  if (ev.wkt) return `${batter.last} ${dismissText(sc.out)} ${sc.r} (${sc.b})`;
+  if (ev.wkt) return `${ambiguousSurname(inn,batter)} ${dismissText(sc.out)} ${sc.r} (${sc.b})`;
   if (ev.extra === 'wd') return ev.runs > 1 ? 'Wide, runs away for five' : 'Wide';
   if (ev.extra === 'nb') return 'No-ball' + (ev.bat ? `, ${ev.bat} off the bat` : '');
   if (ev.extra === 'b' || ev.extra === 'lb') return `${ev.runs} ${ev.extra === 'b' ? 'bye' : 'leg-bye'}${ev.runs > 1 ? 's' : ''}`;
-  let t = ev.bat === 0 ? `${batter.last}, ${pick(['defended','left alone','beaten outside off','no run','played and missed'])}` : `${batter.last}, ${pick(ZONES[ev.zone || 'cover'].txt)}`;
+  let t = ev.bat === 0 ? `${ambiguousSurname(inn,batter)}, ${pick(['defended','left alone','beaten outside off','no run','played and missed'])}` : `${ambiguousSurname(inn,batter)}, ${pick(ZONES[ev.zone || 'cover'].txt)}`;
   if (sc.r >= 100 && sc.r - ev.bat < 100) t += `. Hundred for ${batter.last}`;
   else if (sc.r >= 50 && sc.r - ev.bat < 50) t += `. Fifty for ${batter.last}`;
   return t;
 }
 function commentary(M, inn, ev, bowler, batter, sc) {
-  const head = `${ev.o}.${Math.min(6, ev.b)} ${bowler.last} to ${batter.last}: `;
-  if (ev.wkt) return head + `OUT! ${batter.last} ${dismissText(sc.out)} for ${sc.r} (${sc.b}). ${inn.runs}/${inn.wkts}.`;
+  const head = `${ev.o}.${Math.min(6, ev.b)} ${bowler.last} to ${ambiguousSurname(inn,batter)}: `;
+  if (ev.wkt) return head + `OUT! ${ambiguousSurname(inn,batter)} ${dismissText(sc.out)} for ${sc.r} (${sc.b}). ${inn.runs}/${inn.wkts}.`;
   if (ev.extra === 'wd') return head + (ev.runs > 1 ? 'wide and it races away for five wides.' : 'wide, drifting down leg.');
   if (ev.extra === 'nb') return head + 'no-ball, overstepped' + (ev.bat ? `, and ${ev.bat} off the bat.` : '.');
   if (ev.extra === 'b' || ev.extra === 'lb') return head + `${ev.runs} ${ev.extra === 'b' ? 'bye' : 'leg-bye'}${ev.runs > 1 ? 's' : ''}.`;
@@ -3814,7 +3897,7 @@ function fixtureById(id) { return game.season.fixtures.find(f => f.id === id); }
 function compactScorecard(M) {
   return {
     condText: condSummary(M), overs: M.overs || null, crowd: M.crowd || null, crowd: M.crowd || null,
-    comp: M.comp, fmt: M.fmt, home: M.home, away: M.away, venue: M.venue, stage: M.stage, toss: M.toss, result: M.result, potm: M.potm, xi: M.xi,
+    comp: M.comp, fmt: M.fmt, home: M.home, away: M.away, venue: M.venue, stage: M.stage, toss: M.toss, result: M.result, potm: M.potm, xi: M.xi, milestones: (M.milestones || []).slice(),
     innings: M.innings.map(i => ({ maxOvers: M.overs || null, bat: i.bat, bowl: i.bowl, runs: i.runs, wkts: i.wkts, balls: i.balls, ext: i.ext, declared: i.declared, allOut: i.allOut, followOn: i.followOn, target: i.target,
       card: i.card.map(c => ({ id: c.id, r: c.r, b: c.b, f4: c.f4, f6: c.f6, out: c.out, in: c.in, shots: c.shots })),
       bw: Object.keys(i.bw).map(id => Object.assign({ id }, i.bw[id])), fow: i.fow, overRuns: i.overRuns }))
@@ -3864,7 +3947,7 @@ function applyIntlMatch(M) {
   matchWear(M, inXI);
   recordMatch(M); logMatchForPlayers(M);
   trackNationalMatchRecord(M);
-  fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
+  fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M), milestones: (M.milestones || []).slice() };
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
   if (/^(wc(semi|final)|global(semi|final))/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
   if (M.home === 'AUS' || M.away === 'AUS' || /^(wc(semi|final)|global(semi|final))/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
@@ -3947,7 +4030,7 @@ function applyMatch(M) {
       st[inn.bowl].ra += inn.runs; st[inn.bowl].ba += balls; st[inn.bowl].wt += inn.wkts;
     });
   }
-  fx.result = { winner: res.winner, draw: !!res.draw && !res.advanced, tie: !!res.tie, noResult: !!res.noResult && !res.advanced, text: res.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M) };
+  fx.result = { winner: res.winner, draw: !!res.draw && !res.advanced, tie: !!res.tie, noResult: !!res.noResult && !res.advanced, text: res.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M), milestones: (M.milestones || []).slice() };
   gateTakings(M);
   if (M.home === U() || M.away === U() || fx.stage !== 'league') game.scorecards[fx.id] = compactScorecard(M);
   if (M.home === U() || M.away === U()) squadOf(U()).forEach(p => { p.rest = false; });
@@ -4915,7 +4998,7 @@ const LEGACY_FLAG_ASSETS = {
   ENG: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFoAAAA8CAYAAADmBa1FAAACMElEQVR42u3bvWoUURyG8efsmZ2QEPYDxAREFC9CC29B7C0VYmkKb8BasIilAS2tbNRbsFCw8AYkGpCsCPtBDGRmzvwt1h02kshsQOewvE+3xc7O+eVkPs4woNQy5eY/mJk1uTOW57h2m8HTXb5sPyTduIxlWb2BpCnZYJ8rO0/YeLBVbatRXOcq35bm2v9J0IIWtBK0oAUtAkELWgla0IJWgha0ErSgBa0EvUQl8x/qPjb6V1megxkWAn88ZauZw0LAsqzaVpTQLk0b3ZnZ7yf9HkYAtwC2cxiBpN/DpWnjY/kr9LdHj5ud0aHE+RY/P34iWe1gRVH/u0VBstph+OoN2d7XaluxdGLKvKdjze+O0UrW8N0OhAVmtRl4TxhPKIujaltNdoOJO3VGpxcvxfHnL0ssFAsfOigDSa8LrX4c4/g+OeNkmOcRHdXOfzIkBF3e6TpaCVrQStCCFrQS9BIU1aJSVQjTO8OFb1oM5xPwPm7obLAfx7+ZXyPpdad3eQusdTjvKYYjynAUHfSJURzsPGt2FaYM0PIcvvvA8PVbkvXf2HUG4j3F4Zj+7Vus37xebavJNrfvu1Ohm36HZdaPFy/5fG+LdPMqdnxcD3plhexgj2vPd7lw904cs3juHZaoFpVmL/gUozHgF3tCYgZ4itEYy/MoXhY6+2QYwY65dhvnPedbS54ep2fjiAlal3eCFrQStKAFLQJBC1oJWtCCVoIWtBK0oAWtBK2UirRfMMW2QCK6oPMAAAAASUVORK5CYII=',
   WI: 'data:image/png;base64,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'
 };
-function flagFor(n) { const src=LEGACY_FLAG_ASSETS[n]; return src ? `<img class="legacy-flag" alt="" draggable="false" src="${src}">` : '🌐'; }
+function flagFor(n) { n = n === 'X_ENG' ? 'ENG' : n === 'X_WI' ? 'WI' : n; const src=LEGACY_FLAG_ASSETS[n]; return src ? `<img class="legacy-flag" alt="" draggable="false" src="${src}">` : '🌐'; }
 function nationTag(n) { return '<span class="nat-flag" title="' + esc(NATIONS[n] || n) + '">' + flagFor(n) + '</span>'; }
 function natTag(p) { return ' <span class="nat-flag" title="' + esc(NATIONS[p.nat] || p.nat) + '">' + flagFor(p.nat) + '</span>'; }
 // Status is plain coloured text, and nothing at all when the player is fit and available.
@@ -6285,6 +6368,7 @@ function resultRecap(M) {
   const inner = `<div class="broadcast-head broadcast-result-meta"><span class="broadcast-live">RESULT</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
     <div class="broadcast-result ${won ? 'is-win' : ''}">${esc(res.text)}</div>
     ${M.potm && P(M.potm) ? `<div class="broadcast-award">Player of the match · ${plink(P(M.potm))}</div>` : ''}
+    ${M.milestones && M.milestones.length ? `<details class="recap-more"><summary>Match milestones · ${M.milestones.length}</summary><div class="rows">${M.milestones.map(m=>`<div class="row xs">${esc(m.text)}</div>`).join('')}</div></details>` : ''}
     ${inningsCards}
     ${M.fmt !== 'FC' ? `<div class="broadcast-recap-worm">${wormSvg(M.innings,M.fmt)}</div>` : ''}
     ${impact ? `<details class="recap-more"><summary>Competition impact</summary><span class="xs muted">${esc(impact)}</span></details>` : ''}`;
