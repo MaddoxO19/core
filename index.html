@@ -654,6 +654,20 @@ button,select,[onclick]{touch-action:manipulation}
 .day-weather{display:flex;align-items:center;gap:10px;margin-top:8px}.day-weather svg{width:30px;height:30px;flex:none}.day-weather>div{display:flex;flex-direction:column;gap:3px}.day-weather strong{font-size:12px}.day-weather span{font-size:11px;color:var(--muted);line-height:1.35}
 .day-coaching .plan-row{padding:10px 0 0;margin-top:10px!important;border-top:1px solid var(--line2)}
 @media(max-width:390px){.day-recap-heading{font-size:22px}.day-recap-heading span{font-size:10px}.day-innings-team{font-size:11px}.day-innings-fig{gap:5px}.day-innings-fig b{font-size:16px}.day-stats strong{font-size:19px}}
+
+/* Build 037: coherent live score hierarchy and interval transitions. */
+.broadcast-panel .broadcast-head{margin-bottom:2px}
+.broadcast-panel .broadcast-match{margin-bottom:6px}
+.broadcast-panel .broadcast-lead{padding:5px 10px;margin:2px 0 3px;border-radius:8px;background:var(--s2)}
+.broadcast-panel .broadcast-metrics.broadcast-metrics-inline{margin:1px 0 8px;padding:7px 0 9px;border-bottom:1px solid var(--line2)}
+.broadcast-panel .broadcast-people{margin-top:4px}
+.broadcast-panel .broadcast-recent{margin-top:10px;padding:10px 0;border-bottom:1px solid var(--line2)}
+.broadcast-panel .broadcast-context{margin-top:4px;border-top:0;padding-top:7px}
+.broadcast-panel .ball-condition{margin-top:2px}
+.session-recap .day-sections{margin-top:11px}
+.session-recap .day-session-row>b{white-space:normal}
+.transition-recap .day-recap-heading{margin-bottom:11px}
+@media(max-width:390px){.broadcast-panel .broadcast-metrics-inline .broadcast-metric{gap:4px}.session-recap .day-session-row{gap:6px}}
 </style>
 </head>
 <body>
@@ -706,7 +720,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 036', title: 'Stumps & Day Transition Broadcast Refresh', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 037', title: 'Unified Match Centre & Session Transitions', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -6536,7 +6550,7 @@ function broadcastCrease(M, inn) {
   const batterHtml = bat.map(c => `<div class="broadcast-player tap" onclick="showPlayer('${c.id}')"><span>${esc(pshort(P(c.id)))}${c.id === inn.striker ? ' *' : ''}</span><b>${c.r} <small>(${c.b})</small></b></div>`).join('');
   const bowlerHtml = bowler && P(bowler) ? `<div class="broadcast-player tap" onclick="showPlayer('${bowler}')"><span>${esc(pshort(P(bowler)))}</span><b>${f ? f.w+'/'+f.r : '0/0'} <small>(${f ? oversStr(f.balls) : '0'})</small></b></div>` : '<div class="dim xs">Awaiting next bowler</div>';
   const last = inn.lastOver, cur = inn.thisOver || [];
-  return `<div class="broadcast-people"><div><span class="broadcast-label">BATTERS</span>${batterHtml}</div><div><span class="broadcast-label">BOWLER</span>${bowlerHtml}</div></div>${broadcastMetrics(M, inn)}<div class="broadcast-recent"><span class="broadcast-label">${cur.length ? 'THIS OVER' : last ? 'LAST OVER' : 'FIRST OVER'}</span><div>${(cur.length ? cur : last ? last.syms : []).map(ballSym).join('') || '<span class="dim xs">Awaiting first ball</span>'}</div></div>`;
+  return `<div class="broadcast-people"><div><span class="broadcast-label">BATTERS</span>${batterHtml}</div><div><span class="broadcast-label">BOWLER</span>${bowlerHtml}</div></div><div class="broadcast-recent"><span class="broadcast-label">${cur.length ? 'THIS OVER' : last ? 'LAST OVER' : 'FIRST OVER'}</span><div>${(cur.length ? cur : last ? last.syms : []).map(ballSym).join('') || '<span class="dim xs">Awaiting first ball</span>'}</div></div>`;
 }
 function broadcastInningsCard(M, inn) {
   const bats = inn.card.filter(c => c.in).sort((a,b) => b.r-a.r).slice(0,3);
@@ -6562,7 +6576,7 @@ function renderLive() {
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
-  const broadcast = broadcastScore(M) + broadcastMatchContext(M) + broadcastCrease(M, inn);
+  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn) + broadcastMatchContext(M);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
@@ -6620,7 +6634,7 @@ function inningsRecap(M, inn) {
     ${M.fmt !== 'FC' ? `<div class="broadcast-recap-worm">${wormSvg(M.innings, M.fmt)}</div>` : ''}
     ${best ? `<details class="recap-more"><summary>Best partnership</summary><span class="xs muted">${best.r} runs · ${ordinal(best.w)} wicket${best.live ? ' · unbroken' : ''}</span></details>` : ''}
     ${nb ? `<div class="broadcast-next">Next to bat: ${esc(teamName(nb))}${M.fmt === 'FC' && n >= 3 && teamRuns(M, nb) < teamRuns(M, nb === inn.bat ? inn.bowl : inn.bat) ? ` · ${teamRuns(M, nb === inn.bat ? inn.bowl : inn.bat) - teamRuns(M, nb) + 1} to win` : ''}</div>` : ''}`;
-  return `<section class="panel recap broadcast-recap"><div class="pb"><div class="rc-e">Innings complete</div>${inner}</div></section>`;
+  return `<section class="panel recap broadcast-recap transition-recap"><div class="pb"><div class="rc-e">Innings break</div><div class="day-recap-heading">Innings complete<span>Next innings ahead</span></div>${inner}</div></section>`;
 }
 function breakRecap(M, r) {
   const label = { lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[r.type];
@@ -6631,7 +6645,15 @@ function breakRecap(M, r) {
   if (r.sess.bowl[0]) key.push(`<div class="kv"><span>${esc(pshort(P(r.sess.bowl[0][0])))}</span><span><b>${r.sess.bowl[0][1]}/${r.sess.bowl[0][2]}</b> <span class="xs dim">this session</span></span></div>`);
   const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
   const sit = inn.target ? `${teamName(inn.bat)} need ${Math.max(0, inn.target - inn.runs)} more with ${10 - inn.wkts} wickets in hand.` : M.innings.length > 1 ? `${teamName(lead >= 0 ? inn.bat : inn.bowl)} lead by ${Math.abs(lead)}.` : '';
-  if (r.type !== 'stumps') return recapShell(`${label} · Day ${r.day + 1}`, esc(r.score), `${r.overs} overs`, `<div class="s" style="margin-top:8px">The session: ${sessLine}.</div>${key.length ? perfRows(key) : ''}${sit ? `<div class="xs muted" style="margin-top:6px">${esc(sit)}</div>` : ''}`);
+  if (r.type !== 'stumps') {
+    const topBat = r.sess.bat[0], topBowl = r.sess.bowl[0];
+    const stat = (value, caption) => `<div><strong>${Number(value).toLocaleString('en-AU')}</strong><span>${caption}</span></div>`;
+    const performers = `<div class="day-sections"><div class="day-section-title">${label.toUpperCase()} · SESSION HIGHLIGHTS</div>${topBat ? `<div class="day-session-row"><span>Leading batter</span><b>${esc(pshort(P(topBat[0])))} · ${topBat[1]} runs</b></div>` : ''}${topBowl ? `<div class="day-session-row"><span>Leading bowler</span><b>${esc(pshort(P(topBowl[0])))} · ${topBowl[1]}/${topBowl[2]}</b></div>` : ''}${!topBat && !topBowl ? '<div class="day-session-row"><span>No individual highlights recorded</span></div>' : ''}</div>`;
+    const nd = M.cond && M.cond.days ? M.cond.days[r.day] : null;
+    const outlook = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">UP NEXT</span><b>${r.type === 'lunch' ? 'Afternoon session' : 'Evening session'}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>${esc(SKY_SHORT[nd.sky])}</strong><span>${esc(PITCH_OUTLOOK[M.cond.pitch] || 'Play resumes after the interval.')}</span></div></div></div>` : '';
+    const summary = M.innings.map((i,idx) => `<div class="day-innings-row"><div class="day-innings-team">${broadcastBadge(i.bat)}<span>${esc(teamName(i.bat))}${idx === M.innings.length-1 && !i.closed ? '<small> · batting</small>' : ''}</span></div><div class="day-innings-fig"><b>${i.runs}/${i.wkts}</b><small>${oversStr(i.balls)} ov</small></div></div>`).join('');
+    return `<section class="panel recap day-recap session-recap"><div class="pb"><div class="rc-e">${label} · Day ${r.day+1}</div><div class="day-recap-heading">${label}<span>Session complete</span></div><div class="day-recap-meta">${esc(r.score)} · ${r.overs} overs in current innings</div><div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT ${label.toUpperCase()}</div>${summary}</div><div class="day-stats">${stat(r.sess.runs,'Session runs')}${stat(r.sess.wkts,'Wickets')}${stat(r.sess.overs,'Overs')}</div>${performers}${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${outlook}<div class="day-coaching">${coachPlanLine(M)}</div></div></section>`;
+  }
   const d = r.dayStats || {runs:0,wkts:0,overs:0,bat:[],bowl:[]}, nd = M.cond.days[r.day + 1];
   const potd = (() => { const b = d.bat[0], w = d.bowl[0]; if (!b && !w) return null; if (w && (!b || w[1] * 22 >= b[1])) return `${esc(pname(P(w[0])))} · ${w[1]}/${w[2]}`; return `${esc(pname(P(b[0])))} · ${b[1]} runs`; })();
   const trend = nd ? (r.day + 2 >= 3 ? 'The surface is wearing: spinners get more help each day, quicks a little less.' : PITCH_OUTLOOK[M.cond.pitch]) : '';
