@@ -564,6 +564,16 @@ button,select,[onclick]{touch-action:manipulation}
 .badge.nation-badge .cricket-flag-svg,.badge.nation-badge.lg .cricket-flag-svg,.hero .badge.nation-badge .cricket-flag-svg,.hero .badge.nation-badge.lg .cricket-flag-svg{width:32px!important;max-width:32px!important;height:20px!important;max-height:20px!important}
 /* Live broadcast and completed innings use their own compact matched flag size. */
 .broadcast-panel .broadcast-identity .cricket-flag-svg,.broadcast-identity>.nat-flag .cricket-flag-svg,.broadcast-innings-head .nat-flag .cricket-flag-svg{width:26px!important;max-width:26px!important;height:16px!important;max-height:16px!important}
+
+/* Build 021: scorecard order and team-specific innings navigation */
+.sc-innings-tabs .seg{display:flex;overflow-x:auto;gap:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.sc-innings-tabs .seg::-webkit-scrollbar{display:none}
+.sc-innings-tabs .seg button{flex:1 0 auto;min-width:68px;white-space:nowrap;padding-inline:8px;font-size:12px;min-height:40px}
+.sc-innings-total{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 12px;border-top:1px solid var(--line2);background:var(--s2)}
+.sc-innings-total strong{text-transform:uppercase;letter-spacing:.05em;font-size:12px}
+.sc-innings-total .right{display:flex;align-items:flex-end;flex-direction:column;gap:4px}
+.sc-innings-total .sc-total{font-size:21px}
+.sc-total-meta{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -616,7 +626,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 020', title: 'Controls & Flag Consistency', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 021', title: 'Scorecard & Cricket Terminology', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5374,7 +5384,13 @@ function wormSvg(innings, fmt) {
   const target = activeChase ? `<span class="worm-target">Target ${chase.target} · ${Math.max(0,chase.target-chase.runs)} needed</span>` : '';
   return `<div class="worm-wrap"><div class="worm-legend">${legends}${target}</div><svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative runs by over for ${valid.map(i=>teamDef(i.bat).name).join(' and ')}">${grid}${ticks}${paths}</svg><div class="worm-axis">Overs</div></div>`;
 }
-function innLabel(S, k) { return `Inn ${k + 1}`; }
+function innLabel(S, k) {
+  const inn = S.innings[k];
+  if (!inn) return `Inn ${k + 1}`;
+  const nth = S.innings.slice(0, k + 1).filter(x => x.bat === inn.bat).length;
+  const name = teamDef(inn.bat).short || inn.bat;
+  return `${esc(name)} ${ordinal(nth)}`;
+}
 function scorecardHtml(S, k, fnName, noWorm) {
   if (!S.innings.length) return '<div class="empty">No play.</div>';
   k = k == null || k >= S.innings.length ? S.innings.length - 1 : k;
@@ -5393,15 +5409,15 @@ function scorecardHtml(S, k, fnName, noWorm) {
   });
   const ext = inn.ext.w + inn.ext.nb + inn.ext.b + inn.ext.lb;
   const nth = S.innings.filter((x, j) => j <= k && x.bat === inn.bat).length;
-  const tabs = S.innings.length > 1 ? seg(S.innings.map((x, j) => [String(j), innLabel(S, j)]), String(k), fnName) : '';
+  const tabs = S.innings.length > 1 ? `<div class="sc-innings-tabs">${seg(S.innings.map((x, j) => [String(j), innLabel(S, j)]), String(k), fnName)}</div>` : '';
   const shots = []; inn.card.forEach(c => (c.shots || []).forEach(s => shots.push(s)));
   return `
     ${tabs}
-    <div class="sc-head"><div><div class="sc-team">${teamName(inn.bat)}</div><div class="xs dim">${S.fmt === 'FC' ? ordinal(nth) + ' innings' : 'Innings'}${inn.followOn ? ' · following on' : ''}${inn.target ? ' · target ' + inn.target : ''}</div></div>
-      <div class="right"><div class="sc-total">${inn.runs}${inn.allOut ? '' : '/' + inn.wkts}${inn.declared ? 'd' : ''}</div><div class="xs dim">${oversStr(inn.balls)} overs · RR ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}</div></div></div>
+    <div class="sc-head"><div><div class="sc-team">${teamName(inn.bat)}</div><div class="xs dim">${S.fmt === 'FC' ? ordinal(nth) + ' innings' : 'Innings'}${inn.followOn ? ' · following on' : ''}${inn.target ? ' · target ' + inn.target : ''}</div></div></div>
     <div class="panel"><table class="tbl sc"><thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th class="hide-xs">SR</th></tr></thead><tbody>
       ${batted.map(c => `<tr><td class="l"><div class="nm">${plink(P(c.id), pshort(P(c.id)))}</div><div class="how ${c.out ? '' : 'no'}">${esc(dismissText(c.out))}</div></td><td class="b">${c.r}</td><td>${c.b}</td><td>${c.f4}</td><td>${c.f6}</td><td class="dim hide-xs">${c.b ? (c.r / c.b * 100).toFixed(0) : '–'}</td></tr>`).join('')}</tbody></table>
       <div class="sc-foot"><span>Extras <b>${ext}</b> <span class="dim">(w ${inn.ext.w}, nb ${inn.ext.nb}, b ${inn.ext.b}, lb ${inn.ext.lb})</span></span></div>
+      <div class="sc-innings-total"><strong>Total</strong><div class="right"><span class="sc-total">${inn.runs}/${inn.wkts}${inn.declared ? 'd' : ''}</span><span class="xs dim sc-total-meta">${oversStr(inn.balls)} overs · RR ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}</span></div></div>
       ${dnb.length ? `<details class="sc-remaining"><summary>${inn.closed ? 'Did not bat' : 'Yet to bat'} · ${dnb.length}</summary><div class="sc-remaining-list">${dnb.map(c => P(c.id) ? plink(P(c.id), pshort(P(c.id))) : esc(c.id)).join(', ')}</div></details>` : ''}
       ${inn.fow.length ? `<div class="sc-foot"><span class="dim">Fall of wickets</span> ${inn.fow.map(f => `<span class="fow">${f.r}-${f.w}</span>`).join(' ')}</div>` : ''}</div>
     <div class="panel" style="margin-top:8px"><table class="tbl sc"><thead><tr><th>Bowler</th><th>O</th><th>M</th><th>R</th><th>W</th><th class="hide-xs">Econ</th></tr></thead><tbody>
@@ -5944,7 +5960,7 @@ function broadcastScore(M, compact) {
   const remain = target ? Math.max(0, current.target - current.runs) : 0;
   const ballsLeft = target ? Math.max(0, mOvers(M) * 6 - current.balls) : 0;
   const chase = target ? `<div class="broadcast-chase">${esc(teamDef(current.bat).short || current.bat)} need ${remain} from ${ballsLeft} balls · RRR ${(ballsLeft ? remain * 6 / ballsLeft : 0).toFixed(2)}</div>` : '';
-  const heading = M.done ? 'FULL TIME' : current && current.closed ? 'INNINGS BREAK' : 'LIVE MATCH';
+  const heading = M.done ? 'MATCH COMPLETE' : current && current.closed ? 'INNINGS BREAK' : 'LIVE MATCH';
   return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>${broadcastMatchProgress(M)}
     <div class="broadcast-match">${team(teams[0])}<span class="broadcast-vs">v</span>${team(teams[1])}</div>${chase}${broadcastSituationHtml(M)}`;
 }
@@ -6137,7 +6153,7 @@ function resultRecap(M) {
   }
   const won = res.winner && isUserTeam(res.winner);
   const inningsCards = M.innings.map(i => broadcastInningsCard(M,i)).join('');
-  const inner = `<div class="broadcast-head broadcast-result-meta"><span class="broadcast-live">FULL TIME</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
+  const inner = `<div class="broadcast-head broadcast-result-meta"><span class="broadcast-live">RESULT</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
     <div class="broadcast-result ${won ? 'is-win' : ''}">${esc(res.text)}</div>
     ${M.potm && P(M.potm) ? `<div class="broadcast-award">Player of the match · ${plink(P(M.potm))}</div>` : ''}
     ${inningsCards}
