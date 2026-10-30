@@ -600,6 +600,9 @@ button,select,[onclick]{touch-action:manipulation}
 .legacy-flag { width:25px!important;height:17px!important;min-width:25px!important;max-width:25px!important;min-height:17px!important;max-height:17px!important;object-fit:fill!important;display:inline-block!important;vertical-align:middle!important; }
 .broadcast-panel .legacy-flag,.broadcast-innings-head .legacy-flag{width:27px!important;height:18px!important;min-width:27px!important;max-width:27px!important;min-height:18px!important;max-height:18px!important}
 .badge.nation-badge .legacy-flag{width:39px!important;height:26px!important;min-width:39px!important;max-width:39px!important;min-height:26px!important;max-height:26px!important}
+
+/* Build 026: succinct match-specific competition context */
+.championship-context{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:5px 12px;font-size:12px;color:var(--muted,#94a9b9);padding:8px 2px 5px}.championship-context strong{color:var(--gold,#efc557);font-size:12px;letter-spacing:.035em}.championship-context span,.neutral-venue{color:var(--muted,#94a9b9);font-size:11px}.neutral-venue{margin-top:5px}
 </style>
 </head>
 <body>
@@ -652,7 +655,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 025', title: 'Flags, Milestones & Name Diversity', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 026', title: 'Championship & Neutral Venue Context', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5574,7 +5577,7 @@ function fixtureRow(f, isNext) {
   const sub = f.result ? esc(displayInternationalSummary(f.result.summary)) : f.home ? teamDef(f.venue || f.home).ground : '';
   const card = f.result && game.scorecards[f.id];
   return `<div class="row ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}')"` : ''}><div class="center" style="width:34px;flex:none"><div class="b" style="line-height:1">${d.getUTCDate()}</div><div class="xs dim">${d.toLocaleDateString('en-AU', { month:'short', timeZone:'UTC' })}</div></div>
-    <div class="stack"><div class="main-t ell">${chip(f.comp, COMPS[f.comp].short)} ${teams}</div><div class="sub-t ell">${f.stage !== 'league' ? f.round + ' · ' : ''}${sub}</div></div><div class="end">${end}</div></div>`;
+    <div class="stack"><div class="main-t ell">${chip(f.comp, COMPS[f.comp].short)} ${teams}</div><div class="sub-t ell">${fixtureContextLabel(f) ? fixtureContextLabel(f) + ' · ' : f.stage !== 'league' ? f.round + ' · ' : ''}${sub}</div></div><div class="end">${end}</div></div>`;
 }
 function wormSvg(innings, fmt) {
   if (fmt === 'FC') return '';
@@ -5644,7 +5647,7 @@ function showScorecard(fxId, k) {
   if (!S) { flash('Scorecard not available.'); return; }
   _scFx = fxId;
   const f = fixtureById(fxId);
-  sheet(`${COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(S.result.text)}</span>` : '' });
+  sheet(`${fixtureContextLabel(f) || COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(S.result.text)}</span>` : '' });
 }
 function scInn(k) { showScorecard(_scFx, k); }
 
@@ -5882,6 +5885,29 @@ function showPlayer(id, tab) {
 
 // §24 MATCH DAY + LIVE MATCH ---------------------------------------------------------------
 // The GM sets the brief and watches. The coach and captain make the on-field calls.
+// Build 026: label the competition and venue separately from the regular match format.
+// The championship final is played at a neutral venue even when a participant
+// has the same nation code as the venue; never infer home advantage from fx.home.
+function fixtureContextLabel(fx) {
+  if (!fx) return '';
+  if (fx.stage === 'wtcfinal') return 'World Test Championship Final';
+  if (fx.stage === 'wcfinal') return 'T20 World Cup Final';
+  if (fx.stage === 'wcsemi1' || fx.stage === 'wcsemi2') return 'T20 World Cup Semi-final';
+  if (fx.comp === 'WC') return 'T20 World Cup';
+  if (fx.stage === 'globalfinal') return 'International Tournament Final';
+  return '';
+}
+function fixtureNeutralLabel(fx) {
+  if (!fx) return '';
+  return fx.stage === 'wtcfinal' ? 'Neutral venue · Championship Final' : '';
+}
+function matchContextForLive(M) {
+  if (!M) return '';
+  const fx = M.fxId ? fixtureById(M.fxId) : null;
+  const c = fixtureContextLabel(fx || M);
+  const n = fixtureNeutralLabel(fx || M);
+  return c ? `<div class="championship-context"><strong>${esc(c)}</strong>${n ? `<span>${esc(n)}</span>` : ''}</div>` : '';
+}
 function myTeamIn(fx) { return isUserTeam(fx.home) ? fx.home : fx.away; }
 // Show fixture overlap only when it matters; never occupy permanent dashboard space.
 // Acknowledgement changes no result or fixture priority. Delegation is explicit.
@@ -5926,9 +5952,9 @@ function renderMatchday() {
   const scouted = game.scoutedFx[fx.id];
   const wx = pre.cond.days.map((d, i) => chip(d.sky === 'rain' || d.sky === 'showers' ? 'warn' : d.sky === 'overcast' ? 'info' : '', `${fmt === 'FC' ? 'D' + (i + 1) + ' ' : ''}${SKIES[d.sky].label}${d.lost ? ' −' + d.lost : ''}`)).join(' ');
   const hc = staffIn(me, 'head');
-  return `${pageTitle('Match day', `${COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
+  return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
-    ${panel('', `<div class="hero"><span onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div></div><span onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
+    ${panel('', `<div class="hero"><span onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       ${pitchReport(pre, v, fmt)}
       ${forecastRow(pre, fmt, fx)}
       <table class="tbl clean" style="margin-top:6px"><tbody>
@@ -6173,7 +6199,7 @@ function broadcastScore(M, compact) {
   const ballsLeft = target ? Math.max(0, mOvers(M) * 6 - current.balls) : 0;
   const chase = target ? `<div class="broadcast-chase">${esc(teamDef(current.bat).short || current.bat)} need ${remain} from ${ballsLeft} balls · RRR ${(ballsLeft ? remain * 6 / ballsLeft : 0).toFixed(2)}</div>` : '';
   const heading = M.done ? 'MATCH COMPLETE' : current && current.closed ? 'INNINGS BREAK' : 'LIVE MATCH';
-  return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>${broadcastMatchProgress(M)}
+  return `<div class="broadcast-head"><span class="broadcast-live">${heading}</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>${broadcastMatchProgress(M)}${matchContextForLive(M)}
     <div class="broadcast-match">${team(teams[0])}<span class="broadcast-vs">v</span>${team(teams[1])}</div>${chase}${broadcastSituationHtml(M)}`;
 }
 // Build 010: derive the day/session and remaining playable overs from the match's
@@ -6366,7 +6392,7 @@ function resultRecap(M) {
   const won = res.winner && isUserTeam(res.winner);
   const inningsCards = M.innings.map(i => broadcastInningsCard(M,i)).join('');
   const inner = `<div class="broadcast-head broadcast-result-meta"><span class="broadcast-live">RESULT</span><span>${esc(COMPS[M.comp].short)} · ${esc(teamDef(M.venue).ground)}</span></div>
-    <div class="broadcast-result ${won ? 'is-win' : ''}">${esc(res.text)}</div>
+    ${matchContextForLive(M)}<div class="broadcast-result ${won ? 'is-win' : ''}">${esc(res.text)}</div>
     ${M.potm && P(M.potm) ? `<div class="broadcast-award">Player of the match · ${plink(P(M.potm))}</div>` : ''}
     ${M.milestones && M.milestones.length ? `<details class="recap-more"><summary>Match milestones · ${M.milestones.length}</summary><div class="rows">${M.milestones.map(m=>`<div class="row xs">${esc(m.text)}</div>`).join('')}</div></details>` : ''}
     ${inningsCards}
