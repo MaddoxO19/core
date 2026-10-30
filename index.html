@@ -586,7 +586,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 014', title: 'Team Identity Integrity', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 015', title: 'Scoring Calibration & Extreme Rating Protection', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1425,6 +1425,15 @@ function battingIntent(M, inn) {
   return clamp(i, -0.9, 1.5);
 }
 
+// Extreme-rating protection: keep elite bowling valuable without permitting
+// edit-driven 20+ point gaps to produce implausibly high per-ball wicket odds.
+// Normal-range probabilities pass through untouched; only the upper tail is softened.
+function calibratedWicketChance(raw, fmt) {
+  const knee = fmt === 'FC' ? 0.028 : fmt === 'OD' ? 0.042 : 0.067;
+  const ceiling = fmt === 'FC' ? 0.042 : fmt === 'OD' ? 0.062 : 0.092;
+  if (raw <= knee) return clamp(raw, 0.002, ceiling);
+  return clamp(knee + (raw - knee) * 0.10, 0.002, ceiling);
+}
 function ballContext(M, inn, batter, bowler, sc) {
   const F = FORMATS[M.fmt], B = F.ball;
   let bR = batRating(batter, M.fmt) + formMod(batter);
@@ -1442,7 +1451,7 @@ function ballContext(M, inn, batter, bowler, sc) {
   const ph = M.fmt === 'FC' ? null : phaseOf(M.fmt, inn.overNo, mOvers(M));
   let intent = battingIntent(M, inn) + (bst.int || 0) * (M.fmt === 'FC' ? 0.6 : 1);
   if (bst.finisher && ph === 'death') { intent += 0.12; bR += 3; }
-  const d = clamp((bR - wR + 6 + home) / 15, -2.5, 2.5);
+  const d = clamp((bR - wR + 6 + home) / 21, -2.5, 2.5);
   const fld = TACTICS.field[tacticsFor(M, inn.bowl).field];
   const fieldQ = 1 + ((M.fieldAvg[inn.bowl] || 60 + RATING_SHIFT) - 62 - RATING_SHIFT) / 300;
   const pW = B.wkt * Math.exp(-0.42 * d) * (1 + 0.5 * intent) * fld.wkt * fieldQ * pe.wkt * (wst.wkt || 1);
@@ -1462,7 +1471,7 @@ function ballContext(M, inn, batter, bowler, sc) {
   const accMul = clamp(1.5 - bowler.sk.acc / 100, 0.5, 1.4);
   const keeper = P(M.keeper[inn.bowl]);
   const byeMul = keeper ? clamp(1.7 - keeper.sk.keep / 100, 0.6, 1.5) : 1.5;
-  return { pW: clamp(pW, 0.002, 0.25), weights, pWide: B.wide * accMul * pe.wideMul, pNb: B.nb * accMul, pBye: B.bye * byeMul, mix: pe.mix };
+  return { pW: calibratedWicketChance(pW, M.fmt), weights, pWide: B.wide * accMul * pe.wideMul, pNb: B.nb * accMul, pBye: B.bye * byeMul, mix: pe.mix };
 }
 const RUN_VALUES = [0, 1, 2, 3, 4, 6];
 function sampleRuns(w) {
