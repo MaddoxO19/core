@@ -542,6 +542,11 @@ button,select,[onclick]{touch-action:manipulation}
 
 /* Pitch outlook: solid gold is the minimum rating; muted gold covers the forecast range. */
 .pgr .cells i.range{background:#89713b}
+
+/* Build 018: compact Home ladder selector, preserve iPhone touch target. */
+.home-comp-select{display:inline-flex;align-items:center;max-width:132px}
+.home-comp-select select{width:auto;max-width:132px;min-width:96px;height:40px;min-height:40px;padding:6px 26px 6px 10px;font-size:14px;line-height:1.2}
+@media(max-width:480px){.home-comp-select select{font-size:16px!important;height:40px}}
 </style>
 </head>
 <body>
@@ -594,7 +599,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 017', title: 'Compact Pitch Outlook', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 018', title: 'Compact Home & Match Day', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5057,7 +5062,7 @@ function renderHome() {
     ${formLine}
     ${attention}
     <div class="grid g2">
-      <div class="grid">${homeNation ? panel('World rankings', nationRankings, {flush:true}) : panel('Ladder', ladderTable(hc, true), { flush: true, end: sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()") })}${acts}</div>
+      <div class="grid">${homeNation ? panel('World rankings', nationRankings, {flush:true}) : panel('Ladder', ladderTable(hc, true), { flush: true, end: `<span class="home-comp-select">${sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()")}</span>` })}${acts}</div>
       <div class="grid">
         ${wcHomeCard()}${homeExtras()}
         ${panel('News', `<div class="rows">${game.news.slice(0, 4).map(newsRow).join('') || '<div class="empty">No news yet.</div>'}</div>`, { flush: true, end: `<button class="link" onclick="newsSheet()">All news ▸</button>` })}
@@ -5682,7 +5687,6 @@ function renderMatchday() {
       ${pitchReport(pre, v, fmt)}
       ${forecastRow(pre, fmt, fx)}
       <table class="tbl clean" style="margin-top:6px"><tbody>
-        ${pre.notes.length ? `<tr><td class="l muted">Note</td><td class="l draw" style="white-space:normal">${pre.notes.map(esc).join(' ')}</td></tr>` : ''}
         ${mine.replaced && mine.replaced.length ? `<tr><td class="l muted">Team news</td><td class="l" style="white-space:normal">${mine.replaced.map(([o, n]) => `${esc(o.last)} out, ${esc(n.last)} in.`).join(' ')}</td></tr>` : ''}</tbody></table>
       ${gamePlanRow(fmt, hc, fx)}
       <div class="grid match-actions" style="grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn" onclick="analystSheet()">Analyst report</button><button class="btn" onclick="quickSimUser()">Quick sim</button></div>
