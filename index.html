@@ -617,6 +617,12 @@ button,select,[onclick]{touch-action:manipulation}
 .trade-review-section .kv>span:first-child{min-width:0;overflow-wrap:anywhere}
 .trade-review-section .kv>span:last-child{text-align:right;white-space:nowrap}
 @media(max-width:390px){.trade-offer-columns{gap:8px}.trade-person{font-size:.83rem}}
+
+/* Build 030: compact, noninteractive ball-condition status. */
+.ball-condition{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 2px;border-top:1px solid var(--line,#263d4c);margin-top:9px;min-height:35px}
+.ball-status{display:flex;align-items:center;gap:9px;font-size:12px}
+.ball-visual{display:inline-block;width:19px;height:19px;flex:none;border-radius:50%;background:linear-gradient(135deg,#de604e 0%,#a33b32 55%,#58312c 100%);border:1px solid #ca7969;box-shadow:inset calc(var(--wear)*-0.012) 0 4px #392725;position:relative}
+.ball-visual:after{content:'';position:absolute;left:9px;top:2px;height:14px;border-left:1px dashed #e0aa99;transform:rotate(20deg)}
 </style>
 </head>
 <body>
@@ -669,7 +675,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 028', title: 'Awards & Trade Interface Refinement', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 030', title: 'Match Events, Milestones & Ball Conditions', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1363,7 +1369,12 @@ function startInnings(M, bat, bowl, opts) {
     curBowler: null, lastBowler: null, overBowlers: [], spell: {}, part: { r:0, b:0 }, recent: [], overRuns: [],
     target: opts.target || null, followOn: !!opts.followOn, declared: false, closed: false, allOut: false, startBall: M.balls };
   inn.card[0].in = true; inn.card[1].in = true;
-  M.innings.push(inn); M.hatTrack={bowler:null,count:0};
+  M.innings.push(inn);
+  // Establish both recap baselines before the first delivery, not at lunch.
+  // Do not overwrite restored snapshots when resuming a saved match or changing innings.
+  if (M.fmt === 'FC' && !M.sessT) M.sessT = { runs: 0, wkts: 0, balls: 0, bat: {}, bowl: {} };
+  if (M.fmt === 'FC' && !M.dayT) M.dayT = { runs: 0, wkts: 0, balls: 0, bat: {}, bowl: {} };
+  M.hatTrack={bowler:null,count:0};
   if (M.fmt === 'FC' && M.innings.length > 1) wlBreak(M, 'innings');
   if (M.pendingBrief) applyPendingBrief(M, 'Innings break');
   if (M.cond) coachUpdate(M, M.innings.length > 1 ? 'Innings break' : null);
@@ -1444,7 +1455,7 @@ function wlOver(M, inn, bowlerId) {
     }
   });
   // The second new ball: taken as soon as it is due, 80 overs after the last one.
-  if (inn.overNo - (inn.newBall || 0) >= 80) { inn.newBall = inn.overNo; if (M.live) M.log.unshift({ cls: 'sys', text: `New ball taken after ${inn.overNo} overs.` }); }
+  if (inn.overNo - (inn.newBall || 0) >= 80) { inn.newBall = inn.overNo; if (M.live) { const text=`New ball taken after ${inn.overNo} overs.`; M.log.unshift({ cls: 'sys', keyMoment:true, text }); (M.matchEvents||(M.matchEvents=[])).push({type:'new-ball',innings:M.innings.length,over:inn.overNo,ball:0,text}); } }
 }
 function wlBreak(M, type) {
   Object.keys(M.wl || {}).forEach(id => {
@@ -1682,6 +1693,45 @@ function noteMilestone(M, type, playerId, innNo, text) {
  arr.push({key,type,playerId,innings:innNo,text});
  if (M.live) { M.log.unshift({cls:'sys', text}); if(M.log.length>80)M.log.length=80; }
 }
+// Career landmarks use completed career totals plus the current match, with
+// separate domestic and international scopes; no extra simulation RNG is consumed.
+function matchRunsSoFar(M, playerId) {
+ return M.innings.reduce((sum, i)=>sum+i.card.reduce((v,c)=>v+(c.id===playerId?c.r:0),0),0);
+}
+function careerMilestoneBase(M, playerId) {
+ const p=P(playerId); if(!p||!p.stats)return 0;
+ const f=M.fmt, international=String(M.comp||'').toLowerCase().includes('intl')||String(M.home).startsWith('X_')||String(M.away).startsWith('X_')||String(M.comp||'').toLowerCase().includes('world');
+ const src=international?p.stats.intl&&p.stats.intl[f]:p.stats.career&&p.stats.career[f];
+ return src&&Number.isFinite(+src.r)?+src.r:0;
+}
+function noteBallChance(M,inn,ev,batter,bowler) {
+ // Non-dismissal events are annotations only. They must never alter runs, wickets,
+ // selection or the random sequence used by the match engine.
+ if(!ev.legal || ev.wkt || ev.runs>0 || !M.live)return;
+ const n=(M.balls*37 + inn.wkts*19 + String(batter.id).length*13 + String(bowler.id).length*7)%211;
+ let label='';
+ if(n===0)label=`Dropped catch! ${batter.last} survives a chance off ${bowler.last}.`;
+ else if(n===1)label=`LBW appeal turned down. ${bowler.last} cannot convince the umpire against ${batter.last}.`;
+ else if(n===2)label=`Missed run-out chance. ${batter.last} survives.`;
+ else if(n===3)label=`Stumping chance missed. ${batter.last} remains not out.`;
+ if(label){ev.chance=label; (M.matchEvents||(M.matchEvents=[])).push({type:'chance',innings:M.innings.length,over:ev.o,ball:ev.b,text:label}); if(M.matchEvents.length>120)M.matchEvents.shift();}
+}
+function checkCareerRunMilestones(M,inn,sc) {
+ if(!M.live||!sc||!sc.id||sc.r===0)return;
+ const bases=M.careerMilestoneBases||(M.careerMilestoneBases={});
+ const base=bases[sc.id]===undefined?(bases[sc.id]=careerMilestoneBase(M,sc.id)):bases[sc.id];
+ const match=matchRunsSoFar(M,sc.id);
+ const before=base+match;
+ for(const mark of [1000,2000,3000,5000,10000]) {
+   if(before>=mark) {
+     // The player passed this threshold in this innings, but only announce at
+     // the exact delivery where the score reaches it.
+     const previous=before-(sc.r-(sc._lastCareerCheck||0));
+     if(previous<mark) noteMilestone(M,'career-runs-'+mark,sc.id,M.innings.length,`${pname(P(sc.id))} reaches ${mark.toLocaleString('en-AU')} ${M.fmt==='FC'?'first-class':M.fmt==='OD'?'one-day':'T20'} career runs!`);
+   }
+ }
+ sc._lastCareerCheck=sc.r;
+}
 function checkBallMilestones(M, inn, ev, bowler, sc) {
  const inningsNo=M.innings.length;
  // Track consecutive LEGAL balls taking a wicket credited to this bowler.
@@ -1695,6 +1745,10 @@ function checkBallMilestones(M, inn, ev, bowler, sc) {
      const text=`HAT-TRICK! ${pname(bowler)} takes three wickets in three consecutive balls.`;
      noteMilestone(M,'hat-trick',bowler.id,inningsNo,text);
    }
+ }
+ if(sc.r>=150 && !(inn.milestoneOneFifties||[]).includes(sc.id)) {
+   (inn.milestoneOneFifties||(inn.milestoneOneFifties=[])).push(sc.id);
+   noteMilestone(M,'one-fifty',sc.id,inningsNo,`${pname(P(sc.id))} reaches 150 runs!`);
  }
  if(sc.r>=200 && !(inn.milestoneDoubleCenturies||[]).includes(sc.id)) {
    (inn.milestoneDoubleCenturies||(inn.milestoneDoubleCenturies=[])).push(sc.id);
@@ -1794,10 +1848,12 @@ function simBall(M) {
     }
   }
   checkBallMilestones(M, inn, ev, bowler, sc);
+  noteBallChance(M, inn, ev, batter, bowler);
   bf.r += conceded;
   inn.overConceded += conceded;
   inn.overTally = (inn.overTally || 0) + ev.runs;
   inn.runs += ev.runs; inn.part.r += ev.runs;
+  if(ev.bat>0)checkCareerRunMilestones(M,inn,sc);
   const ran = ev.extra === 'wd' ? 0 : ev.extra === 'nb' ? ev.bat : ev.runs;
   if (!ev.wkt && ran % 2 === 1) swapStrike(inn);
   inn.recent.push(ev.sym); if (inn.recent.length > 12) inn.recent.shift();
@@ -1811,9 +1867,9 @@ function simBall(M) {
     // Break and drinks notes written by endOver belong after the ball that ended the over.
     const breakNotes = M.log.splice(0, M.log.length - logBefore);
     ev.text = commentary(M, inn, ev, bowler, batter, sc);
-    ev.short = shortComm(M, inn, ev, bowler, batter, sc);
+    ev.short = ev.chance || shortComm(M, inn, ev, bowler, batter, sc);
     ev.inn = M.innings.length; ev.score = `${inn.runs}/${inn.wkts}`; ev.bn = bowler.last;
-    ev.cls = ev.wkt ? 'w' : (ev.bat === 4 || ev.bat === 6) ? 'b' : '';
+    ev.cls = ev.chance ? 'chance' : ev.wkt ? 'w' : (ev.bat === 4 || ev.bat === 6) ? 'b' : '';
     M.log.unshift(ev);
     if (overEnded && !inn.closed) M.log.unshift({ cls:'sys', text: overSummary(M, inn) });
     if (inn.closed) M.log.unshift({ cls:'sys', text: inningsClosedText(M, inn) });
@@ -2188,8 +2244,11 @@ function blankTally() { return { runs: 0, wkts: 0, balls: 0, bat: {}, bowl: {} }
 // At lunch, tea and stumps: record the session (and day) and, in a live match, pause on a recap.
 function recordBreak(M, b, inn) {
   const now = matchTally(M);
-  if (!M.sessT) M.sessT = M.balls < 60 ? blankTally() : now;
-  if (!M.dayT) M.dayT = M.balls < 60 ? blankTally() : now;
+  // Old mid-match saves may lack snapshots. Never take the first break as
+  // the starting point: that silently discards the opening session.
+  // New games initialise both snapshots at the first innings' start.
+  if (!M.sessT) M.sessT = b.day === 0 ? blankTally() : now;
+  if (!M.dayT) M.dayT = b.day === 0 ? blankTally() : now;
   const sess = tallyDiff(M.sessT, now);
   (M.dayBreaks = M.dayBreaks || []).push({ day: b.day, type: b.type, score: `${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}` });
   const rec = { type: b.type, day: b.day, sess, score: `${teamDef(inn.bat).short || inn.bat} ${inn.runs}/${inn.wkts}`, overs: oversStr(inn.balls) };
@@ -6342,6 +6401,14 @@ function broadcastInningsCard(M, inn) {
   const bowls = Object.entries(inn.bw).filter(([id,f]) => f.balls).sort((a,b) => b[1].w-a[1].w || a[1].r-b[1].r).slice(0,3);
   return `<div class="broadcast-innings"><div class="broadcast-innings-head"><span>${broadcastBadge(inn.bat)} ${esc(teamName(inn.bat))}</span><b>${inn.runs}/${inn.wkts}</b><small>${oversStr(inn.balls)} ov</small></div><div class="broadcast-innings-cols"><div><div class="broadcast-label">TOP BATTERS</div>${bats.map(c => batRow(c)).join('') || '<span class="dim xs">No batting figures</span>'}</div><div><div class="broadcast-label">BEST BOWLING</div>${bowls.map(([id,f])=>bowlRow(id,f)).join('') || '<span class="dim xs">No bowling figures</span>'}</div></div></div>`;
 }
+function ballConditionHtml(M,inn) {
+ if(!inn||M.done||inn.closed)return '';
+ const age= Math.max(0,inn.overNo-(inn.newBall||0));
+ const pct=Math.min(100,age/80*100);
+ const phase=age<10?'New ball':age<35?'Good condition':age<60?'Wearing':'Old ball';
+ const available=M.fmt==='FC'&&age>=80;
+ return `<div class="ball-condition" aria-label="Ball age ${age} overs"><div class="ball-status"><span class="ball-visual" style="--wear:${pct.toFixed(0)}%" aria-hidden="true"></span><span><b>${available?'New ball due':phase}</b> <span class="dim xs">· ${age} overs old</span></span></div>${M.fmt==='FC'?`<span class="xs dim">${available?'Change available':'New ball at 80 ov'}</span>`:''}</div>`;
+}
 function renderLive() {
   const M = game.live, inn = curInn(M), F = FORMATS[M.fmt];
   if (!inn) return `${pageTitle('Live', 'Starting')}<div class="empty">Starting.</div>`;
@@ -6370,6 +6437,7 @@ function renderLive() {
   </div><div class="livebar three">${bar}</div>`;
   return `<div class="grid">
     <section class="panel broadcast-panel"><div class="pb">${broadcast}
+      ${ballConditionHtml(M,inn)}
       ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
     </div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
@@ -6489,7 +6557,7 @@ function commentaryHtml(M) {
     const balls = g.balls.slice().reverse();
     const runs = balls.reduce((a, b) => a + (b.runs || 0), 0);
     const last = g.balls[0];
-    const shown = all ? balls : balls.filter(b => b.wkt || b.bat >= 4 || /Fifty|Hundred/.test(b.short || ''));
+    const shown = all ? balls : balls.filter(b => b.wkt || b.bat >= 4 || b.chance || /Fifty|Hundred/.test(b.short || ''));
     return `<div class="ov"><div class="ovh"><span class="ovn">Over ${g.o + 1}</span><span class="ovw ell">${esc(g.bn || '')}</span><span class="ovr">${runs} run${runs === 1 ? '' : 's'} · ${esc(last.score || '')}</span></div>
       ${shown.map(b => `<div class="cball ${b.wkt ? 'w' : b.bat >= 4 ? 'b' : ''}"><span class="o">${b.o}.${Math.min(6, b.b)}</span><span>${esc(b.short || b.text)}</span></div>`).join('')}</div>`;
   }).join('');
