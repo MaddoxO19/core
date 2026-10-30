@@ -603,6 +603,20 @@ button,select,[onclick]{touch-action:manipulation}
 
 /* Build 026: succinct match-specific competition context */
 .championship-context{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:5px 12px;font-size:12px;color:var(--muted,#94a9b9);padding:8px 2px 5px}.championship-context strong{color:var(--gold,#efc557);font-size:12px;letter-spacing:.035em}.championship-context span,.neutral-venue{color:var(--muted,#94a9b9);font-size:11px}.neutral-venue{margin-top:5px}
+
+/* Build 028: simplify offers and maintain predictable mobile wrapping. */
+.trade-offer-card{padding:13px 14px;border-bottom:1px solid var(--line,#293c4a);cursor:pointer;min-width:0}
+.trade-offer-card:focus-visible{outline:2px solid var(--gold,#edc956);outline-offset:-2px}
+.trade-offer-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.trade-offer-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-width:0}
+.trade-offer-columns>div{min-width:0}
+.trade-person{display:flex;justify-content:space-between;gap:6px;font-size:.9rem;padding-top:6px;overflow-wrap:anywhere}
+.trade-person span{white-space:nowrap;font-weight:700;color:var(--gold,#edc956)}
+.trade-review-section{padding:6px 0 12px}
+.trade-review-section .kv{gap:10px;align-items:flex-start}
+.trade-review-section .kv>span:first-child{min-width:0;overflow-wrap:anywhere}
+.trade-review-section .kv>span:last-child{text-align:right;white-space:nowrap}
+@media(max-width:390px){.trade-offer-columns{gap:8px}.trade-person{font-size:.83rem}}
 </style>
 </head>
 <body>
@@ -655,7 +669,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 027', title: 'Player Movement & Contract Management', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 028', title: 'Awards & Trade Interface Refinement', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5377,7 +5391,7 @@ function intlSeasonAwardsHtml(a) {
   const labels = [['overall','International player of the year'],['FC','Test player of the year'],['OD','ODI player of the year'],['T20','T20I player of the year'],['young','Young international player'],['bat','International batter'],['bowl','International bowler']];
   const rows = labels.map(([key,title]) => {
     const item = a.winners[key];
-    return `<div class="kv"><span>${title}</span><span>${item && P(item.id) ? `${natTag(P(item.id))} ${plink(P(item.id), pname(P(item.id)))}` : '<span class="dim">Insufficient data</span>'}</span></div>`;
+    return `<div class="kv"><span>${title}</span><span>${item && P(item.id) ? `${plink(P(item.id), pname(P(item.id)))}` : '<span class="dim">Insufficient data</span>'}</span></div>`;
   });
   for (const fmt of ['FC','OD','T20']) {
     for (const [k,label] of [['runs','runs'],['wickets','wickets']]) {
@@ -5396,7 +5410,7 @@ function renderOffseason() {
   let body = '', btn = 'Continue';
   if (game.phase === 'review') {
     const a = o.awards, b = o.board;
-    const aw = (label, x, unit) => `<div class="kv"><span>${label}</span><span>${x ? `${plink(P(x.id), x.name)} <span class="dim">${tdot(x.team)}${unit ? ' · ' + x.v + ' ' + unit : ''}</span>` : '–'}</span></div>`;
+    const aw = (label, x, unit) => `<div class="kv"><span>${label}</span><span>${x ? `<span class="link" onclick="showPlayer('${x.id}')">${esc(x.name)}</span> <span class="dim">${esc(teamName(x.team))}${unit ? ' · ' + x.v + ' ' + unit : ''}</span>` : '–'}</span></div>`;
     body = `<div class="grid g2">
       ${panel('Champions', `<div class="rows">${COMP_ORDER.map(c => `<div class="kv"><span>${COMPS[c].name}</span><span>${game.season.champions[c] ? tdot(game.season.champions[c]) + ' ' + teamDef(game.season.champions[c]).nick : '–'}</span></div>`).join('')}
         ${COMP_ORDER.map(c => `<div class="kv"><span>Your ${COMPS[c].short} finish</span><span class="${compOutcome(c, U()) === 'Champions' ? 'win b' : ''}">${outcomeLine(c, U())}</span></div>`).join('')}<div class="kv"><span>Season record</span><span>${game.season.userWins}W ${game.season.userLosses}L</span></div></div>`, { flush: true })}
@@ -5790,11 +5804,13 @@ function renderTrades() {
   if (!ui.tradePartner || ui.tradePartner === U()) ui.tradePartner = TEAM_DEFS.find(t => t.id !== U()).id;
   const partner = ui.tradePartner;
   ui.tradeGive = ui.tradeGive.filter(id => P(id) && P(id).teamId === U()); ui.tradeGet = ui.tradeGet.filter(id => P(id) && P(id).teamId === partner);
-  const offers = game.offers.map(o => `<div class="row"><div class="stack"><div class="main-t ell">${tdot(o.from)} want ${o.want.map(id => plink(P(id))).join(', ')}</div><div class="sub-t" style="white-space:normal">Offer: ${o.give.map(id => `${plink(P(id))} (${ROLES[P(id).role].short} ${peakOvr(P(id))})`).join(', ')} · until ${dateStr(o.expires)}</div></div>
-    <div class="end"><button class="btn sm pri" onclick="acceptOffer('${o.id}')">Accept</button><button class="btn sm ghost" onclick="declineOffer('${o.id}')">✕</button></div></div>`).join('');
+  const offers = game.offers.map(o => `<div class="trade-offer-card" onclick="reviewTradeOffer('${o.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();reviewTradeOffer('${o.id}')}" aria-label="Review trade offer from ${esc(teamName(o.from))}">
+    <div class="trade-offer-head"><b>${esc(teamName(o.from))}</b><span class="xs muted">Until ${dateStr(o.expires)} · Review ›</span></div>
+    <div class="trade-offer-columns"><div><div class="xs muted">YOU SEND</div>${o.want.map(id=>P(id)?`<div class="trade-person">${esc(pname(P(id)))} <span>${peakOvr(P(id))}</span></div>`:'').join('')}</div><div><div class="xs muted">YOU RECEIVE</div>${o.give.map(id=>P(id)?`<div class="trade-person">${esc(pname(P(id)))} <span>${peakOvr(P(id))}</span></div>`:'').join('')}</div></div>
+  </div>`).join('');
   const need = groupNeeds(partner);
   const needTxt = Object.keys(need).filter(g => need[g] > 0.2).map(g => ({ BAT:'batting', WK:'keeping', AR:'all-rounders', PACE:'pace', SPIN:'spin' }[g])).join(', ') || 'nothing in particular';
-  const list = (team, selIds, fn) => sortPlayers(squadOf(team), 'ovr', 'T20').map(p => { const on = selIds.includes(p.id); return playerRow(p, { all: true, click: `${fn}('${p.id}')`, sub: `${team !== U() ? fitTag(p) : ''}${ROLES[p.role].short} · ${p.age} · ${money(p.contract.salary)}×${p.contract.years}`, end: `${on ? chip('good', '✓') : ''}${pill(peakOvr(p))}` }).replace('class="row tap', `class="row tap ${on ? 'me' : ''}`); }).join('');
+  const list = (team, selIds, fn) => sortPlayers(squadOf(team), 'ovr', 'T20').map(p => { const on = selIds.includes(p.id); return `<div class="row tap ${on?'me':''}" onclick="${fn}('${p.id}')"><div class="stack"><div class="main-t ell">${esc(pname(p))}</div><div class="sub-t">${ROLES[p.role].short} · ${p.age}</div></div><div class="end">${on?chip('good','✓'):''}${pill(peakOvr(p))}</div></div>`; }).join('');
   const sum = ids => ids.map(id => pname(P(id))).join(', ') || 'nobody';
   return `${offers ? panel('Offers received', `<div class="rows">${offers}</div>`, { flush: true }) + '<div style="height:8px"></div>' : ''}
     ${open ? '' : '<div class="note warn" style="margin-bottom:8px">Trade window closed. It reopens in free agency.</div>'}
@@ -5813,13 +5829,35 @@ function proposeTrade() {
 }
 function sum2(ids) { return ids.map(id => pname(P(id))).join(', '); }
 function doTrade() { executeTrade(ui.tradePartner, ui.tradeGive.slice(), ui.tradeGet.slice()); ui.tradeGive = []; ui.tradeGet = []; closeModal(); autosave(); render(); flash('Trade completed.'); }
-function acceptOffer(id) {
-  const o = game.offers.find(x => x.id === id); if (!o) return;
-  const ok = o.want.every(x => P(x).teamId === U()) && o.give.every(x => P(x).teamId === o.from) && !tradeCheck(o.from, o.want, o.give).length;
-  if (!ok) { flash('This offer is no longer valid.'); game.offers = game.offers.filter(x => x !== o); render(); return; }
-  executeTrade(o.from, o.want, o.give); game.offers = game.offers.filter(x => x !== o); autosave(); render(); flash('Trade completed.');
+function tradeOfferValidity(o) {
+  if (!o || !Array.isArray(o.want) || !Array.isArray(o.give)) return ['Offer unavailable.'];
+  if (!tradeWindowOpen()) return ['The trade window is closed.'];
+  if (!o.want.every(id => P(id) && P(id).teamId === U()) || !o.give.every(id => P(id) && P(id).teamId === o.from)) return ['One or more players are no longer at the clubs shown.'];
+  return tradeCheck(o.from, o.want, o.give);
 }
-function declineOffer(id) { game.offers = game.offers.filter(x => x.id !== id); render(); }
+function reviewTradeOffer(id) {
+  const o = game.offers.find(x => x.id === id); if (!o) { flash('This offer is no longer available.'); return; }
+  const details = ids => ids.map(pid => { const p=P(pid); return p ? `<div class="kv"><span>${esc(pname(p))} <span class="dim xs">${ROLES[p.role].short} · ${p.age} · ${peakOvr(p)} OVR</span></span><span class="xs">${money(p.contract.salary)} × ${p.contract.years} yr</span></div>` : ''; }).join('');
+  const outSalary=o.want.reduce((n,id)=>n+(P(id)?.contract.salary||0),0), inSalary=o.give.reduce((n,id)=>n+(P(id)?.contract.salary||0),0);
+  const cap=capSpace(U())+outSalary-inSalary, size=squadOf(U()).length-o.want.length+o.give.length;
+  const os=overseasCount(U())-o.want.filter(id=>P(id)?.nat!=='AUS').length+o.give.filter(id=>P(id)?.nat!=='AUS').length;
+  const errs=tradeOfferValidity(o);
+  sheet('Trade offer',esc(teamName(o.from)), `<div class="trade-review-section"><b class="s">You send</b><div class="rows">${details(o.want)}</div></div><div class="trade-review-section"><b class="s">You receive</b><div class="rows">${details(o.give)}</div></div>
+    <div class="rows"><div class="kv"><span>Cap space after trade</span><b>${money(cap)}</b></div><div class="kv"><span>Squad after trade</span><b>${size} / ${SQUAD_MAX}</b></div><div class="kv"><span>Overseas players</span><b>${os} / ${OVERSEAS_MAX}</b></div></div>
+    ${errs.length ? `<div class="note bad">${esc(errs.join(' '))}</div>` : '<div class="note good">Trade meets squad and salary-cap rules.</div>'}`,
+    {foot:`<button class="btn ghost" onclick="declineOffer('${id}')">Reject</button><button class="btn pri" ${errs.length?'disabled':''} onclick="confirmIncomingTrade('${id}')">Accept trade</button>`});
+}
+function confirmIncomingTrade(id) {
+  const o=game.offers.find(x=>x.id===id); if(!o) {closeModal();flash('Offer unavailable.');return;}
+  const errors=tradeOfferValidity(o); if(errors.length){reviewTradeOffer(id);flash('Offer is no longer valid.');return;}
+  confirmSheet('Confirm trade',`Send ${sum2(o.want)} to ${teamName(o.from)} and receive ${sum2(o.give)}? This trade cannot be undone.`, 'Complete trade', `acceptOffer('${id}')`);
+}
+function acceptOffer(id) {
+  const o=game.offers.find(x=>x.id===id); if (!o) {closeModal();return;}
+  const errors=tradeOfferValidity(o); if(errors.length){reviewTradeOffer(id);flash('Trade blocked: '+errors[0]);return;}
+  executeTrade(o.from,o.want,o.give); game.offers=game.offers.filter(x=>x.id!==id); closeModal();autosave();render();flash('Trade completed.');
+}
+function declineOffer(id) { game.offers=game.offers.filter(x=>x.id!==id);closeModal();autosave();render();flash('Offer declined.'); }
 function renderFA() {
   let fas = freeAgents();
   if (ui.faGroup !== 'ALL') fas = fas.filter(p => group(p) === ui.faGroup);
