@@ -673,14 +673,14 @@ button,select,[onclick]{touch-action:manipulation}
    The normal full-screen/PWA layout retains the original bottom anchoring. */
 @media (max-width:899px) {
   html.ios-safari-browser body.live-mode .livebar {
-    bottom: max(52px, var(--livebar-viewport-gap, 0px));
+    bottom: max(22px, var(--livebar-viewport-gap, 0px));
     padding-bottom: 8px;
   }
   body.live-mode .main {
     padding-bottom: calc(132px + var(--safe-b));
   }
   html.ios-safari-browser body.live-mode .main {
-    padding-bottom: calc(192px + var(--safe-b));
+    padding-bottom: calc(155px + var(--safe-b));
   }
   .livebar.three {align-items:stretch;}
   .livebar.three .btn,.livebar.three .skip{min-height:45px;min-width:0;box-sizing:border-box;}
@@ -737,7 +737,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 038', title: 'Mobile Match Controls Safe-Area Fix', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 039', title: 'Match Centre Refinement & Partnership Integrity', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -6593,7 +6593,7 @@ function renderLive() {
   let sit = `${oversStr(inn.balls)}${F.overs ? ' of ' + mOvers(M) : ''} overs · run rate ${(inn.balls ? inn.runs / (inn.balls / 6) : 0).toFixed(2)}`;
   if (inn.target && F.overs) { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; sit = `Need ${Math.max(0, need)} from ${bl} balls · required rate ${(bl ? need / (bl / 6) : 0).toFixed(2)}`; }
   if (M.fmt === 'FC') { const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl); const ses = sessionOf(M); sit = `Day ${ses ? ses.day : fcDay(M)}${ses && !M.done ? ' · ' + ses.name : ''} · ${oversStr(inn.balls)} overs` + (inn.target ? ` · need ${Math.max(0, inn.target - inn.runs)} more` : M.innings.length > 1 ? ` · ${lead >= 0 ? 'lead' : 'trail'} by ${Math.abs(lead)}` : '') + ` · ${Math.max(0, Math.round((mMaxBalls(M) - M.balls) / 6))} overs left in the match`; }
-  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn) + broadcastMatchContext(M);
+  const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
   const body = ui.liveTab === 'card'
@@ -6603,7 +6603,7 @@ function renderLive() {
   if (M.done) bar = `<button class="btn pri" style="grid-column:1/-1" onclick="finishLive()">Finish and see the full scorecard ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
   else if (M.pause) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="resumeLive()">${M.pause.type === 'stumps' ? `Start day ${M.pause.day + 2}` : 'Resume play'} ▸</button>`;
-  else bar = `${canGMMessage(M) && (M.gmTalks || 0) < (M.fmt === 'FC' ? 3 : 1) ? '<button class="btn" onclick="gmMessageSheet()">Team talk</button>' : ''}<button class="btn pri" style="${canGMMessage(M) && (M.gmTalks || 0) < (M.fmt === 'FC' ? 3 : 1) ? '' : 'grid-column:span 2'}" onclick="liveStep('over')">Next over ▸</button>
+  else bar = `<button class="btn pri" style="grid-column:span 2" onclick="liveStep('over')">Next over ▸</button>
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   if (recap) return `<div class="grid">${recap}
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
@@ -6611,6 +6611,7 @@ function renderLive() {
   return `<div class="grid">
     <section class="panel broadcast-panel"><div class="pb">${broadcast}
       ${ballConditionHtml(M,inn)}
+      ${broadcastMatchContext(M)}
       ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
     </div></section>
     ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
@@ -6649,9 +6650,9 @@ function inningsRecap(M, inn) {
     ${M.fmt !== 'FC' && sit ? `<div class="broadcast-situation">${esc(sit)}</div>` : ''}
     ${broadcastInningsCard(M, inn)}
     ${M.fmt !== 'FC' ? `<div class="broadcast-recap-worm">${wormSvg(M.innings, M.fmt)}</div>` : ''}
-    ${best ? `<details class="recap-more"><summary>Best partnership</summary><span class="xs muted">${best.r} runs · ${ordinal(best.w)} wicket${best.live ? ' · unbroken' : ''}</span></details>` : ''}
+    <div class="day-sections best-partnership"><div class="day-section-title">BEST PARTNERSHIP</div><div class="day-session-row"><span>${best ? `${ordinal(best.w)} wicket${best.live ? ' · unbroken' : ''}` : 'Partnership data'}</span><b>${best ? `${best.r} runs` : 'Not available'}</b></div>${best && best.a && best.o && P(best.a) && P(best.o) ? `<div class="day-session-row"><span>Batters</span><b>${esc(pshort(P(best.a)))} &amp; ${esc(pshort(P(best.o)))}</b></div>` : ''}</div>
     ${nb ? `<div class="broadcast-next">Next to bat: ${esc(teamName(nb))}${M.fmt === 'FC' && n >= 3 && teamRuns(M, nb) < teamRuns(M, nb === inn.bat ? inn.bowl : inn.bat) ? ` · ${teamRuns(M, nb === inn.bat ? inn.bowl : inn.bat) - teamRuns(M, nb) + 1} to win` : ''}</div>` : ''}`;
-  return `<section class="panel recap broadcast-recap transition-recap"><div class="pb"><div class="rc-e">Innings break</div><div class="day-recap-heading">Innings complete<span>Next innings ahead</span></div>${inner}</div></section>`;
+  return `<section class="panel recap broadcast-recap transition-recap"><div class="pb"><div class="rc-e">Innings break</div>${inner}</div></section>`;
 }
 function breakRecap(M, r) {
   const label = { lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[r.type];
@@ -6669,7 +6670,7 @@ function breakRecap(M, r) {
     const nd = M.cond && M.cond.days ? M.cond.days[r.day] : null;
     const outlook = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">UP NEXT</span><b>${r.type === 'lunch' ? 'Afternoon session' : 'Evening session'}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>${esc(SKY_SHORT[nd.sky])}</strong><span>${esc(PITCH_OUTLOOK[M.cond.pitch] || 'Play resumes after the interval.')}</span></div></div></div>` : '';
     const summary = M.innings.map((i,idx) => `<div class="day-innings-row"><div class="day-innings-team">${broadcastBadge(i.bat)}<span>${esc(teamName(i.bat))}${idx === M.innings.length-1 && !i.closed ? '<small> · batting</small>' : ''}</span></div><div class="day-innings-fig"><b>${i.runs}/${i.wkts}</b><small>${oversStr(i.balls)} ov</small></div></div>`).join('');
-    return `<section class="panel recap day-recap session-recap"><div class="pb"><div class="rc-e">${label} · Day ${r.day+1}</div><div class="day-recap-heading">${label}<span>Session complete</span></div><div class="day-recap-meta">${esc(r.score)} · ${r.overs} overs in current innings</div><div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT ${label.toUpperCase()}</div>${summary}</div><div class="day-stats">${stat(r.sess.runs,'Session runs')}${stat(r.sess.wkts,'Wickets')}${stat(r.sess.overs,'Overs')}</div>${performers}${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${outlook}<div class="day-coaching">${coachPlanLine(M)}</div></div></section>`;
+    return `<section class="panel recap day-recap session-recap"><div class="pb"><div class="rc-e">${label} · Day ${r.day+1}</div><div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT ${label.toUpperCase()}</div>${summary}</div><div class="day-stats">${stat(r.sess.runs,'Session runs')}${stat(r.sess.wkts,'Wickets')}${stat(r.sess.overs,'Overs')}</div>${performers}${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${outlook}</div></section>`;
   }
   const d = r.dayStats || {runs:0,wkts:0,overs:0,bat:[],bowl:[]}, nd = M.cond.days[r.day + 1];
   const potd = (() => { const b = d.bat[0], w = d.bowl[0]; if (!b && !w) return null; if (w && (!b || w[1] * 22 >= b[1])) return `${esc(pname(P(w[0])))} · ${w[1]}/${w[2]}`; return `${esc(pname(P(b[0])))} · ${b[1]} runs`; })();
@@ -6681,8 +6682,8 @@ function breakRecap(M, r) {
     <div class="day-stats"><div><strong>${d.runs.toLocaleString('en-AU')}</strong><span>Runs today</span></div><div><strong>${d.wkts}</strong><span>Wickets</span></div><div><strong>${d.overs}</strong><span>Overs today</span></div></div>
     <div class="day-sections"><div class="day-section-title">DAY ${r.day + 1} · SESSION CHECKPOINTS</div>${breaks}${potd ? `<div class="day-session-row day-player"><span>Player of the day</span><b>${potd}</b></div>` : ''}</div>
     ${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${next}
-    <div class="day-coaching">${coachPlanLine(M)}</div>`;
-  return `<section class="panel recap day-recap"><div class="pb"><div class="rc-e">Close of play · Day ${r.day + 1}</div><div class="day-recap-heading">Stumps <span>Day ${r.day + 1} complete</span></div><div class="day-recap-meta">${d.overs} overs bowled today · ${r.overs} overs in current innings</div>${inner}</div></section>`;
+    `;
+  return `<section class="panel recap day-recap"><div class="pb"><div class="rc-e">Close of play · Day ${r.day + 1}</div>${inner}</div></section>`;
 }
 function resultRecap(M) {
   // Best innings per batter; combined match figures per bowler.
