@@ -280,7 +280,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 /* v0.7.2 pitch report, forecast, sessions */
 .pitch-rep{display:flex;gap:12px;align-items:flex-start;margin-top:10px;padding:10px;border-radius:10px;background:var(--s2)}
 .pitch-svg{width:34px;height:108px;flex:none}
-.pgr{display:grid;grid-template-columns:112px 1fr 18px;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:5px}
+.pgr{display:grid;grid-template-columns:112px minmax(0,1fr) 32px;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:5px}
 .pgr b{color:var(--text);text-align:right}
 .pgr .cells{display:grid;grid-template-columns:repeat(10,1fr);gap:2px}.pgr .cells i{height:7px;border-radius:2px;background:var(--s3)}.pgr .cells i.on{background:var(--accent)}
 .fc-row{display:grid;gap:6px;margin-top:8px}
@@ -539,6 +539,9 @@ button,select,[onclick]{touch-action:manipulation}
 .pitch-days{margin-top:9px;border:1px solid var(--line,#294154);border-radius:9px;overflow:hidden;font-variant-numeric:tabular-nums}
 .pitch-day-row{display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr;gap:4px;padding:6px 8px;font-size:12px;text-align:center;border-top:1px solid rgba(125,151,171,.15)}
 .pitch-day-row:first-child{border-top:none}.pitch-day-row.head{font-size:11px;color:#96a9bb;font-weight:700}.pitch-day-row span:first-child{text-align:left}
+
+/* Pitch outlook: solid gold is the minimum rating; muted gold covers the forecast range. */
+.pgr .cells i.range{background:#89713b}
 </style>
 </head>
 <body>
@@ -591,7 +594,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 016', title: 'Dynamic Pitch Progression', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 017', title: 'Compact Pitch Outlook', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5717,14 +5720,28 @@ function pitchSvg(key) {
 function pitchReport(pre, v, fmt) {
   const key = pre.cond.pitch, pt = PITCHES[key];
   const g = pitchDayGrades(key, v, 0, fmt);
+  const grades = fmt === 'FC' ? [0,1,2,3].map(d => pitchDayGrades(key, v, d, fmt)) : [g];
   const top = Math.max(g.pace, g.spin);
   const verdict = top >= 8 ? (g.spin > g.pace ? 'Helps the spinners' : 'Helps the seamers') : g.bat >= 8 ? 'Batting surface' : top <= 6 && g.bat <= 6 ? 'Slow and low' : 'Even contest';
-  const bar = (l, n) => `<div class="pgr"><span>${l}</span><span class="cells">${[...Array(10)].map((_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span><b>${n}</b></div>`;
+  // Day-one bars retain their existing appearance. A darker gold band highlights
+  // the range reached over the full multi-day match, without adding another table.
+  const bar = (label, field) => {
+    const dayOne = g[field];
+    const lo = Math.min(...grades.map(x => x[field]));
+    const hi = Math.max(...grades.map(x => x[field]));
+    const value = fmt === 'FC' && lo !== hi ? `${lo}–${hi}` : `${dayOne}`;
+    const cells = Array.from({length:10}, (_,i) => {
+      const point = i + 1;
+      const cls = point <= lo ? 'on' : point <= hi ? 'range' : '';
+      return `<i class="${cls}"></i>`;
+    }).join('');
+    return `<div class="pgr" aria-label="${esc(label)}: ${value} out of 10"><span>${esc(label)}</span><span class="cells">${cells}</span><b>${value}</b></div>`;
+  };
   return `<div class="pitch-rep">${pitchSvg(key)}<div class="grow">
     <div class="flex" style="gap:6px;align-items:baseline"><b>${pt.label}</b><span class="xs muted">· ${verdict}</span></div>
-    ${bar('Pace and bounce', g.pace)}${bar('Spin', g.spin)}${bar('Batting', g.bat)}
-    <div class="xs muted" style="margin-top:4px">${fmt === 'FC' ? 'Day 1 ratings shown. Expected wear by day:' : PITCH_WB[key]}</div>
-    ${fmt === 'FC' ? `<div class="pitch-days" role="table" aria-label="Pitch forecast by day"><div class="pitch-day-row head"><span>Day</span><span>Pace</span><span>Spin</span><span>Batting</span></div>${[0,1,2,3].map(d => {const x=pitchDayGrades(key,v,d,fmt);return `<div class="pitch-day-row"><span>${d+1}</span><span>${x.pace}</span><span>${x.spin}</span><span>${x.bat}</span></div>`;}).join('')}</div><div class="xs muted" style="margin-top:4px">Forecast is based on surface wear; weather varies by day.</div>` : ''}</div></div>`;
+    ${bar('Pace and bounce', 'pace')}${bar('Spin', 'spin')}${bar('Batting', 'bat')}
+    <div class="xs muted" style="margin-top:5px">${fmt === 'FC' ? 'Day 1–4 outlook · gold band shows the expected range.' : PITCH_WB[key]}</div>
+  </div></div>`;
 }
 const SKY_ICON = {
   sunny: '<circle cx="12" cy="12" r="4.2" fill="#fbbf24"/><g stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g>',
