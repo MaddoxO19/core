@@ -623,6 +623,37 @@ button,select,[onclick]{touch-action:manipulation}
 .ball-status{display:flex;align-items:center;gap:9px;font-size:12px}
 .ball-visual{display:inline-block;width:19px;height:19px;flex:none;border-radius:50%;background:linear-gradient(135deg,#de604e 0%,#a33b32 55%,#58312c 100%);border:1px solid #ca7969;box-shadow:inset calc(var(--wear)*-0.012) 0 4px #392725;position:relative}
 .ball-visual:after{content:'';position:absolute;left:9px;top:2px;height:14px;border-left:1px dashed #e0aa99;transform:rotate(20deg)}
+
+/* Build 034: consistent dimensions for all country badges including England and West Indies. */
+.nat-flag .legacy-flag,.team-flag .legacy-flag{object-fit:fill!important;border-radius:2px;}
+
+/* Build 036: Stumps transition matches the broadcast Match Centre. */
+.day-recap .pb{padding:14px 13px 15px}
+.day-recap-heading{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:24px;font-weight:900;letter-spacing:-.025em;margin:5px 0 2px}
+.day-recap-heading span{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:0;white-space:nowrap}
+.day-recap-meta{font-size:11px;color:var(--muted);margin-bottom:11px}
+.day-scoreboard{border:1px solid var(--line2);border-radius:11px;overflow:hidden;background:var(--s2)}
+.day-scoreboard-label,.day-section-title{color:var(--dim);font-size:9px;letter-spacing:.09em;font-weight:850;padding:9px 11px 5px}
+.day-innings-row{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 11px;border-top:1px solid var(--line2)}
+.day-innings-team{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;font-weight:750}
+.day-innings-team .nat-flag,.day-innings-team .badge{flex:none}
+.day-innings-team>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.day-innings-team small{font-size:10px;color:var(--muted);font-weight:500}
+.day-innings-fig{display:flex;align-items:baseline;gap:9px;flex:none}.day-innings-fig b{font-size:18px;letter-spacing:-.02em}.day-innings-fig small{font-size:10px;color:var(--muted)}
+.day-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px}
+.day-stats>div{display:flex;align-items:center;flex-direction:column;gap:4px;padding:11px 3px;background:var(--s2);border:1px solid var(--line2);border-radius:9px}
+.day-stats strong{font-size:21px;line-height:1.1}.day-stats span{font-size:10px;color:var(--muted);font-weight:650}
+.day-sections{margin-top:10px;border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+.day-section-title{padding:10px 10px 8px;background:var(--s2)}
+.day-session-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 10px;border-top:1px solid var(--line2);font-size:12px}
+.day-session-row>span{color:var(--muted);flex:none}.day-session-row>b{font-size:12px;text-align:right;font-weight:750;min-width:0}
+.day-player{align-items:flex-start}.day-player>span{white-space:nowrap}
+.day-situation{margin-top:10px;padding:10px 11px;background:var(--s2);border-left:3px solid var(--cyan);border-radius:8px;font-size:12px;line-height:1.45}
+.day-next{margin-top:11px;padding:11px;border:1px solid var(--line2);border-radius:10px;background:var(--s2)}
+.day-next-heading{display:flex;align-items:center;gap:8px;font-size:13px}.day-step{font-size:9px;color:var(--accent);font-weight:850;letter-spacing:.1em}
+.day-weather{display:flex;align-items:center;gap:10px;margin-top:8px}.day-weather svg{width:30px;height:30px;flex:none}.day-weather>div{display:flex;flex-direction:column;gap:3px}.day-weather strong{font-size:12px}.day-weather span{font-size:11px;color:var(--muted);line-height:1.35}
+.day-coaching .plan-row{padding:10px 0 0;margin-top:10px!important;border-top:1px solid var(--line2)}
+@media(max-width:390px){.day-recap-heading{font-size:22px}.day-recap-heading span{font-size:10px}.day-innings-team{font-size:11px}.day-innings-fig{gap:5px}.day-innings-fig b{font-size:16px}.day-stats strong{font-size:19px}}
 </style>
 </head>
 <body>
@@ -675,7 +706,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 033', title: 'Player Creation Access Restored', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 036', title: 'Stumps & Day Transition Broadcast Refresh', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1616,8 +1647,15 @@ function battingIntent(M, inn) {
 function calibratedWicketChance(raw, fmt) {
   const knee = fmt === 'FC' ? 0.028 : fmt === 'OD' ? 0.042 : 0.067;
   const ceiling = fmt === 'FC' ? 0.042 : fmt === 'OD' ? 0.062 : 0.092;
-  if (raw <= knee) return clamp(raw, 0.002, ceiling);
-  return clamp(knee + (raw - knee) * 0.10, 0.002, ceiling);
+  // Preserve the normal middle of the probability distribution. Exceptionally
+  // dominant batting previously drove dismissal odds toward the absolute 0.2%
+  // floor, creating near-undismissable edited/developed players. Apply a gentle
+  // lower-tail compression without changing ordinary player matchups.
+  const lowKnee = fmt === 'FC' ? 0.010 : fmt === 'OD' ? 0.015 : 0.024;
+  const lowFloor = fmt === 'FC' ? 0.006 : fmt === 'OD' ? 0.009 : 0.014;
+  if (raw < lowKnee) return clamp(lowKnee - (lowKnee - raw) * 0.40, lowFloor, lowKnee);
+  if (raw <= knee) return clamp(raw, lowFloor, ceiling);
+  return clamp(knee + (raw - knee) * 0.10, lowFloor, ceiling);
 }
 function ballContext(M, inn, batter, bowler, sc) {
   const F = FORMATS[M.fmt], B = F.ball;
@@ -5196,6 +5234,7 @@ const LEGACY_FLAG_ASSETS = {
 };
 function flagFor(n) { n = n === 'X_ENG' ? 'ENG' : n === 'X_WI' ? 'WI' : n; const src=LEGACY_FLAG_ASSETS[n]; return src ? `<img class="legacy-flag" alt="" draggable="false" src="${src}">` : '🌐'; }
 function nationTag(n) { return '<span class="nat-flag" title="' + esc(NATIONS[n] || n) + '">' + flagFor(n) + '</span>'; }
+function countNum(n) { return Number.isFinite(Number(n)) ? Number(n).toLocaleString('en-AU', { maximumFractionDigits: 0 }) : esc(String(n == null ? '–' : n)); }
 function natTag(p) { return ' <span class="nat-flag" title="' + esc(NATIONS[p.nat] || p.nat) + '">' + flagFor(p.nat) + '</span>'; }
 // Status is plain coloured text, and nothing at all when the player is fit and available.
 function statusChip(p) {
@@ -5540,7 +5579,7 @@ function playerRow(p, o) {
   const f = o.fmt || ui.listFmt;
   const sub = o.sub || identityLine(p);
   return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}
-    <div class="stack"><div class="main-t ell">${natTag(p)} ${esc(pname(p))} ${cricketRoleIcon(p)}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + tdot(p.teamId) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
+    <div class="stack"><div class="main-t ell">${natTag(p)} ${esc(pname(p))} ${cricketRoleIcon(p)}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + (p.teamId === 'X_' + p.nat || p.teamId === 'AUS' && p.nat === 'AUS' ? esc(p.nat) : tdot(p.teamId)) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
     <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? `<span class="tag bad">${p.wantsOut ? 'Wants out' : 'Unhappy'}</span>` : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
 }
 
@@ -6593,15 +6632,18 @@ function breakRecap(M, r) {
   const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
   const sit = inn.target ? `${teamName(inn.bat)} need ${Math.max(0, inn.target - inn.runs)} more with ${10 - inn.wkts} wickets in hand.` : M.innings.length > 1 ? `${teamName(lead >= 0 ? inn.bat : inn.bowl)} lead by ${Math.abs(lead)}.` : '';
   if (r.type !== 'stumps') return recapShell(`${label} · Day ${r.day + 1}`, esc(r.score), `${r.overs} overs`, `<div class="s" style="margin-top:8px">The session: ${sessLine}.</div>${key.length ? perfRows(key) : ''}${sit ? `<div class="xs muted" style="margin-top:6px">${esc(sit)}</div>` : ''}`);
-  const d = r.dayStats, nd = M.cond.days[r.day + 1];
+  const d = r.dayStats || {runs:0,wkts:0,overs:0,bat:[],bowl:[]}, nd = M.cond.days[r.day + 1];
   const potd = (() => { const b = d.bat[0], w = d.bowl[0]; if (!b && !w) return null; if (w && (!b || w[1] * 22 >= b[1])) return `${esc(pname(P(w[0])))} · ${w[1]}/${w[2]}`; return `${esc(pname(P(b[0])))} · ${b[1]} runs`; })();
   const trend = nd ? (r.day + 2 >= 3 ? 'The surface is wearing: spinners get more help each day, quicks a little less.' : PITCH_OUTLOOK[M.cond.pitch]) : '';
-  const inner = `<div class="kpis rc-kpis"><div class="kpi"><div class="v">${d.runs}</div><div class="l">Runs today</div></div><div class="kpi"><div class="v">${d.wkts}</div><div class="l">Wickets</div></div><div class="kpi"><div class="v">${d.overs}</div><div class="l">Overs</div></div></div>
-    <div class="rows rc-rows">${r.breaks.map(x => `<div class="kv"><span>${{ lunch: 'Lunch', tea: 'Tea', stumps: 'Stumps' }[x.type]}</span><span>${esc(x.score)}</span></div>`).join('')}${potd ? `<div class="kv"><span>Player of the day</span><span class="b">${potd}</span></div>` : ''}</div>
-    ${sit ? `<div class="note" style="margin-top:10px">${esc(sit)}</div>` : ''}
-    ${nd ? `<div class="flex" style="gap:10px;margin-top:10px;align-items:center"><svg viewBox="0 0 24 24" style="width:30px;height:30px;flex:none">${SKY_ICON[nd.sky]}</svg><div><div class="s b">Day ${r.day + 2}: ${SKY_SHORT[nd.sky]}${nd.lost ? ` · about ${nd.lost} overs lost` : ''}</div><div class="xs muted">${esc(trend)}</div></div></div>` : ''}
-    ${coachPlanLine(M)}`;
-  return recapShell(`Stumps · Day ${r.day + 1}`, esc(r.score), `${r.overs} overs`, inner);
+  const summary = M.innings.map((i,idx) => `<div class="day-innings-row"><div class="day-innings-team">${broadcastBadge(i.bat)}<span>${esc(teamName(i.bat))}${idx === M.innings.length - 1 && !i.closed ? '<small> · batting</small>' : ''}</span></div><div class="day-innings-fig"><b>${i.runs}/${i.wkts}</b><small>${oversStr(i.balls)} ov</small></div></div>`).join('');
+  const breaks = (r.breaks || []).map(x => `<div class="day-session-row"><span>${{ lunch:'Lunch',tea:'Tea',stumps:'Stumps' }[x.type] || esc(x.type)}</span><b>${esc(x.score)}</b></div>`).join('');
+  const next = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">NEXT</span><b>Day ${r.day + 2}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>${esc(SKY_SHORT[nd.sky])}${nd.lost ? ` · about ${nd.lost} overs lost` : ''}</strong><span>${esc(trend)}</span></div></div></div>` : '';
+  const inner = `<div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT CLOSE OF PLAY</div>${summary}</div>
+    <div class="day-stats"><div><strong>${d.runs.toLocaleString('en-AU')}</strong><span>Runs today</span></div><div><strong>${d.wkts}</strong><span>Wickets</span></div><div><strong>${d.overs}</strong><span>Overs today</span></div></div>
+    <div class="day-sections"><div class="day-section-title">DAY ${r.day + 1} · SESSION CHECKPOINTS</div>${breaks}${potd ? `<div class="day-session-row day-player"><span>Player of the day</span><b>${potd}</b></div>` : ''}</div>
+    ${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${next}
+    <div class="day-coaching">${coachPlanLine(M)}</div>`;
+  return `<section class="panel recap day-recap"><div class="pb"><div class="rc-e">Close of play · Day ${r.day + 1}</div><div class="day-recap-heading">Stumps <span>Day ${r.day + 1} complete</span></div><div class="day-recap-meta">${d.overs} overs bowled today · ${r.overs} overs in current innings</div>${inner}</div></section>`;
 }
 function resultRecap(M) {
   // Best innings per batter; combined match figures per bowler.
@@ -7064,11 +7106,11 @@ function renderRecords() {
   const cats = [['hs','Highest scores'],['bb','Best bowling'],['th','Highest totals'],['tl','Lowest totals'],['pt','Partnerships'],['cr','Career runs'],['cw','Career wickets'],['ch','Career hundreds'],['cm','Most matches']];
   let rows = '';
   const yr = y => `<span class="dim xs">${y}</span>`;
-  if (cat === 'hs') rows = (R.hs[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.r}${x.no ? '*' : ''}</td><td class="dim">${x.b}b</td></tr>`).join('');
+  if (cat === 'hs') rows = (R.hs[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${countNum(x.r)}${x.no ? '*' : ''}</td><td class="dim">${x.b}b</td></tr>`).join('');
   if (cat === 'bb') rows = (R.bb[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.w}/${x.r}</td><td></td></tr>`).join('');
-  if (cat === 'th' || cat === 'tl') rows = (R[cat][k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${x.t}</b><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.r}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
-  if (cat === 'pt') rows = (R.pt[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> & <b>${esc(x.b)}</b><div class="xs dim">${x.t} v ${x.opp} · ${ordinal(x.w)} wicket · ${x.y}</div></td><td class="b big">${x.r}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
-  if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${s.m} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${s.m} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${s.r} runs · ${s.w} wkts`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${x.p.retired ? 'retired' : tdot(x.p.teamId)}</span><div class="xs dim">${sub}</div></td><td class="b big">${v}</td><td></td></tr>`; }).join(''); }
+  if (cat === 'th' || cat === 'tl') rows = (R[cat][k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${x.t}</b><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${countNum(x.r)}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
+  if (cat === 'pt') rows = (R.pt[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> & <b>${esc(x.b)}</b><div class="xs dim">${x.t} v ${x.opp} · ${ordinal(x.w)} wicket · ${x.y}</div></td><td class="b big">${countNum(x.r)}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
+  if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${countNum(s.m)} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${countNum(s.m)} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${countNum(s.r)} runs · ${countNum(s.w)} wkts`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${scope === 'intl' ? nationTag(x.p.nat) + ' ' + esc(x.p.nat) : (x.p.retired ? 'retired' : tdot(x.p.teamId))}</span><div class="xs dim">${sub}</div></td><td class="b big">${countNum(v)}</td><td></td></tr>`; }).join(''); }
   return `<div class="tool-row">${seg([['dom','Domestic'],['intl','Intl']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
     <div style="height:8px"></div>${sel(cats, cat, "ui.recCat=this.value;render()", 'full')}<div style="height:8px"></div>
     ${panel(`${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
