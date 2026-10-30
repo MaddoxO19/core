@@ -586,7 +586,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 013', title: 'Scorecard Readability & Integrity', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 014', title: 'Team Identity Integrity', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5849,7 +5849,14 @@ function sendGMMessage(key) {
 }
 // Build 002: compact broadcast-style match information, derived only from recorded innings.
 // National fixtures use X_ prefixed team IDs; convert to the flag nationality.
-function broadcastNation(id) { const n = id === 'AUS' ? 'AUS' : String(id || '').startsWith('X_') ? String(id).slice(2) : id; return NATIONS[n] ? n : null; }
+// Team IDs are typed identities, not nationality abbreviations. In particular,
+// domestic SA (South Australia) must never resolve as X_SA (South Africa).
+function broadcastNation(id) {
+  if (id === 'AUS') return 'AUS';
+  if (typeof id !== 'string' || !id.startsWith('X_')) return null;
+  const nat = id.slice(2);
+  return Object.prototype.hasOwnProperty.call(NATIONS, nat) && teamDef(id)?.intl ? nat : null;
+}
 function broadcastBadge(id) { const nat = broadcastNation(id); return nat ? nationTag(nat) : badge(id); }
 function broadcastScore(M, compact) {
   const innings = M.innings || [], current = curInn(M);
