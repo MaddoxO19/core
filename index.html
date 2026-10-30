@@ -534,6 +534,11 @@ button,select,[onclick]{touch-action:manipulation}
 .sc-remaining{border-top:1px solid var(--line2);padding:10px 12px;font-size:12px}
 .sc-remaining summary{cursor:pointer;color:var(--muted);font-weight:700;touch-action:manipulation}
 .sc-remaining-list{padding:9px 0 2px;line-height:1.75;color:var(--text);overflow-wrap:anywhere}
+
+/* Build 016: compact pitch evolution preview */
+.pitch-days{margin-top:9px;border:1px solid var(--line,#294154);border-radius:9px;overflow:hidden;font-variant-numeric:tabular-nums}
+.pitch-day-row{display:grid;grid-template-columns:1fr 1fr 1fr 1.3fr;gap:4px;padding:6px 8px;font-size:12px;text-align:center;border-top:1px solid rgba(125,151,171,.15)}
+.pitch-day-row:first-child{border-top:none}.pitch-day-row.head{font-size:11px;color:#96a9bb;font-weight:700}.pitch-day-row span:first-child{text-align:left}
 </style>
 </head>
 <body>
@@ -586,7 +591,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 015', title: 'Scoring Calibration & Extreme Rating Protection', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 016', title: 'Dynamic Pitch Progression', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2043,11 +2048,31 @@ function sessionOf(M) {
   return { day: nxt.day + 1, name: SESSION_NAMES[{ lunch: 0, tea: 1, stumps: 2 }[nxt.type]] };
 }
 function skyOf(M) { return M.cond ? SKIES[M.cond.days[matchDayIndex(M)].sky] : SKIES.sunny; }
+// Forecast and live simulation share the same gentle pitch-wear modifiers.
+// Day 1 is the baseline. Wear is FC-only and does not alter weather rolls or save data.
+const PITCH_WEAR = {
+  standard: { pace:[1,1,0.99,0.98,0.97], spin:[1,1.01,1.03,1.05,1.07], bat:[1,1,0.99,0.98,0.97] },
+  green:    { pace:[1,0.98,0.96,0.94,0.93], spin:[1,1.01,1.02,1.03,1.04], bat:[1,1.02,1.04,1.03,1.02] },
+  flat:     { pace:[1,1,1,1,1], spin:[1,1,1.01,1.03,1.05], bat:[1,1,1,0.99,0.98] },
+  dry:      { pace:[1,1,0.99,0.99,0.98], spin:[1,1.02,1.04,1.06,1.08], bat:[1,0.99,0.98,0.97,0.96] },
+  cracked:  { pace:[1,1.01,1.02,1.03,1.04], spin:[1,1.02,1.04,1.06,1.08], bat:[1,0.99,0.97,0.95,0.94] }
+};
+function pitchDayFactor(pitch, key, dayIndex, fmt) {
+  if (fmt !== 'FC') return 1;
+  const curve = (PITCH_WEAR[pitch] || PITCH_WEAR.standard)[key];
+  return curve[Math.max(0,Math.min(curve.length - 1, dayIndex || 0))];
+}
+function pitchDayGrades(pitch, venue, dayIndex, fmt) {
+  const pt = PITCHES[pitch] || PITCHES.standard;
+  const result = {};
+  ['pace','spin','bat'].forEach(k => { result[k] = pitchGrade(venue[k] * pt[k] * pitchDayFactor(pitch,k,dayIndex,fmt)); });
+  return result;
+}
 // Combined venue x pitch x sky factor for 'pace', 'spin' or 'bat'.
 function condFactor(M, k) {
   const v = teamDef(M.venue);
   if (!M.cond) return v[k];
-  return v[k] * PITCHES[M.cond.pitch][k] * (SKIES[M.cond.days[matchDayIndex(M)].sky][k] || 1);
+  return v[k] * PITCHES[M.cond.pitch][k] * pitchDayFactor(M.cond.pitch, k, matchDayIndex(M), M.fmt) * (SKIES[M.cond.days[matchDayIndex(M)].sky][k] || 1);
 }
 function mOvers(M) { return M.overs || FORMATS[M.fmt].overs; }
 function mQuota(M) { return M.overs ? Math.max(1, Math.ceil(M.overs / 5)) : FORMATS[M.fmt].quota; }
@@ -5691,14 +5716,15 @@ function pitchSvg(key) {
 }
 function pitchReport(pre, v, fmt) {
   const key = pre.cond.pitch, pt = PITCHES[key];
-  const g = { pace: pitchGrade(v.pace * pt.pace), spin: pitchGrade(v.spin * pt.spin), bat: pitchGrade(v.bat * pt.bat) };
+  const g = pitchDayGrades(key, v, 0, fmt);
   const top = Math.max(g.pace, g.spin);
   const verdict = top >= 8 ? (g.spin > g.pace ? 'Helps the spinners' : 'Helps the seamers') : g.bat >= 8 ? 'Batting surface' : top <= 6 && g.bat <= 6 ? 'Slow and low' : 'Even contest';
   const bar = (l, n) => `<div class="pgr"><span>${l}</span><span class="cells">${[...Array(10)].map((_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span><b>${n}</b></div>`;
   return `<div class="pitch-rep">${pitchSvg(key)}<div class="grow">
     <div class="flex" style="gap:6px;align-items:baseline"><b>${pt.label}</b><span class="xs muted">· ${verdict}</span></div>
     ${bar('Pace and bounce', g.pace)}${bar('Spin', g.spin)}${bar('Batting', g.bat)}
-    <div class="xs muted" style="margin-top:4px">${fmt === 'FC' ? PITCH_OUTLOOK[key] : PITCH_WB[key]}</div></div></div>`;
+    <div class="xs muted" style="margin-top:4px">${fmt === 'FC' ? 'Day 1 ratings shown. Expected wear by day:' : PITCH_WB[key]}</div>
+    ${fmt === 'FC' ? `<div class="pitch-days" role="table" aria-label="Pitch forecast by day"><div class="pitch-day-row head"><span>Day</span><span>Pace</span><span>Spin</span><span>Batting</span></div>${[0,1,2,3].map(d => {const x=pitchDayGrades(key,v,d,fmt);return `<div class="pitch-day-row"><span>${d+1}</span><span>${x.pace}</span><span>${x.spin}</span><span>${x.bat}</span></div>`;}).join('')}</div><div class="xs muted" style="margin-top:4px">Forecast is based on surface wear; weather varies by day.</div>` : ''}</div></div>`;
 }
 const SKY_ICON = {
   sunny: '<circle cx="12" cy="12" r="4.2" fill="#fbbf24"/><g stroke="#fbbf24" stroke-width="1.6" stroke-linecap="round"><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></g>',
