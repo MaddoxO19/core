@@ -668,6 +668,23 @@ button,select,[onclick]{touch-action:manipulation}
 .session-recap .day-session-row>b{white-space:normal}
 .transition-recap .day-recap-heading{margin-bottom:11px}
 @media(max-width:390px){.broadcast-panel .broadcast-metrics-inline .broadcast-metric{gap:4px}.session-recap .day-session-row{gap:6px}}
+
+/* Build 038: keep the fixed live controls above mobile Safari's bottom browser chrome.
+   The normal full-screen/PWA layout retains the original bottom anchoring. */
+@media (max-width:899px) {
+  html.ios-safari-browser body.live-mode .livebar {
+    bottom: max(52px, var(--livebar-viewport-gap, 0px));
+    padding-bottom: 8px;
+  }
+  body.live-mode .main {
+    padding-bottom: calc(132px + var(--safe-b));
+  }
+  html.ios-safari-browser body.live-mode .main {
+    padding-bottom: calc(192px + var(--safe-b));
+  }
+  .livebar.three {align-items:stretch;}
+  .livebar.three .btn,.livebar.three .skip{min-height:45px;min-width:0;box-sizing:border-box;}
+}
 </style>
 </head>
 <body>
@@ -720,7 +737,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 037', title: 'Unified Match Centre & Session Transitions', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 038', title: 'Mobile Match Controls Safe-Area Fix', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -7219,6 +7236,32 @@ function homeExtras() {
     const btn = document.createElement('button'); btn.className = 'btn pri block launch-resume'; btn.textContent = 'Continue career ›'; btn.onclick = () => loadGame(last.slot);
     card.append(kicker,name,sub,btn); document.querySelector('.launch .btns').before(card);
   }
+})();
+
+// Build 038: iOS Safari's floating bottom toolbar can cover bottom:0 fixed controls.
+// Don't add browser-toolbar clearance in standalone / home-screen mode.
+(function initLiveBarViewportClearance() {
+  if (typeof navigator === 'undefined' || typeof document === 'undefined') return;
+  const ios = /iP(?:hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  const safari = /Safari/.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+  if (!ios || !safari || standalone) return;
+  document.documentElement.classList.add('ios-safari-browser');
+  const refresh = () => {
+    const v = window.visualViewport;
+    if (!v) return;
+    // If the visual viewport is shorter than the layout viewport, reserve that gap.
+    const gap = Math.max(0, Math.min(120, Math.round(document.documentElement.clientHeight - v.height - v.offsetTop)));
+    document.documentElement.style.setProperty('--livebar-viewport-gap', gap + 'px');
+  };
+  refresh();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', refresh, { passive: true });
+    window.visualViewport.addEventListener('scroll', refresh, { passive: true });
+  }
+  window.addEventListener('orientationchange', refresh, { passive: true });
 })();
 </script>
 </body>
