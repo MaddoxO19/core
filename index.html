@@ -830,8 +830,36 @@ body.live-mode .actbar{display:none}
   .pgr em{font-size:10px}
 }
 
-/* Build 054 match-analysis screens */
-.wagon-zone-names{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;text-align:left;font-size:11px;margin-top:9px}.wagon-zone-names>div{display:flex;justify-content:space-between;border-bottom:1px solid var(--border,#304253);padding:3px}.pitch-map-grid{display:grid;grid-template-columns:74px repeat(5,minmax(0,1fr));gap:3px;max-width:600px;margin:0 auto 15px}.map-axis{font-size:9px;color:var(--muted,#9bb0be);text-align:center;align-self:end;overflow-wrap:anywhere}.map-row-title{text-align:right;align-self:center;padding-right:4px}.map-cell{position:relative;aspect-ratio:1/1.1;min-height:31px;background:color-mix(in srgb,#ed8d21 calc(var(--heat)*86%),#233649);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;border-radius:2px}.map-cell small{color:#fff;font-size:9px;font-weight:800}.map-target{outline:2px solid #f4c542;outline-offset:-2px}.map-hand-title{font-weight:700;font-size:12px;margin:12px 0 8px;text-align:center}.map-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}.map-metrics>div{background:#152735;padding:8px 3px;text-align:center;border-radius:6px}.map-metrics b{display:block;font-size:15px}.map-metrics span{font-size:9px;color:#9fb3be}.wagon-controls select{max-width:100%}
+/* Build 056 live analysis layout and compact pitch maps */
+.wagon-zone-names{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;text-align:left;font-size:11px;margin-top:9px}
+.wagon-zone-names>div{display:flex;justify-content:space-between;border-bottom:1px solid var(--border,#304253);padding:3px}
+.wagon-controls{display:grid;gap:8px}
+.wagon-controls select{max-width:100%}
+.pitch-map-wrap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+.pitch-map-card{min-width:0}
+.map-hand-title{font-weight:700;font-size:11px;margin:0 0 6px;text-align:center;color:var(--text,#eaf2f8)}
+.pitch-map-grid{display:grid;grid-template-columns:24px repeat(5,minmax(0,1fr));gap:2px;width:100%;margin:0}
+.map-axis{font-size:8px;color:var(--muted,#9bb0be);text-align:center;align-self:end;overflow-wrap:anywhere;line-height:1.1}
+.map-row-title{text-align:right;align-self:center;padding-right:2px}
+.map-cell{position:relative;aspect-ratio:1/1;min-height:22px;background:color-mix(in srgb,#f59e0b calc(var(--heat)*88%),#182a39);border:1px solid rgba(255,255,255,.06);border-radius:2px}
+.map-cell::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.08),transparent 50%);pointer-events:none}
+.map-target{outline:2px solid #f4c542;outline-offset:-2px}
+.map-cell small{position:absolute;right:2px;bottom:1px;color:#fff;font-size:8px;font-weight:800;line-height:1}
+.map-key{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:8px}
+.map-key span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted,#9fb3be)}
+.map-swatch{width:11px;height:11px;border-radius:2px;background:#182a39;border:1px solid rgba(255,255,255,.08)}
+.map-swatch.mid{background:color-mix(in srgb,#f59e0b 45%,#182a39)}
+.map-swatch.hot{background:color-mix(in srgb,#f59e0b 88%,#182a39)}
+.map-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.map-metrics>div{background:#152735;padding:8px 3px;text-align:center;border-radius:6px}
+.map-metrics b{display:block;font-size:15px}
+.map-metrics span{font-size:9px;color:#9fb3be}
+@media(max-width:480px){
+  .pitch-map-grid{grid-template-columns:20px repeat(5,minmax(0,1fr));gap:1px}
+  .map-axis{font-size:7px}
+  .map-cell{min-height:18px}
+  .map-metrics{grid-template-columns:repeat(2,1fr)}
+}
 </style>
 </head>
 <body>
@@ -890,7 +918,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.15 Build 055', title: 'AI Payroll and Recruitment Balance', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.15 Build 056', title: 'Live Analysis Layout Refinement', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -7097,9 +7125,12 @@ function renderLive() {
   const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
-  const body = ui.liveTab === 'card'
+  const liveTab=(ui.liveTab==='wagon'?'batter':ui.liveTab);
+  const body = liveTab === 'card'
     ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
-    : ui.liveTab === 'wagon' ? wagonPanel(M) : commentaryHtml(M);
+    : liveTab === 'batter' ? batterPanel(M)
+    : liveTab === 'bowler' ? bowlerPanel(M)
+    : commentaryHtml(M);
   let bar;
   if (M.done) bar = `<button class="btn" onclick="liveScorecardSheet()">Scorecard</button><button class="btn pri" style="grid-column:span 2" onclick="finishLive()">Done ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
@@ -7108,14 +7139,14 @@ function renderLive() {
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   if (M.done) return `<div class="grid">${recap}</div><div class="livebar three">${bar}</div>`;
   if (recap) return `<div class="grid">${recap}
-    ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
+    ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], (ui.liveTab==='wagon'?'batter':ui.liveTab), 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
   return `<div class="grid">
     <section class="panel broadcast-panel"><div class="pb">${broadcast}
       ${M.fmt === 'FC' ? ballConditionHtml(M,inn) : ''}
       ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
     </div></section>
-    ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Wagon wheel']], ui.liveTab, 'setLiveTab')}${body}
+    ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], (ui.liveTab==='wagon'?'batter':ui.liveTab), 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
 }
 
@@ -7318,37 +7349,78 @@ function zonesGraphic(shots,hand) {
   const names=WAGON_NAMES.map((name,i)=>`<div><span class="dim">${esc(name)}</span> <b>${totals[i]}</b></div>`).join('');
   return `<svg class="wagon" viewBox="0 0 224 224" aria-label="Eight scoring zones">${slices}</svg><div class="wagon-zone-names">${names}</div>`;
 }
-function pitchMapGrid(entries,hand) {
+function pitchMapGrid(entries,hand,showTarget) {
   const cells=Array.from({length:6},()=>Array.from({length:5},()=>({n:0,w:0,r:0})));
   entries.forEach(e=>{const c=cells[e[4]]?.[e[5]];if(c){c.n++;c.w+=e[6];c.r+=e[7];}});
   const max=Math.max(1,...cells.flat().map(c=>c.n));
-  const target=entries.length?[entries[0][8],entries[0][9]]:null;
-  return `<div class="map-hand-title">${hand?'Left-handed batters':'Right-handed batters'}</div><div class="pitch-map-grid" role="table" aria-label="Bowling lengths by line">
-    <div class="map-axis"></div>${['Wide off','Off','Stumps','Leg','Wide leg'].map(t=>`<div class="map-axis">${t}</div>`).join('')}
-    ${MAP_LENGTHS.map((t,r)=>`<div class="map-axis map-row-title">${t}</div>${cells[r].map((c,k)=>`<div class="map-cell ${target&&target[0]===r&&target[1]===k?'map-target':''}" style="--heat:${(c.n/max).toFixed(2)}" title="${esc(t)} / ${MAP_LINES[k]}: ${c.n} balls, ${c.w} wickets, ${c.r} bat runs"><strong>${c.n||''}</strong>${c.w?`<small>${c.w}W</small>`:''}</div>`).join('')}`).join('')}</div>`;
+  const target=showTarget&&entries.length?[entries[0][8],entries[0][9]]:null;
+  return `<div class="pitch-map-card"><div class="map-hand-title">${hand?'LHB':'RHB'}</div><div class="pitch-map-grid" role="table" aria-label="Pitch map heat grid">
+    <div class="map-axis"></div>${['OFF','OFF','ST','LEG','LEG'].map(t=>`<div class="map-axis">${t}</div>`).join('')}
+    ${MAP_LENGTHS.map((t,r)=>`<div class="map-axis map-row-title">${['FT','Y','F','G','SG','S'][r]}</div>${cells[r].map((c,k)=>`<div class="map-cell ${target&&target[0]===r&&target[1]===k?'map-target':''}" style="--heat:${(c.n/max).toFixed(2)}" title="${esc(t)} / ${MAP_LINES[k]}: ${c.n} balls, ${c.w} wickets, ${c.r} bat runs">${c.w?`<small>W</small>`:''}</div>`).join('')}`).join('')}
+  </div></div>`;
+}
+function pitchMapMeta(mode, player, inn, shown, on) {
+  if (mode==='bowler') {
+    const f=player&&inn&&inn.bw?inn.bw[player.id]:null;
+    const overs=f?oversStr(f.balls):'—';
+    const econ=f&&f.balls?((f.r/(f.balls/6))||0).toFixed(2):'—';
+    return {
+      title: player?esc(pname(player)):'Pitch map',
+      sub: player&&f?`${overs} ov · ${f.m||0} m · ${f.r||0} r · ${f.w||0} w · econ ${econ}`:'Modelled delivery placement, not independent ball tracking.',
+      metrics:[
+        [shown.length,'Balls'],
+        [`${shown.length?Math.round(on.length/shown.length*100):0}%`,'On target'],
+        [on.reduce((a,e)=>a+e[6],0),'Wkts on target'],
+        [player?(player.sk.acc||'—'):'—','Accuracy']
+      ]
+    };
+  }
+  if (mode==='batter') {
+    const c=player&&inn?inn.card.find(x=>x&&x.id===player.id):null;
+    return {
+      title: player?esc(pname(player)):'Pitch map',
+      sub: player&&c?`${c.r}${c.out?'':'*'} from ${c.b} · where the batter was bowled to this innings`:'Modelled delivery placement, not independent ball tracking.',
+      metrics:[
+        [shown.length,'Balls faced'],
+        [shown.reduce((a,e)=>a+e[7],0),'Runs off map'],
+        [shown.reduce((a,e)=>a+e[6],0),'Dismissals'],
+        [player&&typeof traitList==='function'?(traitList(player).filter(t=>t.weak).slice(0,1).map(t=>t.text).join('')||'—'):'—','Scout note']
+      ]
+    };
+  }
+  return {
+    title: `${esc(teamDef(inn.bowl).short||inn.bowl)} bowling innings`,
+    sub: `All modelled deliveries in this innings. Highlight removed because bowlers had different plans.`,
+    metrics:[
+      [shown.length,'Balls'],
+      [`${shown.length?Math.round(on.length/shown.length*100):0}%`,'On target'],
+      [shown.reduce((a,e)=>a+e[6],0),'Wickets'],
+      [Object.keys(inn.bw||{}).filter(id=>inn.bw[id]&&inn.bw[id].balls).length,'Bowlers used']
+    ]
+  };
 }
 function pitchMapPanel(M,inn) {
   const all=(M.mapBalls||[]).filter(e=>e[0]===M.innings.indexOf(inn));
-  const side=ui.mapSide==='batter'?'batter':'bowler';
-  const ids=[...new Set(all.map(e=>side==='batter'?e[2]:e[1]))];
+  const mode=ui.mapSide==='batter'?'batter':ui.mapSide==='innings'?'innings':'bowler';
+  const ids=mode==='innings'?[]:[...new Set(all.map(e=>mode==='batter'?e[2]:e[1]))];
   const selected=ids.includes(ui.mapPerson)?ui.mapPerson:ids[0];
-  const shown=all.filter(e=>(side==='batter'?e[2]:e[1])===selected);
+  const shown=mode==='innings'?all:all.filter(e=>(mode==='batter'?e[2]:e[1])===selected);
   const player=selected?P(selected):null;
   const on=shown.filter(e=>e[4]===e[8]&&e[5]===e[9]);
-  const pct=shown.length?Math.round(on.length/shown.length*100):0;
   const names=ids.map(id=>`<option value="${esc(id)}" ${id===selected?'selected':''}>${esc(pname(P(id)))}</option>`).join('');
-  const pl=shown[0]?{len:MAP_LENGTHS[shown[0][8]],line:MAP_LINES[shown[0][9]]}:null;
-  return `<div class="seg" style="margin:10px 0"> <button class="${side==='bowler'?'on':''}" onclick="setMapSide('bowler')">Bowler</button><button class="${side==='batter'?'on':''}" onclick="setMapSide('batter')">Batter</button></div>
-    ${ids.length?`<label class="wagon-select-label">${side==='bowler'?'Bowler':'Batter'} <select onchange="setMapPerson(this.value)">${names}</select></label>`:''}
-    <div class="panel" style="margin-top:10px"><div class="pb"><div class="b">${player?esc(pname(player)):'Pitch map'}</div>
-    <div class="xs muted" style="margin:5px 0 12px">Modelled delivery placement, not independent ball tracking. Highlighted cell is the first recorded analyst target for this selection.</div>
-    ${[0,1].map(h=>pitchMapGrid(shown.filter(e=>e[3]===h),h)).join('')}
-    ${pl?`<div class="xs muted" style="margin-top:10px">Plan at first recorded ball: ${esc(pl.line)}, ${esc(pl.len.toLowerCase())}</div>`:''}
-    <div class="map-metrics"><div><b>${shown.length}</b><span>Balls</span></div><div><b>${pct}%</b><span>On target</span></div><div><b>${on.reduce((a,e)=>a+e[6],0)}</b><span>Wickets on target</span></div><div><b>${player?(player.sk.acc||'—'):'—'}</b><span>${side==='bowler'?'Accuracy':'Batter view'}</span></div></div>
-    ${side==='batter'&&player&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:10px">Scouting: ${esc(traitList(player).filter(t=>t.weak).slice(0,2).map(t=>t.text).join(' · ')||'No known weaknesses')}</div>`:''}
+  const meta=pitchMapMeta(mode,player,inn,shown,on);
+  const showTarget=mode!=='innings';
+  return `<div class="seg" style="margin:10px 0"><button class="${mode==='bowler'?'on':''}" onclick="setMapSide('bowler')">Bowler</button><button class="${mode==='batter'?'on':''}" onclick="setMapSide('batter')">Batter</button><button class="${mode==='innings'?'on':''}" onclick="setMapSide('innings')">Innings</button></div>
+    ${ids.length?`<label class="wagon-select-label">${mode==='bowler'?'Bowler':'Batter'} <select onchange="setMapPerson(this.value)">${names}</select></label>`:''}
+    <div class="panel" style="margin-top:10px"><div class="pb"><div class="b">${meta.title}</div>
+    <div class="xs muted" style="margin:5px 0 12px">${meta.sub}</div>
+    <div class="pitch-map-wrap">${[0,1].map(h=>pitchMapGrid(shown.filter(e=>e[3]===h),h,showTarget)).join('')}</div>
+    <div class="map-key"><span><i class="map-swatch"></i>Cooler</span><span><i class="map-swatch mid"></i>Busier</span><span><i class="map-swatch hot"></i>Hot</span><span><b style="font-size:10px;color:#fff">W</b> wicket cell</span>${showTarget?'<span><b style="font-size:10px;color:#f4c542">▣</b> plan target</span>':''}</div>
+    <div class="map-metrics">${meta.metrics.map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>
+    ${mode==='batter'&&player&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:10px">Scouting: ${esc(traitList(player).filter(t=>t.weak).slice(0,2).map(t=>t.text).join(' · ')||'No known weaknesses')}</div>`:''}
     </div></div>`;
 }
-function wagonPanel(M) {
+function batterPanel(M) {
   const inn=ui.liveInn!=null&&M.innings[ui.liveInn]?M.innings[ui.liveInn]:curInn(M);
   const valid=inn.card.filter(c=>c&&c.id&&P(c.id));
   const selected=valid.find(c=>c.id===ui.wagonPlayer),current=valid.find(c=>c.id===inn.card[inn.striker]?.id)||valid[0];
@@ -7356,19 +7428,22 @@ function wagonPanel(M) {
   let shots=[],label='',hand='R';
   if(mode==='inn') {valid.forEach(c=>(c.shots||[]).forEach(shot=>shots.push([shot[0],shot[1],P(c.id).hand||'R'])));label=`${teamDef(inn.bat).short||inn.bat} · ${inn.runs}/${inn.wkts}`;}
   else if(card){shots=(card.shots||[]).map(s=>[s[0],s[1],P(card.id).hand||'R']);hand=P(card.id).hand||'R';label=`${pname(P(card.id))} · ${card.r} (${card.b})`;}
-  const view=['spike','zones','pitch'].includes(ui.wagonView)?ui.wagonView:'spike';
+  const view=['spike','zones'].includes(ui.wagonView)?ui.wagonView:'spike';
   const players=valid.map(c=>`<option value="${esc(c.id)}" ${card&&c.id===card.id?'selected':''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
-  const groupShots=mode==='inn'?shots:shots;
   const n=[1,2,3,4,6].map(k=>`${k}s ${shots.filter(s=>s[1]===k).length}`).join(' · ');
   const off=shots.reduce((a,s)=>{let angle=s[2]==='L'?(360-s[0])%360:s[0];return a+(angle>0&&angle<180?s[1]:0);},0);
   const total=shots.reduce((a,s)=>a+s[1],0);
   return `<div class="wagon-controls"><div class="seg"><button class="${mode==='player'?'on':''}" onclick="setWagon('player')">Player</button><button class="${mode==='inn'?'on':''}" onclick="setWagon('inn')">Innings</button></div>
     ${mode==='player'?`<label class="wagon-select-label">Batter <select onchange="ui.wagonPlayer=this.value;render()">${players}</select></label>`:''}</div>
-    <div class="seg" style="margin:10px 0"><button class="${view==='spike'?'on':''}" onclick="setWagonView('spike')">Spike</button><button class="${view==='zones'?'on':''}" onclick="setWagonView('zones')">Zones</button><button class="${view==='pitch'?'on':''}" onclick="setWagonView('pitch')">Pitch map</button></div>
-    ${view==='pitch'?pitchMapPanel(M,inn):`<div class="panel"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${view==='spike'?wagonSvg(shots,hand):zonesGraphic(shots,hand)}
+    <div class="seg" style="margin:10px 0"><button class="${view==='spike'?'on':''}" onclick="setWagonView('spike')">Spike</button><button class="${view==='zones'?'on':''}" onclick="setWagonView('zones')">Zones</button></div>
+    <div class="panel"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${view==='spike'?wagonSvg(shots,hand):zonesGraphic(shots,hand)}
     ${view==='spike'?`<div class="flex" style="justify-content:center;gap:12px;margin-top:6px"><span class="xs" style="color:#7dd3fc">1–3s</span><span class="xs win">4s</span><span class="xs" style="color:#f4c542">6s</span></div>`:''}
     <div class="xs muted" style="margin-top:9px">${n}</div>${mode==='player'&&total?`<div class="xs muted" style="margin-top:5px">${Math.round(off/total*100)}% of runs on the off side</div>`:''}
-    ${view==='zones'&&mode==='player'&&card&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:9px">${esc(traitList(P(card.id)).filter(x=>!x.weak).slice(0,2).map(x=>x.text).join(' · '))}</div>`:''}</div></div>`}`;
+    ${view==='zones'&&mode==='player'&&card&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:9px">${esc(traitList(P(card.id)).filter(x=>!x.weak).slice(0,2).map(x=>x.text).join(' · '))}</div>`:''}</div></div>`;
+}
+function bowlerPanel(M) {
+  const inn=ui.liveInn!=null&&M.innings[ui.liveInn]?M.innings[ui.liveInn]:curInn(M);
+  return pitchMapPanel(M,inn);
 }
 
 // ---- Game plan (the GM's brief) ----
