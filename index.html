@@ -742,6 +742,35 @@ body.live-mode .actbar{display:none}
 /* The yellow action button always sits on the left. */
 .livebar .btn.pri,.actbar .btn.pri,.sheet-f .btn.pri{order:-1}
 .pgr{grid-template-columns:92px minmax(0,1fr) 20px 62px;gap:6px}.pgr em{font-style:normal;font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* v0.9.13 player profile and editor */
+.pstat{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.pstat>div{background:var(--s2);border-radius:9px;padding:7px 4px;text-align:center;min-width:0}
+.pstat .v{font-size:15px;font-weight:800;white-space:nowrap}.pstat .l{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.skg+.skg{margin-top:12px}.skg>.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.skg .skills{grid-template-columns:repeat(2,1fr)}
+.sheet-f{position:relative}
+.sheet-f .more-btn{flex:0 0 auto}
+.more-pop{position:absolute;right:14px;bottom:calc(100% + 6px);display:none;flex-direction:column;gap:6px;min-width:180px;padding:8px;background:var(--s2);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.45);z-index:5}
+.more-pop.on{display:flex}.more-pop .btn{width:100%}
+.btn.danger{color:#fb7185;border-color:rgba(251,113,133,.45)}
+.sheet-h .edit-x{margin-left:auto;display:grid;place-items:center;color:var(--text)}.sheet-h .edit-x+.x{margin-left:0}
+.sheet-h .edit-x svg{width:18px;height:18px}
+.ed-prev{position:sticky;top:-12px;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:-12px -14px 12px;padding:10px 14px;background:var(--s1);border-bottom:1px solid var(--line2)}
+.ed-prev>div{background:var(--s2);border-radius:9px;padding:6px;text-align:center}.ed-prev .v{font-size:18px;font-weight:900}.ed-prev .v span{font-size:12px;font-weight:800}.ed-prev .l{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase}
+.ed-sec{padding:2px 0 14px}.ed-sec+.ed-sec{border-top:1px solid var(--line2);padding-top:12px}
+.ed-h{font-size:13px;font-weight:800;margin-bottom:8px}
+.ed-g{gap:8px}.ed-g+.ed-g{margin-top:8px}.ed-g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ed-g label.lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ed-step .lbl{display:block;font-size:var(--fs-xs);color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.ed-step .flex{gap:4px}.ed-step .btn{flex:0 0 32px;padding:0;height:36px}.ed-step .input{text-align:center;padding:8px 2px;-moz-appearance:textfield}
+.ed-step .input::-webkit-inner-spin-button,.ed-sk .input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.ed-sk{display:grid;grid-template-columns:112px minmax(0,1fr) 54px;gap:10px;align-items:center;padding:3px 0}
+.ed-sk label{font-size:var(--fs-s);color:var(--muted)}.ed-sk .input{text-align:center;padding:6px 2px;-moz-appearance:textfield}
+.ed-sk input[type=range]{width:100%;accent-color:var(--cyan);height:24px}
+.ed-g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ed-sub{font-size:var(--fs-xs);color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:10px 0 2px}
+.ed-sk .input{height:34px}.ed-sk{padding:2px 0}
 </style>
 </head>
 <body>
@@ -795,7 +824,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.12 Build 046', title: 'Authentic Data Integrity & Career Calibration', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.13 Build 044', title: 'Player Profile & Editor', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2310,7 +2339,7 @@ function traitList(p) {
 function scoutLevel(p) { return p.teamId === U() ? 2 : ((game.scout || {})[p.id] || 0); }
 function raiseScout(id, lvl) { game.scout = game.scout || {}; game.scout[id] = Math.min(2, Math.max(game.scout[id] || 0, lvl)); }
 function scoutingHtml(p) {
-  const lvl = scoutLevel(p), list = traitList(p);
+  const lvl = scoutLevel(p), list = traitList(p).slice().sort((a, b) => (a.weak ? 1 : 0) - (b.weak ? 1 : 0));   // strengths first
   if (lvl === 0) return '<span class="muted">Unknown. Scout the opposition or bowl at him to learn more.</span>';
   const shown = lvl === 1 ? list.filter(t => t.weak).slice(0, 1) : list;
   return shown.map(t => `<span class="${t.weak ? 'loss' : 'win'}">${t.weak ? '▼' : '▲'} ${esc(t.text)}</span>`).join('<br>') + (lvl === 1 ? '<br><span class="muted">More to learn.</span>' : '');
@@ -4192,54 +4221,13 @@ const REAL_AGES_2026 = {
   'cooper-connolly':23, 'sam-harper':29, 'xavier-bartlett':27, 'nathan-ellis':32, 'spencer-johnson':30,
   'harry-brook':27, 'jos-buttler':36, 'adil-rashid':38, 'jofra-archer':31, 'sam-curran':28,
   'ben-duckett':32, 'jacob-bethell':23, 'josh-tongue':28, 'liam-dawson':36, 'jamie-overton':32,
-  'will-jacks':27, 'rehan-ahmed':22, 'rashid-khan':28, 'mohammad-nabi':41, 'babar-azam':32
+  'will-jacks':27, 'rehan-ahmed':22,
+  'jake-weatherald':31, 'brendan-doggett':32, 'todd-murphy':25, 'michael-neser':36, 'jhye-richardson':30,
+  'mitchell-swepson':33, 'hilton-cartwright':34, 'rashid-khan':28, 'mohammad-nabi':41, 'babar-azam':32
 };
 // Name slug from realPlayerId ('real-' + nation + name); careers and ages are keyed by name.
 const realKey = p => p && p.realPlayerId ? p.realPlayerId.replace(/^real-[a-z0-9]*-/, '') : null;
 const realSlug = name => name.trim().toLocaleLowerCase('en').replace(/[^a-z0-9]+/g, '-');
-// Build 044: provenance of the 2026 historical imports. Missing and inferred fields
-// must never be presented as independently verified official totals.
-const REAL_DATA_QUALITY = Object.freeze({
-  snapshot: 'Published lists from 2025–2026; source dates vary by country and format',
-  battingInnings: 'estimated from runs / published batting average',
-  notOuts: 'not separately available in the original data; stored as zero',
-  centuriesAndFifties: 'partially minimum estimates; not verified for all players',
-  ballsFaced: 'not available in the original import',
-  bowlingFiveFors: 'not available in the original import',
-  ages: 'verified for a subset; otherwise modelled',
-  status: 'partial-history'
-});
-// Detect invalid historical rows, ambiguity and missing source coverage; never invent
-// missing values. These diagnostics do not mutate any save or consume gameplay RNG.
-function auditAuthenticData() {
-  const issues = [], coverage = {};
-  for (const [key, formats] of Object.entries(REAL_CAREERS)) {
-    for (const [fmt, a] of Object.entries(formats)) {
-      if (!['FC','OD','T20'].includes(fmt) || !Array.isArray(a) || a.length !== REAL_CAREER_KEYS.length) {
-        issues.push(key + '/' + fmt + ': malformed row'); continue;
-      }
-      const row = Object.fromEntries(REAL_CAREER_KEYS.map((k,i) => [k,a[i]]));
-      const problems = [];
-      if (a.some(v => !Number.isFinite(v) || v < 0)) problems.push('invalid number');
-      if (row.inn > row.m * 2) problems.push('innings exceed match maximum');
-      if (row.no > row.inn) problems.push('not-outs exceed innings');
-      if (row.r && !row.inn) problems.push('runs without innings');
-      if (row.hs > row.r) problems.push('highest score exceeds runs');
-      if (row.c100 + row.c50 > row.inn) problems.push('milestones exceed innings');
-      if (row.w && !row.bb) problems.push('wickets without deliveries');
-      if (problems.length) issues.push(key + '/' + fmt + ': ' + problems.join(', '));
-      coverage[fmt] = (coverage[fmt] || 0) + 1;
-    }
-  }
-  const rosterCoverage = {};
-  for (const [nat, roster] of Object.entries(AUTHENTIC_ROSTERS.international)) {
-    rosterCoverage[nat] = {players: roster.length,
-      withHistory: roster.filter(r => REAL_CAREERS[realSlug(r.name)]).length,
-      missing: roster.filter(r => !REAL_CAREERS[realSlug(r.name)]).map(r => r.name)};
-  }
-  return {players: Object.keys(REAL_CAREERS).length, formats: coverage, rosterCoverage,
-    knownLimitations: REAL_DATA_QUALITY, issues};
-}
 // Add a real player's international career (to Oct 2026) on top of whatever this save has recorded.
 function addRealCareer(p) {
   const c = REAL_CAREERS[realKey(p)]; if (!c) return false;
@@ -4255,41 +4243,25 @@ function addRealCareer(p) {
     p.caps[fmt] = (p.caps[fmt] || 0) + h.m;
   });
   p.realCareer = 'Oct 2026';
-  p.realCareerQuality = 'partial-history';
   return true;
 }
 function realAgeFor(key, year) { const a = REAL_AGES_2026[key]; return a ? a + Math.max(0, (year || 2026) - 2026) : null; }
-// v0.9.12: existing authentic careers pick up real international history and real ages once.
+// Existing authentic careers: v1 (v0.9.12) adds real international history once; v2 (v0.9.13) fills
+// real ages for players added to REAL_AGES_2026 since. A player whose age is already real is left alone.
+const REAL_CAREERS_VERSION = 2;
 function upgradeRealCareers(g) {
-  if (g.realCareersV) return;
-  g.realCareersV = 1;
+  const v = g.realCareersV || 0;
+  if (v >= REAL_CAREERS_VERSION) return;
+  g.realCareersV = REAL_CAREERS_VERSION;
   if (!g.meta || g.meta.rosterMode !== 'authentic') return;
   Object.values(g.players).forEach(p => {
     if (!p.isRealPlayer) return;
-    addRealCareer(p);
+    if (v < 1) addRealCareer(p);
     const age = realAgeFor(realKey(p), g.year);
-    if (age && !p.retired) { p.age = age; p.realAge = true; }
+    if (age && !p.retired && !p.realAge) { p.age = age; p.realAge = true; }
   });
 }
 
-// Build 045: conservative, role-only corrections for clear roster misclassifications.
-// Other imported attributes remain modelled until individually sourced. The engine
-// already uses role to select a compatible bowling type and batting position.
-const AUTHENTIC_ROLE_CORRECTIONS = Object.freeze({
-  'liam-hatcher':'PACE', 'jack-nisbet':'PACE', 'charlie-stobo':'SEAM',
-  'jack-sinfield':'OFF', 'callum-vidler':'PACE', 'tom-straker':'PACE',
-  'nathan-mcandrew':'SEAM', 'henry-thornton':'PACE',
-  'matthew-kuhnemann':'SLA', 'billy-stanlake':'PACE',
-  'riley-meredith':'PACE', 'lawrence-neil-smith':'SEAM',
-  'beau-webster':'BAR', 'nathan-mcsweeney':'TOP',
-  'jake-weatherald':'OPEN', 'cameron-bancroft':'OPEN',
-  'jordan-silk':'MID', 'caleb-jewell':'OPEN', 'tim-ward':'OPEN',
-  'ashley-chandrasinghe':'OPEN', 'fergus-oneill':'SEAM',
-  'will-sutherland':'BWAR', 'tanveer-sangha':'LEG'
-});
-function authenticRole(rec) {
-  return AUTHENTIC_ROLE_CORRECTIONS[realSlug(rec.name)] || rec.role;
-}
 // Authentic roster mode is opt-in and creates its own isolated career. Existing saves never receive imported players.
 function seedAuthenticWorld() {
   const created = new Map();
@@ -4298,12 +4270,11 @@ function seedAuthenticWorld() {
     if (created.has(key)) return game.players[created.get(key)];
     const parts = rec.name.trim().split(/\s+/);
     const age = realAgeFor(realSlug(rec.name), game.year) || (rec.q >= 80 ? 29 : 25);
-    const p = makePlayer({role:authenticRole(rec), q:rec.q + RATING_SHIFT, age, nat, teamId:tid});
+    const p = makePlayer({role:rec.role, q:rec.q + RATING_SHIFT, age, nat, teamId:tid});
     p.first = parts.slice(0,-1).join(' '); p.last = parts[parts.length - 1];
     p.realPlayerId = 'real-' + key.replace(/[^a-z0-9]+/g,'-');
     p.isRealPlayer = true; p.rosterSource = source; p.sourceDate = '2026';
-    p.authenticModelled = true; // ratings and unverified ages remain modelled
-    p.authenticDataV = 2; // Build 046 role mapping and provenance for new careers only
+    p.authenticModelled = true; // ratings, role assumptions and age are provisional estimates
     // Real players carry their real international record only; never a fictional history.
     addRealCareer(p);
     if (REAL_AGES_2026[realSlug(rec.name)]) p.realAge = true;
@@ -4340,7 +4311,7 @@ function createGame(gmName, teamId, year, nationGm, rosterMode) {
     training: 'balanced', deadMoney: 0, plans: {}, scout: {}, scoutedFx: {},
     defaultPlan: { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) },
     board: { confidence: 60, objectives: [] },
-    history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1, scaleV: SCALE_VERSION, realCareersV: 1,
+    history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1, scaleV: SCALE_VERSION, realCareersV: REAL_CAREERS_VERSION,
     philosophy: { FC:'balanced', OD:'balanced', T20:'balanced' }, coachRel: 60, matchOverride: null, clashMode: 'intl',
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
@@ -5521,14 +5492,14 @@ function statusChip(p) {
   return f >= 88 ? '' : `<span class="tag ${f >= 75 ? 'warn' : 'bad'}">${f}%</span>`;
 }
 function fitText(p) { if (p.injury) return '<span class="loss">Inj</span>'; if (p.natDuty) return '<span class="info-t">AUS</span>'; const f = Math.round(p.fitness); return `<span class="${f >= 88 ? 'dim' : f >= 75 ? 'draw' : 'loss'}">${f}</span>`; }
-function formArrow(f) { return f >= 66 ? '<span class="win" title="Hot form">▲▲</span>' : f >= 55 ? '<span class="win" title="Good form">▲</span>' : f >= 44 ? '<span class="dim">–</span>' : f >= 33 ? '<span class="loss">▼</span>' : '<span class="loss">▼▼</span>'; }
+function formArrow(f) { return f >= 66 ? '<span class="win" title="Hot form">▲▲</span>' : f >= 55 ? '<span class="win" title="Good form">▲</span>' : f >= 44 ? '<span class="dim" title="Steady form">→</span>' : f >= 33 ? '<span class="loss">▼</span>' : '<span class="loss">▼▼</span>'; }
 function compName(f) { return COMPS[FMT_COMP[f]].short; }
 function fmtSeg(active, fn) { return seg(FMT_LIST.map(f => [f, compName(f)]), active, fn); }
 function flash(msg) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; document.body.appendChild(d); setTimeout(() => d.remove(), 2300); }
 function sheet(eyebrow, title, body, opts) {
   opts = opts || {};
   $('modalRoot').innerHTML = `<div class="sheet-bg" onclick="if(event.target===this)closeModal()"><div class="sheet ${opts.wide ? 'wide' : ''}">
-    <div class="sheet-h"><div class="ell">${eyebrow ? `<div class="e">${eyebrow}</div>` : ''}<div class="t ell">${title}</div>${opts.sub ? `<div class="sub ell">${opts.sub}</div>` : ''}</div><button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
+    <div class="sheet-h"><div class="ell">${eyebrow ? `<div class="e">${eyebrow}</div>` : ''}<div class="t ell">${title}</div>${opts.sub ? `<div class="sub ell">${opts.sub}</div>` : ''}</div>${opts.headBtn || ''}<button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
     <div class="sheet-b ${opts.flush ? 'flush' : ''}">${body}</div>${opts.foot ? `<div class="sheet-f">${opts.foot}</div>` : ''}</div></div>`;
   sheetSwipe($('modalRoot').querySelector('.sheet'));
 }
@@ -6416,7 +6387,7 @@ function showPlayer(id, tab) {
   let body;
   if (tab === 'stats') {
     const t = src => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>M</th><th>Runs</th><th>Avg</th><th>SR</th><th>100/50</th><th>HS</th><th>W</th><th>Avg</th><th>Econ</th><th>BB</th><th>Ct</th></tr></thead><tbody>${FMT_LIST.map(f => { const s = src[f]; return `<tr><td>${compName(f)}</td><td>${s.m}</td><td>${s.r}</td><td>${fmtNum(batAvgOf(s))}</td><td>${s.b ? fmtNum(srOf(s), 0) : '–'}</td><td>${s.c100}/${s.c50}</td><td>${hsStr(s)}</td><td>${s.w}</td><td>${fmtNum(bowlAvgOf(s))}</td><td>${fmtNum(econOf(s))}</td><td>${bbStr(s)}</td><td>${s.ct}${s.st ? '/' + s.st : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
-    body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Domestic career</h3></div>${t(p.stats.career)}</div>${p.stats.intl ? `<div style="height:8px"></div><div class="panel"><div class="ph"><h3>International</h3>${p.realCareer ? `<span class="xs dim">Historical record (partially estimated) to ${p.realCareer}; then this career</span>` : ''}</div>${t(p.stats.intl).replace(/>Shield</, '>Test<').replace(/>One-Day</, '>ODI<').replace(/>T20</, '>T20I<')}</div>` : ''}`;
+    body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Domestic career</h3></div>${t(p.stats.career)}</div>${p.stats.intl ? `<div style="height:8px"></div><div class="panel"><div class="ph"><h3>International</h3>${p.realCareer ? `<span class="xs dim">Real record to ${p.realCareer}, then this career</span>` : ''}</div>${t(p.stats.intl).replace(/>Shield</, '>Test<').replace(/>One-Day</, '>ODI<').replace(/>T20</, '>T20I<')}</div>` : ''}`;
   } else if (tab === 'contract') {
     const value = askingSalary(p), salary = p.contract ? p.contract.salary : null;
     body = `<div class="panel"><div class="rows"><div class="kv"><span>Nationality</span><span>${nationTag(p.nat)} ${esc(NATIONS[p.nat] || p.nat)}</span></div><div class="kv"><span>Club</span><span>${esc(p.teamId ? teamName(p.teamId) : 'Free agent')}</span></div><div class="kv"><span>Personality</span><span>${PERSONAS[ensurePersona(p)].label}</span></div><div class="kv"><span>Current deal</span><span>${salary == null ? 'Not contracted' : money(salary) + ' × ' + p.contract.years + ' yr'}</span></div><div class="kv"><span>Estimated market salary</span><span>${money(value)}</span></div>${salary != null ? `<div class="kv"><span>Annual contract value to club</span><span class="${value > salary ? 'win' : ''}">${value > salary ? money(value - salary) + ' below market' : value < salary ? money(salary - value) + ' above market' : 'Market rate'}</span></div>` : ''}<div class="kv"><span>Contract expectations</span><span>${contractConcern(p) ? 'Concerns raised' : 'No active grievance'}</span></div></div></div>`;
@@ -6424,21 +6395,52 @@ function showPlayer(id, tab) {
     body = `${careerChart(p)}<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
       <div class="kv"><span>International caps</span><span>Tests ${p.caps.FC} · ODIs ${p.caps.OD} · T20Is ${p.caps.T20}</span></div></div></div>`;
   } else {
-    body = `${formChart(p)}<div class="skills">${bar('Technique', sk.tech)}${bar('Temperament', sk.temp)}${bar('Power', sk.power)}${bar('Bowling', sk.bowl)}${bar('Accuracy', sk.acc)}${bar('Variation', sk.vari)}${bar('Fielding', sk.field)}${bar('Keeping', sk.keep)}${bar('Stamina', sk.stamina)}${bar('Strike rotation', sk.rot || 0)}${bar('Death bowling', canBowl(p) ? sk.death || 0 : 0)}</div>
-      <div class="panel" style="margin-top:10px"><div class="rows">
-        <div class="kv"><span>Potential</span><span class="b">${potGrade(p)}</span></div><div class="kv"><span>Form</span><span>${formArrow(p.form)} ${Math.round(p.form)}</span></div>
-        <div class="kv"><span>Personality</span><span title="${esc(PERSONAS[ensurePersona(p)].desc)}">${PERSONAS[p.persona].label}</span></div>
-        ${own ? `<div class="kv"><span>Mood</span><span>${chip(moodClass(p.morale), moodLabel(p.morale))} ${p.morale}${p.promise ? ' · promised games' : ''}</span></div>
-        <div class="kv"><span>Development programme</span><span>${sel(Object.keys(DEV_FOCUS).map(k => [k, DEV_FOCUS[k].label]), p.focus || 'none', `uiSetFocus('${p.id}',this.value)`)}</span></div>` : ''}
-        <div class="kv"><span>Contract</span><span>${p.contract ? `${money(p.contract.salary)} × ${p.contract.years} yr` : p.retired ? '–' : 'Asking ' + money(askingSalary(p))}</span></div><div class="kv"><span>Market value</span><span>${money(askingSalary(p))}</span></div>
-        <div class="kv" style="display:block"><span>Technique${own ? '' : ' (scouting)'}</span><div class="s" style="margin-top:4px">${scoutingHtml(p)}</div></div></div></div>`;
+    body = profileOverview(p, own);
   }
-  const acts = [];
-  if (game.editor) acts.push(`<button class="btn ghost" onclick="editPlayerSheet('${p.id}')">Edit</button>`);
-  if (own && !p.retired) { acts.push(`<button class="btn" onclick="talkSheet('${p.id}')">Talk</button>`); acts.push(`<button class="btn" onclick="game.captain='${p.id}';autosave();closeModal();flash('${esc(p.last)} named captain.')">Captain</button>`); if (game.phase === 'season' && p.contract.years <= 1) acts.push(`<button class="btn" onclick="openContract('${p.id}','extend')">Extend</button>`); acts.push(`<button class="btn ghost" onclick="confirmRelease('${p.id}')">Release</button>`); }
+  // Footer: the main action is yellow and on the left. Rarely used or irreversible actions sit under More.
+  const acts = [], more = [];
+  if (own && !p.retired) {
+    acts.push(`<button class="btn pri" onclick="talkSheet('${p.id}')">Talk</button>`);
+    const capBtn = `<button class="btn" onclick="game.captain='${p.id}';autosave();closeModal();flash('${esc(p.last)} named captain.')">${game.captain === p.id ? 'Captain ✓' : 'Make captain'}</button>`;
+    if (game.phase === 'season' && p.contract.years <= 1) { acts.push(`<button class="btn" onclick="openContract('${p.id}','extend')">Extend</button>`); more.push(capBtn); }
+    else acts.push(capBtn);
+    more.push(`<button class="btn ghost danger" onclick="confirmRelease('${p.id}')">Release</button>`);
+  }
   if (!p.teamId && !p.retired && !p.prospect) acts.push(`<button class="btn pri" onclick="openContract('${p.id}','sign')">Offer contract</button>`);
   if (p.teamId && !own && !p.retired) acts.push(`<button class="btn" onclick="ui.tradePartner='${p.teamId}';ui.tradeGet=['${p.id}'];ui.officeTab='trades';closeModal();go('office')">Explore trade</button>`);
-  sheet(p.retired ? 'Retired' : p.teamId ? teamDef(p.teamId).nick : 'Free agent', esc(pname(p)), head + body, { foot: acts.join('') });
+  if (more.length) acts.push(`<button class="btn more-btn" aria-label="More actions" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('on')">More ▾</button><div class="more-pop">${more.join('')}</div>`);
+  const headBtn = game.editor ? `<button class="x edit-x" aria-label="Edit player" title="Edit player" onclick="editPlayerSheet('${p.id}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></button>` : '';
+  sheet(p.retired ? 'Retired' : p.teamId ? teamDef(p.teamId).nick : 'Free agent', esc(pname(p)), head + body, { foot: acts.join(''), headBtn });
+}
+
+// Skill groups shared by the profile and the editor, so both read the same way.
+const SKILL_GROUPS = [
+  ['Batting', [['tech','Technique'],['temp','Temperament'],['power','Power'],['rot','Strike rotation']]],
+  ['Bowling', [['bowl','Bowling'],['acc','Accuracy'],['vari','Variation'],['death','Death bowling']]],
+  ['Fielding and fitness', [['field','Fielding'],['stamina','Stamina'],['keep','Keeping']]]
+];
+function showsKeeping(p) { return p.role === 'WK' || (p.sk.keep || 0) >= 45; }
+function profileOverview(p, own) {
+  const sk = p.sk;
+  const bar = (l, v) => { v = Math.round(v || 0); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
+  const groups = SKILL_GROUPS.map(([name, list]) => {
+    if (name === 'Bowling' && !canBowl(p)) return `<div class="skg"><div class="lbl">Bowling</div><div class="xs dim">Does not bowl.</div></div>`;
+    const rows = list.filter(([k]) => k !== 'keep' || showsKeeping(p));
+    const tag = name === 'Bowling' && ['OPEN','TOP','MID','WK'].includes(p.role) ? ` · part-time ${esc(BOWL_TYPES[p.bowlType].label.toLowerCase())}` : '';
+    return `<div class="skg"><div class="lbl">${name}${tag}</div><div class="skills">${rows.map(([k, l]) => bar(l, sk[k])).join('')}</div></div>`;
+  }).join('');
+  const tile = (l, v) => `<div><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  const status = `<div class="pstat">${tile('Form', `${formArrow(p.form)} ${Math.round(p.form)}`)}${tile('Fitness', Math.round(p.fitness))}${tile('Potential', potGrade(p))}${own ? tile('Mood', `<span class="${{ good:'win', warn:'draw', bad:'loss' }[moodClass(p.morale)]}">${moodLabel(p.morale)}</span>`) : tile('Age', p.age)}</div>`;
+  const plan = p.focus && p.focus !== 'none' ? DEV_FOCUS[p.focus].label : 'Balanced';
+  const training = own ? `<div class="kv tap" onclick="closeModal();ui.squadTab='training';go('squad')"><span>Training</span><span>${esc(plan)} <span class="xs dim">· ${p.focusBy === 'gm' ? 'your call' : 'coach'} ▸</span></span></div>` : '';
+  return `${status}${formChart(p)}
+    <div class="panel"><div class="ph"><h3>Skills</h3></div><div class="pb">${groups}</div></div>
+    <div class="panel" style="margin-top:10px"><div class="ph"><h3>Strengths and weaknesses</h3>${own ? '' : '<div class="end xs dim">scouting</div>'}</div><div class="pb s">${scoutingHtml(p)}</div></div>
+    <div class="panel" style="margin-top:10px"><div class="rows">
+      <div class="kv"><span>Personality</span><span title="${esc(PERSONAS[ensurePersona(p)].desc)}">${PERSONAS[p.persona].label}</span></div>
+      ${own && p.promise ? '<div class="kv"><span>Promise</span><span>Promised games</span></div>' : ''}${training}
+      <div class="kv"><span>Contract</span><span>${p.contract ? `${money(p.contract.salary)} × ${p.contract.years} yr` : p.retired ? '–' : 'Asking ' + money(askingSalary(p))}</span></div>
+      <div class="kv"><span>Market value</span><span>${money(askingSalary(p))}</span></div></div></div>`;
 }
 
 // §24 MATCH DAY + LIVE MATCH ---------------------------------------------------------------
@@ -7309,27 +7311,54 @@ function renderWorld() {
     ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
 }
 
+// Editor: four sections with one grid each, skills grouped as on the profile, and a pinned preview
+// of the three format ratings that updates as values change (edPreview works on a copy; nothing is saved until Save).
 function editPlayerSheet(id) {
   const p = P(id);
-  const num = (k, v, min, max) => `<div><label class="lbl">${k}</label><input class="input" data-k="${k}" type="number" min="${min}" max="${max}" value="${Math.round(v)}"></div>`;
-  const txt = (k, label, v) => `<div><label class="lbl">${label}</label><input class="input" data-k="${k}" value="${esc(v)}"></div>`;
-  const dd = (k, label, opts, cur) => `<div><label class="lbl">${label}</label><select class="full" data-k="${k}">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
+  const fld = (label, html, k) => `<div><label class="lbl" for="ed_${k}">${label}</label>${html}</div>`;
+  const num = (k, label, v, min, max) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" type="number" inputmode="numeric" min="${min}" max="${max}" value="${Math.round(v)}" oninput="edPreview('${id}')">`, k);
+  const txt = (k, label, v) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" value="${esc(v)}">`, k);
+  const dd = (k, label, opts, cur) => fld(label, `<select class="full" id="ed_${k}" data-k="${k}" onchange="edPreview('${id}')">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`, k);
+  const sec = (title, inner, note) => `<div class="ed-sec"><div class="ed-h">${title}</div>${note ? `<div class="xs dim" style="margin:-4px 0 8px">${note}</div>` : ''}${inner}</div>`;
   const teams = [['', 'Free agent'], ...TEAM_DEFS.map(t => [t.id, t.name]), ...Object.keys(NATION_STRENGTH).map(n => ['X_' + n, NATIONS[n] + ' (national pool)'])];
-  const skn = { tech:'Technique', temp:'Temperament', power:'Power', rot:'Rotation', bowl:'Bowling', acc:'Accuracy', vari:'Variation', death:'Death', field:'Fielding', keep:'Keeping', stamina:'Stamina' };
-  sheet('Editor', esc(pname(p)), `<div id="edForm"><div class="grid g2" style="gap:8px">${txt('first', 'First name', p.first)}${txt('last', 'Last name', p.last)}</div>
-    <div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">${num('age', p.age, 15, 45)}${dd('nat', 'Nation', Object.keys(NATIONS).map(n => [n, n]), p.nat)}${dd('hand', 'Bats', [['R','Right'],['L','Left']], p.hand)}</div>
-    <div class="grid g2" style="gap:8px;margin-top:8px">${dd('role', 'Role', Object.keys(ROLES).map(r => [r, ROLES[r].label]), p.role)}${dd('bowlType', 'Bowling', Object.keys(BOWL_TYPES).map(b => [b, BOWL_TYPES[b].label]), p.bowlType)}</div>
-    <div class="grid g2" style="gap:8px;margin-top:8px">${dd('team', 'Team', teams, p.teamId || '')}${dd('persona', 'Personality', Object.keys(PERSONAS).map(k => [k, PERSONAS[k].label]), ensurePersona(p))}</div>
-    <div class="grid" style="grid-template-columns:2fr 1fr 1fr 1fr;gap:8px;margin-top:8px">${dd('style', 'Style', [['', 'None'], ...Object.keys(STYLES).map(k => [k, STYLES[k].label])], p.style || '')}${FMT_LIST.map(f => num('apt_' + f, (p.apt || {})[f] || 0, -12, 12).replace('>apt_' + f + '<', '>' + compName(f) + ' +/-<')).join('')}</div>
-    <label class="lbl" style="margin-top:12px">Skills</label><div class="grid" style="grid-template-columns:repeat(3,1fr);gap:8px">${Object.keys(skn).map(k => `<div><label class="lbl">${skn[k]}</label><input class="input" data-k="sk_${k}" type="number" min="15" max="99" value="${Math.round(p.sk[k] || 0)}"></div>`).join('')}</div>
-    <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px">${num('pot', p.pot, 15, 99)}${num('form', p.form, 0, 100)}${num('fitness', p.fitness, 0, 100)}${num('morale', p.morale || 65, 0, 100)}</div>
-    ${p.contract ? `<div class="grid g2" style="gap:8px;margin-top:8px">${num('salary', p.contract.salary, MIN_SALARY, 2000000)}${num('years', p.contract.years, 1, 6)}</div>` : ''}
-    ${p.injury ? `<label class="switch" style="margin-top:10px" onclick="this.classList.toggle('on')" data-k="healInjury"><i></i>Heal ${esc(p.injury.type)}</label>` : ''}</div>`,
-    { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="saveEditPlayer('${id}')">Save player</button>` });
+  const step = f => { const v = (p.apt || {})[f] || 0; return `<div class="ed-step"><div class="lbl">${compName(f)}</div><div class="flex"><button type="button" class="btn sm" aria-label="Lower ${compName(f)}" onclick="edStep('${id}','${f}',-1)">−</button><input class="input" data-k="apt_${f}" id="ed_apt_${f}" type="number" inputmode="numeric" min="-12" max="12" value="${v}" oninput="edPreview('${id}')"><button type="button" class="btn sm" aria-label="Raise ${compName(f)}" onclick="edStep('${id}','${f}',1)">+</button></div></div>`; };
+  const skRow = (k, l) => { const v = Math.round(p.sk[k] || 0); return `<div class="ed-sk"><label for="ed_sk_${k}">${l}</label><input type="range" min="15" max="99" value="${v}" aria-label="${l}" oninput="document.getElementById('ed_sk_${k}').value=this.value;edPreview('${id}')"><input class="input" id="ed_sk_${k}" data-k="sk_${k}" type="number" inputmode="numeric" min="15" max="99" value="${v}" oninput="this.previousElementSibling.value=this.value;edPreview('${id}')"></div>`; };
+  const skills = SKILL_GROUPS.map(([name, list]) => `<div class="ed-sub">${name}</div>${list.map(([k, l]) => skRow(k, l)).join('')}`).join('');
+  const prev = `<div class="ed-prev" id="edPrev">${FMT_LIST.map(f => `<div><div class="v" id="edv_${f}">${overall(p, f)}</div><div class="l">${compName(f)}</div></div>`).join('')}</div>`;
+  sheet('Editor', esc(pname(p)), `<div id="edForm" data-id="${id}">${prev}
+    ${sec('Identity', `<div class="grid ed-g ed-g2">${txt('first', 'First name', p.first)}${txt('last', 'Last name', p.last)}</div>
+      <div class="grid ed-g ed-g3">${num('age', 'Age', p.age, 15, 45)}${dd('nat', 'Nation', Object.keys(NATIONS).map(n => [n, n]), p.nat)}${dd('hand', 'Bats', [['R','Right'],['L','Left']], p.hand)}</div>`)}
+    ${sec('Role', `<div class="grid ed-g ed-g2">${dd('role', 'Role', Object.keys(ROLES).map(r => [r, ROLES[r].label]), p.role)}${dd('bowlType', 'Bowling', Object.keys(BOWL_TYPES).map(b => [b, BOWL_TYPES[b].label]), p.bowlType)}
+      ${dd('team', 'Team', teams, p.teamId || '')}${dd('persona', 'Personality', Object.keys(PERSONAS).map(k => [k, PERSONAS[k].label]), ensurePersona(p))}</div>
+      <div class="ed-g">${dd('style', 'Style', [['', 'None'], ...Object.keys(STYLES).map(k => [k, STYLES[k].label])], p.style || '')}</div>`)}
+    ${sec('Format fit', `<div class="grid ed-g ed-g3">${FMT_LIST.map(step).join('')}</div>`, 'Raises or lowers his rating in each format, from −12 to +12.')}
+    ${sec('Skills', skills)}
+    ${sec('Status', `<div class="grid ed-g ed-g2">${num('pot', 'Potential', p.pot, 15, 99)}${num('form', 'Form', p.form, 0, 100)}${num('fitness', 'Fitness', p.fitness, 0, 100)}${num('morale', 'Morale', p.morale || 65, 0, 100)}</div>
+      ${p.injury ? `<label class="switch" style="margin-top:10px" onclick="this.classList.toggle('on')" data-k="healInjury"><i></i>Heal ${esc(p.injury.type)}</label>` : ''}`)}
+    ${p.contract ? sec('Contract', `<div class="grid ed-g ed-g2">${num('salaryK', 'Salary ($k a year)', Math.round(p.contract.salary / 1000), Math.round(MIN_SALARY / 1000), 2000)}${num('years', 'Years left', p.contract.years, 1, 6)}</div>`) : ''}</div>`,
+    { foot: `<button class="btn pri" onclick="saveEditPlayer('${id}')">Save player</button><button class="btn ghost" onclick="closeModal()">Cancel</button>` });
+}
+function edStep(id, f, d) { const el = document.getElementById('ed_apt_' + f); el.value = clamp((+el.value || 0) + d, -12, 12); edPreview(id); }
+function edPreview(id) {
+  const p = P(id), form = document.getElementById('edForm'); if (!p || !form) return;
+  const c = JSON.parse(JSON.stringify({ role: p.role, bowlType: p.bowlType, style: p.style, apt: p.apt || { FC:0, OD:0, T20:0 }, sk: p.sk, id: p.id }));
+  form.querySelectorAll('[data-k]').forEach(el => {
+    const k = el.dataset.k, v = el.value;
+    if (k.startsWith('sk_') && v !== '') c.sk[k.slice(3)] = clamp(+v, 15, 99);
+    else if (k.startsWith('apt_') && v !== '') c.apt[k.slice(4)] = clamp(+v, -12, 12);
+    else if (k === 'role' || k === 'bowlType') c[k] = v;
+    else if (k === 'style') c.style = v && STYLES[v] ? v : null;
+  });
+  FMT_LIST.forEach(f => {
+    const now = overall(p, f), next = overall(c, f), el = document.getElementById('edv_' + f);
+    if (el) el.innerHTML = next === now ? String(next) : `${next}<span class="${next > now ? 'win' : 'loss'}"> ${next > now ? '+' : ''}${next - now}</span>`;
+  });
 }
 function saveEditPlayer(id) {
   const data = {};
   document.querySelectorAll('#edForm [data-k]').forEach(el => { const k = el.dataset.k; data[k] = el.classList.contains('switch') ? el.classList.contains('on') : el.value; });
+  if (data.salaryK !== undefined && data.salaryK !== '') data.salary = +data.salaryK * 1000;
+  delete data.salaryK;
   ['age','pot','form','fitness','morale','salary','years'].forEach(k => { if (data[k] !== undefined && data[k] !== '') data[k] = +data[k]; else delete data[k]; });
   editPlayerApply(id, data); autosave(); closeModal(); render(); showPlayer(id); flash('Player updated.');
 }
@@ -7494,7 +7523,7 @@ function formChart(p) {
   if ((p.log || []).length < 4 || fmts.size < 2) { if (chartFilter !== 'ALL') ui.playerChartFormat = 'ALL'; }
   const chartSwitch = `<div class="chart-filters">${[['ALL','All'],['FC','Shield / Test'],['OD','One-Day'],['T20','T20']].map(([k,l]) => `<button class="${chartFilter===k?'on':''}" onclick="ui.playerChartFormat='${k}';showPlayer('${p.id}','over')">${l}</button>`).join('')}</div>`;
   const showSwitch = (p.log || []).length >= 4 && fmts.size >= 2;
-  if (!log.length) return `<div class="panel"><div class="pb">${showSwitch ? chartSwitch : ''}<div class="xs dim">No matches yet.</div></div></div>`;
+  if (!log.length) return `<div class="panel" style="margin-bottom:10px"><div class="pb">${showSwitch ? chartSwitch : ''}<div class="xs dim">No matches yet.</div></div></div>`;
   const bowler = isBowlerProfile(p);
   const W = 320, H = 118, L = 24, top = 8, base = H - 22, bw = (W - L) / 12;
   const val = x => bowler ? x[2] : Math.max(0, x[1]);
@@ -7516,11 +7545,11 @@ function formChart(p) {
       ${!bowler && v > max ? `<text x="${xx + (bw - 6) / 2}" y="${base - h + 9}" font-size="7.5" font-weight="700" fill="#0d1b26" text-anchor="middle">${v}</text>` : ''}
       ${!bowler && x[2] ? `<circle cx="${xx + (bw - 6) / 2}" cy="${Math.max(top + 3, base - h - 5)}" r="${Math.min(3.5, 1.5 + x[2] * 0.6)}" fill="#fb7185"/>` : ''}
       <text x="${xx + (bw - 6) / 2}" y="${H - 8}" font-size="${x[4] ? 6.5 : 8}" fill="${x[4] ? '#f4c542' : '#6f8aa0'}" text-anchor="middle">${x[4] ? INTL_LETTER[x[0]] : FMT_LETTER[x[0]]}</text></g>`; }).join('');
-  const avgTxt = `avg ${bowler ? avg.toFixed(1) + 'w' : Math.round(avg)}`, ay = Math.max(top + 9, y(avg) - 4);
-  const avgLine = avg > 0 ? `<line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#f4c542" stroke-width="1.2" stroke-dasharray="4 3"/><rect x="${W - avgTxt.length * 5 - 6}" y="${ay - 8}" width="${avgTxt.length * 5 + 6}" height="11" rx="3" fill="#0d1b26" fill-opacity="0.9"/><text x="${W - 3}" y="${ay}" font-size="8.5" fill="#f4c542" text-anchor="end">${avgTxt}</text>` : '';
-  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>${log.length === 1 ? 'Last match' : `Last ${log.length} matches`}</h3><div class="end xs dim">${bowler ? 'wickets per match' : 'runs per match · dots wickets'}</div></div><div class="pb">${showSwitch ? chartSwitch : ''}
+  // The average is named in the panel header; the dashed line alone marks it so no label covers a bar.
+  const avgLine = avg > 0 ? `<line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#f4c542" stroke-width="1.2" stroke-dasharray="4 3"/>` : '';
+  return `<div class="panel" style="margin-bottom:10px"><div class="ph"><h3>${log.length === 1 ? 'Last match' : `Last ${log.length} matches`}</h3><div class="end xs dim">${bowler ? 'wickets per match' : 'runs per match'}${avg > 0 ? ` · <span style="color:#f4c542">avg ${bowler ? avg.toFixed(1) : Math.round(avg)}</span>` : ''}</div></div><div class="pb">${showSwitch ? chartSwitch : ''}
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:128px">${grid}${bars}${avgLine}</svg>
-    <div class="xs dim">S Shield · O One-Day · T T20${log.some(x => x[4]) ? ' · <span style="color:#f4c542">gold</span> for Australia' : ''} · tap a bar</div></div></div>`;
+    <div class="xs dim">S Shield · O One-Day · T T20${log.some(x => x[4]) ? ' · <span style="color:#f4c542">gold</span> for Australia' : ''}${!bowler && log.some(x => x[2]) ? ' · <span style="color:#fb7185">●</span> wickets' : ''} · tap a bar</div></div></div>`;
 }
 function careerChart(p) {
   const h = p.hist.slice(-10);
