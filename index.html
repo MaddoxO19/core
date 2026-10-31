@@ -582,11 +582,11 @@ button,select,[onclick]{touch-action:manipulation}
 @media(max-width:390px){.tbl .cricket-role-icon{width:14px;min-width:14px}.tbl .cricket-role-icon svg{width:14px}}
 
 /* Build 023: self-contained H3O domestic identity crests. Preserve original international flags. */
-.domestic-crest-badge,.domestic-crest-badge.lg{border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important;padding:0!important;display:inline-flex;align-items:center;justify-content:center;line-height:0;flex:none}
-.domestic-crest-badge .domestic-crest{display:block;flex:none;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain}
-.domestic-crest.compact{display:inline-block;vertical-align:middle;width:19px;height:21px;object-fit:contain;margin:0 5px 0 2px}
-.team-hero>.domestic-crest-badge.lg{flex:0 0 84px;width:84px;height:84px;min-width:84px;min-height:84px;max-width:84px;max-height:84px}
-.team-hero>.domestic-crest-badge.lg .domestic-crest{width:78px;height:78px;max-width:78px;max-height:78px;object-fit:contain}
+.domestic-crest-badge,.domestic-crest-badge.lg{border:0!important;background:transparent!important;box-shadow:none!important;overflow:visible!important;padding:0!important;display:inline-flex;align-items:center;justify-content:center;line-height:0;flex:none;isolation:isolate}
+.domestic-crest-badge .domestic-crest{display:block;flex:none;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;object-position:center center;image-rendering:auto;transform:translateZ(0);backface-visibility:hidden;-webkit-user-drag:none}
+.domestic-crest.compact{display:inline-block;vertical-align:middle;width:19px;height:21px;max-width:19px;max-height:21px;object-fit:contain;margin:0 5px 0 2px}
+.team-hero>.domestic-crest-badge.lg{flex:0 0 96px;width:96px;height:104px;min-width:96px;min-height:104px;max-width:96px;max-height:104px;padding:2px 1px}
+.team-hero>.domestic-crest-badge.lg .domestic-crest{width:auto;height:auto;max-width:92px;max-height:100px;object-fit:contain;object-position:center center}
 .broadcast-identity>.domestic-crest-badge .domestic-crest,.broadcast-innings-head .domestic-crest{max-width:100%;max-height:100%}
 
 /* Build 024: consistent built-in national flag pack; no platform emoji dimensions. */
@@ -806,12 +806,12 @@ body.live-mode .actbar{display:none}
 /* Build 049: match-day crests use their own full-height slots.
    The generic .badge.lg (44px) is too small for a detailed shield.
    Scope to match-day so scorecard / broadcast badges remain compact. */
-.matchday-hero{gap:10px;align-items:center}
-.matchday-hero>.matchday-crest{flex:0 0 72px;display:flex;justify-content:center;align-items:center;cursor:pointer;min-width:0}
-.matchday-hero>.matchday-crest>.domestic-crest-badge.lg{display:flex!important;flex:0 0 72px!important;width:72px!important;height:78px!important;min-width:72px!important;min-height:78px!important;max-width:72px!important;max-height:78px!important;align-items:center;justify-content:center}
-.matchday-hero>.matchday-crest .domestic-crest{display:block;width:72px!important;height:78px!important;max-width:72px!important;max-height:78px!important;object-fit:contain!important}
+.matchday-hero{gap:12px;align-items:center}
+.matchday-hero>.matchday-crest{flex:0 0 90px;display:flex;justify-content:center;align-items:center;cursor:pointer;min-width:90px;padding:2px 0}
+.matchday-hero>.matchday-crest>.domestic-crest-badge.lg{display:flex!important;flex:0 0 90px!important;width:90px!important;height:98px!important;min-width:90px!important;min-height:98px!important;max-width:90px!important;max-height:98px!important;align-items:center;justify-content:center;padding:2px 1px}
+.matchday-hero>.matchday-crest .domestic-crest{display:block;width:auto!important;height:auto!important;max-width:86px!important;max-height:94px!important;object-fit:contain!important;object-position:center center!important;image-rendering:auto}
 .matchday-hero>.mid{min-width:0;flex:1}
-@media(max-width:390px){.matchday-hero{gap:6px}.matchday-hero>.matchday-crest{flex-basis:61px}.matchday-hero>.matchday-crest>.domestic-crest-badge.lg{flex-basis:61px!important;width:61px!important;height:67px!important;min-width:61px!important;min-height:67px!important;max-width:61px!important;max-height:67px!important}.matchday-hero>.matchday-crest .domestic-crest{width:61px!important;height:67px!important;max-width:61px!important;max-height:67px!important}}
+@media(max-width:390px){.matchday-hero{gap:8px}.matchday-hero>.matchday-crest{flex-basis:72px;min-width:72px}.matchday-hero>.matchday-crest>.domestic-crest-badge.lg{flex-basis:72px!important;width:72px!important;height:80px!important;min-width:72px!important;min-height:80px!important;max-width:72px!important;max-height:80px!important}.matchday-hero>.matchday-crest .domestic-crest{max-width:68px!important;max-height:76px!important}}
 
 /* Build 050: Match Day pitch-report responsive columns. Keep ratings on one line. */
 .pitch-rep{min-width:0}
@@ -918,7 +918,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 071', title: 'Recruitment Affordability & Squad Needs', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 076', title: 'Editor Interaction & Storage Guard', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5938,6 +5938,12 @@ function saveKey(slot) { return SAVE_PREFIX + slot; }
 let _saving = Promise.resolve();
 function saveGame(slot, notify) {
   if (!game) return false;
+  // A file preview or restricted Safari session may have no writable persistence.
+  // Avoid expensive synchronous JSON serialisation when it cannot be saved.
+  if (Store.status === 'none' && !Store.idbOk && !Store.lsOk) {
+    if (notify) flash('This browser cannot keep saves. Export your career to a file.');
+    return false;
+  }
   slot = slot || game.meta.slot || 1;
   game.meta.slot = slot; game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
   const str = serialiseGame(), meta = metaOf(game);
@@ -6264,7 +6270,7 @@ function homeNotices() {
   if (vacant.length) add('staff', `${vacant.length} staff vacanc${vacant.length===1?'y':'ies'}`, 'Review club staffing.', true, 'staff', vacant.length);
   if (sq.length < SQUAD_MIN) add('short', `Squad short: ${sq.length}/${SQUAD_MIN}`, 'Review free agents and squad depth.', true, 'short', sq.length);
   const canUp = affordableUpgrades();
-  if (canUp.length) add('facility', canUp.length === 1 ? `You can afford a ${FACILITIES[canUp[0]].label.toLowerCase()} upgrade` : `You can afford ${canUp.length} facility upgrades`, `From ${money(Math.min(...canUp.map(upgradeCost)))}.`, true, 'facilities', canUp.map(k => k + facLevel(k)).join(','));
+  if (canUp.length) add('facility', canUp.length === 1 ? `You can afford a ${FACILITIES[canUp[0]].label.toLowerCase()} upgrade` : `You can afford ${canUp.length} facility upgrades`, `From ${money(Math.min(...canUp.map(upgradeCost)))}.`, false, 'facilities', canUp.map(k => k + facLevel(k)).join(','));
   if (inj.length) add('injuries', `${inj.length} player${inj.length===1?'':'s'} injured`, 'View injury status and recovery dates.', false, 'injuries', inj.map(p=>`${p.id}:${p.injury.until}`).sort().join(','));
   if (duty.length) add('duty', `${duty.length} with Australia`, 'These players are unavailable during international duty.', false, 'duty', duty.map(p=>p.id).sort().join(','));
   if (tired.length) add('fitness', `${tired.length} below 75% fitness`, 'Consider resting players before their next match.', false, 'fitness', tired.map(p=>p.id).sort().join(','));
@@ -6285,7 +6291,7 @@ function noticeMark(id) {
 }
 function noticeAct(index) {
   const n = homeNotices()[index]; if (!n) return;
-  // Information items clear once seen; decisions stay until the decision is made.
+  // Informational notices, including optional facility upgrades, clear once viewed; required decisions remain.
   if (!n.action) noticeMark(n.id);
   closeModal(); if (ui.page === 'home') render();
   switch(n.destination) {
@@ -7658,12 +7664,21 @@ function overStrip(inn) {
 function setCommAll(v) { ui.commAll = v === '1'; render(); }
 // Commentary grouped by over, newest first. Lean mode shows only notable balls.
 function commentaryHtml(M) {
-  const groups = []; let cur = null;
+  // Build 075: keep one group per innings/over even when an appeal, system
+  // message or other note is interleaved between deliveries in the log.
+  // The live log is newest-first. Its first ball entry supplies the current
+  // (latest) score, and subsequent entries complete the over's run tally.
+  const groups = [], byOver = new Map();
   M.log.forEach(e => {
-    if (e.o == null) { groups.push({ note: e }); cur = null; return; }
+    if (e.o == null) { groups.push({ note: e }); return; }
     const key = (e.inn || 0) + ':' + e.o;
-    if (!cur || cur.key !== key) { cur = { key, o: e.o, balls: [], bn: e.bn }; groups.push(cur); }
-    cur.balls.push(e);
+    let group = byOver.get(key);
+    if (!group) {
+      group = { key, o: e.o, balls: [], bn: e.bn };
+      byOver.set(key, group);
+      groups.push(group);
+    }
+    group.balls.push(e);
   });
   const all = !!ui.commAll;
   const html = groups.slice(0, 24).map(g => {
@@ -8066,13 +8081,13 @@ function renderWorld() {
 function editPlayerSheet(id) {
   const p = P(id);
   const fld = (label, html, k) => `<div><label class="lbl" for="ed_${k}">${label}</label>${html}</div>`;
-  const num = (k, label, v, min, max) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" type="number" inputmode="numeric" min="${min}" max="${max}" value="${Math.round(v)}" oninput="edPreview('${id}')">`, k);
+  const num = (k, label, v, min, max) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" type="number" inputmode="numeric" min="${min}" max="${max}" value="${Math.round(v)}" oninput="edPreviewSoon('${id}')">`, k);
   const txt = (k, label, v) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" value="${esc(v)}">`, k);
-  const dd = (k, label, opts, cur) => fld(label, `<select class="full" id="ed_${k}" data-k="${k}" onchange="edPreview('${id}')">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`, k);
+  const dd = (k, label, opts, cur) => fld(label, `<select class="full" id="ed_${k}" data-k="${k}" onchange="edPreviewSoon('${id}')">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`, k);
   const sec = (title, inner, note) => `<div class="ed-sec"><div class="ed-h">${title}</div>${note ? `<div class="xs dim" style="margin:-4px 0 8px">${note}</div>` : ''}${inner}</div>`;
   const teams = [['', 'Free agent'], ...TEAM_DEFS.map(t => [t.id, t.name]), ...Object.keys(NATION_STRENGTH).map(n => ['X_' + n, NATIONS[n] + ' (national pool)'])];
-  const step = f => { const v = (p.apt || {})[f] || 0; return `<div class="ed-step"><div class="lbl">${compName(f)}</div><div class="flex"><button type="button" class="btn sm" aria-label="Lower ${compName(f)}" onclick="edStep('${id}','${f}',-1)">−</button><input class="input" data-k="apt_${f}" id="ed_apt_${f}" type="number" inputmode="numeric" min="-12" max="12" value="${v}" oninput="edPreview('${id}')"><button type="button" class="btn sm" aria-label="Raise ${compName(f)}" onclick="edStep('${id}','${f}',1)">+</button></div></div>`; };
-  const skRow = (k, l) => { const v = Math.round(p.sk[k] || 0); return `<div class="ed-sk"><label for="ed_sk_${k}">${l}</label><input type="range" min="15" max="99" value="${v}" aria-label="${l}" oninput="document.getElementById('ed_sk_${k}').value=this.value;edPreview('${id}')"><input class="input" id="ed_sk_${k}" data-k="sk_${k}" type="number" inputmode="numeric" min="15" max="99" value="${v}" oninput="this.previousElementSibling.value=this.value;edPreview('${id}')"></div>`; };
+  const step = f => { const v = (p.apt || {})[f] || 0; return `<div class="ed-step"><div class="lbl">${compName(f)}</div><div class="flex"><button type="button" class="btn sm" aria-label="Lower ${compName(f)}" onclick="edStep('${id}','${f}',-1)">−</button><input class="input" data-k="apt_${f}" id="ed_apt_${f}" type="number" inputmode="numeric" min="-12" max="12" value="${v}" oninput="edPreviewSoon('${id}')"><button type="button" class="btn sm" aria-label="Raise ${compName(f)}" onclick="edStep('${id}','${f}',1)">+</button></div></div>`; };
+  const skRow = (k, l) => { const v = Math.round(p.sk[k] || 0); return `<div class="ed-sk"><label for="ed_sk_${k}">${l}</label><input type="range" min="15" max="99" value="${v}" aria-label="${l}" oninput="document.getElementById('ed_sk_${k}').value=this.value;edPreviewSoon('${id}')"><input class="input" id="ed_sk_${k}" data-k="sk_${k}" type="number" inputmode="numeric" min="15" max="99" value="${v}" oninput="this.previousElementSibling.value=this.value;edPreviewSoon('${id}')"></div>`; };
   const skills = SKILL_GROUPS.map(([name, list]) => `<div class="ed-sub">${name}</div>${list.map(([k, l]) => skRow(k, l)).join('')}`).join('');
   const prev = `<div class="ed-prev" id="edPrev">${FMT_LIST.map(f => `<div><div class="v" id="edv_${f}">${overall(p, f)}</div><div class="l">${compName(f)}</div></div>`).join('')}</div>`;
   sheet('Editor', esc(pname(p)), `<div id="edForm" data-id="${id}">${prev}
@@ -8088,7 +8103,12 @@ function editPlayerSheet(id) {
     ${p.contract ? sec('Contract', `<div class="grid ed-g ed-g2">${num('salaryK', 'Salary ($k a year)', Math.round(p.contract.salary / 1000), Math.round(MIN_SALARY / 1000), 2000)}${num('years', 'Years left', p.contract.years, 1, 6)}</div>`) : ''}</div>`,
     { foot: `<button class="btn pri" type="button" ontouchend="event.preventDefault();saveEditPlayer('${id}')" onclick="saveEditPlayer('${id}')">Save player</button><button class="btn ghost" onclick="closeModal()">Cancel</button>` });
 }
-function edStep(id, f, d) { const el = document.getElementById('ed_apt_' + f); el.value = clamp((+el.value || 0) + d, -12, 12); edPreview(id); }
+function edStep(id, f, d) { const el = document.getElementById('ed_apt_' + f); el.value = clamp((+el.value || 0) + d, -12, 12); edPreviewSoon(id); }
+let _editorPreviewFrame = 0;
+function edPreviewSoon(id) {
+  if (_editorPreviewFrame) cancelAnimationFrame(_editorPreviewFrame);
+  _editorPreviewFrame = requestAnimationFrame(() => { _editorPreviewFrame = 0; if (document.getElementById('edForm')) edPreview(id); });
+}
 function edPreview(id) {
   const p = P(id), form = document.getElementById('edForm'); if (!p || !form) return;
   const c = JSON.parse(JSON.stringify({ role: p.role, bowlType: p.bowlType, style: p.style, apt: p.apt || { FC:0, OD:0, T20:0 }, sk: p.sk, id: p.id }));
@@ -8115,7 +8135,31 @@ function saveEditPlayer(id) {
   if (data.salaryK !== undefined && data.salaryK !== '') data.salary = +data.salaryK * 1000;
   delete data.salaryK;
   ['age','pot','form','fitness','morale','salary','years'].forEach(k => { if (data[k] !== undefined && data[k] !== '') data[k] = +data[k]; else delete data[k]; });
-  editPlayerApply(id, data); autosave(); closeModal(); render(); showPlayer(id); flash('Player updated.');
+  // Confirm the edit visibly before serialising a potentially multi-megabyte career.
+  // saveGame() serialises synchronously; doing that while the sheet remains open
+  // makes the iOS Save button appear unresponsive, inviting repeated taps.
+  try {
+    editPlayerApply(id, data);
+    closeModal();
+    render();
+    showPlayer(id);
+    // No usable storage: do not JSON.stringify the whole career for a write that cannot succeed.
+    // Preserve the edit in memory and clearly prompt for a manual export instead.
+    if (Store.status === 'none' && !Store.idbOk && !Store.lsOk) {
+      flash('Player updated in memory. Export your career to keep changes.');
+    } else {
+      flash('Player updated. Saving career…');
+      // Two animation frames allow the sheet to close and the player profile to paint.
+      // A small debounce also avoids running persistence while the user immediately reopens a control.
+      requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => {
+        try { autosave(); } catch (e) { flash('Career save failed. Use Export save.'); }
+      }, 220)));
+    }
+  } catch (e) {
+    form.dataset.saving = '0';
+    flash('Player update failed. Please try again.');
+    console.error('saveEditPlayer', e);
+  }
 }
 function editTeamsSheet() {
   sheet('Editor', 'Edit teams', `<div id="tmForm">${TEAM_DEFS.map(t => `<div class="panel" style="margin-bottom:8px"><div class="pb"><div class="grid" style="grid-template-columns:2fr 2fr 1fr;gap:6px">
