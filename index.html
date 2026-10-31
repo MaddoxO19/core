@@ -918,7 +918,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 069', title: 'Balanced New-Career Squads', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 071', title: 'Recruitment Affordability & Squad Needs', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1353,8 +1353,8 @@ function seedCareer(p) {
   });
 }
 
-function makeProspect() {
-  const role = pick(['OPEN','TOP','MID','MID','WK','BAR','BWAR','PACE','PACE','SEAM','OFF','LEG','SLA']);
+function makeProspect(forcedRole) {
+  const role = forcedRole || pick(['OPEN','TOP','MID','MID','WK','BAR','BWAR','PACE','PACE','SEAM','OFF','LEG','SLA']);
   const q = randInt(46, 60) + RATING_SHIFT;
   const age = randInt(17, 20);
   const p = makePlayer({ role, q, age, prospect: true });
@@ -4164,7 +4164,10 @@ function academyIntake() {
   const lvl = facLevel('academy'), n = 1 + Math.floor(lvl / 2);
   const ids = [];
   for (let i = 0; i < n; i++) {
-    const p = makeProspect();
+    const needs=groupNeeds(U());
+    const roleGroup=Object.keys(needs).sort((a,b)=>needs[b]-needs[a])[i%Object.keys(needs).length];
+    const roleOptions=typeof FA_INTAKE_ROLES!=='undefined'?FA_INTAKE_ROLES[roleGroup]:null;
+    const p = makeProspect(roleOptions?pick(roleOptions):undefined);
     p.prospect = false; p.academy = true;
     const boost = (lvl - 1) * 2;
     Object.keys(p.sk).forEach(k => p.sk[k] = clamp(p.sk[k] + boost * 0.5, 15, 99));
@@ -4688,6 +4691,7 @@ function createGame(gmName, teamId, year, nationGm, rosterMode) {
   const osNats = Object.keys(NATIONS).filter(n => n !== 'AUS');
   if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 82) + RATING_SHIFT, age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
   balanceStartingSquads();
+  replenishFreeAgentMarket(); // initial new-career market must contain specialists
   game.captain = squadOf(teamId).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0].id;
   balanceLeague();
   ensureStaff(); ensureNationCoach();
@@ -5458,6 +5462,21 @@ function extendPlayer(id, salary, years) {
 // LC-12: AI clubs make value-led recruitment choices rather than stopping at an
 // arbitrary 20 players. Existing contracts are retained; no retroactive salary reset.
 // A weak-value candidate is not signed merely to consume remaining cap space.
+// B071: recruit against actual positional cover, including openers and a second keeper.
+// Preference only: do not mandate identical team rosters or bypass finances.
+function recruitmentRolePriority(teamId,p) {
+  const counts=startingComposition(teamId), role=startRole(p);
+  const target=role==='BAT'?4:(START_ROLE_TARGETS[role]||0);
+  const deficit=Math.max(0,target-counts[role]);
+  return deficit ? 18+12*deficit : (role==='BAT'&&counts.BAT>=6?-30:0);
+}
+function affordableMarketCounts() {
+  const result=Object.fromEntries(Object.keys(FA_MARKET_FLOOR).map(g=>[g,0]));
+  freeAgents().filter(p=>p.nat==='AUS'&&askingSalary(p)<=MIN_SALARY*1.75).forEach(p=>{
+    const role=marketRole(p);if(result[role]!=null)result[role]++;
+  });
+  return result;
+}
 function aiFreeAgency() {
   TEAM_DEFS.forEach(t => {
     if (t.id === U()) return;
@@ -5474,7 +5493,7 @@ function aiFreeAgency() {
       const need = groupNeeds(t.id);
       const candidates = freeAgents().filter(p => askingSalary(p) <= capSpace(t.id) &&
         (p.nat === 'AUS' || overseasCount(t.id) < OVERSEAS_MAX))
-        .map(p => ({p, value:tradeValue(p), score:tradeValue(p)*(1+need[group(p)]*1.5)}))
+        .map(p => ({p, value:tradeValue(p), score:tradeValue(p)*(1+need[group(p)]*1.5)+recruitmentRolePriority(t.id,p)}))
         .sort((a,b)=>b.score-a.score);
       const cand = candidates[0];
       if (!cand) break;
@@ -5488,11 +5507,7 @@ function aiFreeAgency() {
 }
 
 // B068: audit and repair eligibility before each new season. Never bypass the cap.
-function recruitmentCoverage() {
-  const groups = ['BAT','WK','AR','PACE','SPIN'];
-  const market = freeAgents().filter(p => p.nat === 'AUS');
-  return Object.fromEntries(groups.map(g => [g, market.filter(p=>group(p)===g).length]));
-}
+function recruitmentCoverage() { return domesticMarketCounts(); }
 function ensureRecruitmentCoverage() {
   const before = recruitmentCoverage();
   const added = replenishFreeAgentMarket();
@@ -5506,7 +5521,7 @@ function aiMinimumSquadRepair() {
       let candidates=freeAgents().filter(p=>p.nat==='AUS' && askingSalary(p)<=capSpace(t.id));
       if(!candidates.length){ ensureRecruitmentCoverage(); candidates=freeAgents().filter(p=>p.nat==='AUS' && askingSalary(p)<=capSpace(t.id)); }
       const need=groupNeeds(t.id);
-      candidates.sort((a,b)=>(need[group(b)]-need[group(a)]) || (askingSalary(a)-askingSalary(b)));
+      candidates.sort((a,b)=>(recruitmentRolePriority(t.id,b)-recruitmentRolePriority(t.id,a)) || (need[group(b)]-need[group(a)]) || (askingSalary(a)-askingSalary(b)));
       const chosen=candidates[0];
       if(!chosen) break; // report blocked clubs; never fabricate cap space
       chosen.teamId=t.id; chosen.contract={salary:askingSalary(chosen),years:1}; added++;
@@ -5523,14 +5538,14 @@ function careerDiagnosticReport() {
     sq.forEach(p=>{let g=group(p);if(Object.hasOwn(roles,g)) roles[g]++;});
     return {id:t.id,name:teamName(t.id),user:t.id===U(),squad:sq.length,minRequired:SQUAD_MIN,maxAllowed:SQUAD_MAX,cap:SALARY_CAP,payroll:payroll(t.id),capSpace:capSpace(t.id),overseas:overseasCount(t.id),roles,underMinimum:sq.length<SQUAD_MIN,overCap:payroll(t.id)>SALARY_CAP,players:sq.map(p=>({id:p.id,name:pname(p),role:p.role,age:p.age,bat:p.bat,bowl:p.bowl,contract:p.contract,injury:p.injury||null}))};
   });
-  return {report:'Legacy Cricket Career Diagnostic',reportVersion:1,build:BUILD,exportedAt:new Date().toISOString(),career:{year:game.year,season:game.season?.label,phase:game.phase,day:game.day,gm:game.gm?.name,team:U(),rosterMode:game.meta?.realRoster?'authentic':game.meta?.rosterMode||'see save settings'},market:{domesticAvailableByRole:market,totalDomestic:freeAgents().filter(p=>p.nat==='AUS').length,totalFreeAgents:freeAgents().length,minimumMarketFloor:FA_MARKET_FLOOR},teams,leagueHistory:game.history||[],warnings:teams.filter(t=>t.underMinimum||t.overCap).map(t=>t.name+': '+(t.underMinimum?'below squad minimum ':'')+(t.overCap?'over cap':''))};
+  return {report:'Legacy Cricket Career Diagnostic',reportVersion:1,build:BUILD,exportedAt:new Date().toISOString(),career:{year:game.year,season:game.season?.label,phase:game.phase,day:game.day,gm:game.gm?.name,team:U(),rosterMode:game.meta?.realRoster?'authentic':game.meta?.rosterMode||'see save settings'},market:{domesticAvailableByRole:market,affordableDomesticByRole:affordableMarketCounts(),roleShortages:domesticRoleShortage(),totalDomestic:freeAgents().filter(p=>p.nat==='AUS').length,totalFreeAgents:freeAgents().length,minimumMarketFloor:FA_MARKET_FLOOR},teams,leagueHistory:game.history||[],warnings:teams.filter(t=>t.underMinimum||t.overCap).map(t=>t.name+': '+(t.underMinimum?'below squad minimum ':'')+(t.overCap?'over cap':''))};
 }
 function downloadCareerDiagnostic(){
   if(!game)return;
   const data=careerDiagnosticReport();
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`legacy-cricket-diagnostic-${game.year}-B069.json`;document.body.appendChild(a);a.click();
+  a.download=`legacy-cricket-diagnostic-${game.year}-B071.json`;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
   flash('Career diagnostic exported. Share this JSON for analysis.');
 }
@@ -5539,36 +5554,67 @@ function downloadCareerDiagnostic(){
 // *after* AI recruitment so the human GM can actually recruit a balanced XI.
 // These are genuine persistent players, not UI-only placeholders. The bounded
 // annual intake avoids adding another 30-40 players to long-running saves.
-const FA_MARKET_FLOOR = { BAT: 5, WK: 3, AR: 3, PACE: 5, SPIN: 3 };
+// B070: sustainable, role-aware player pipeline. Floors concern *affordable,
+// playable specialist choices*, not the number of surplus middle-order players.
+const FA_MARKET_FLOOR = { OPEN: 5, BAT: 5, WK: 5, AR: 6, PACE: 9, SPIN: 6 };
 const FA_INTAKE_ROLES = {
-  BAT: ['OPEN','TOP','MID','OPEN','TOP','MID'],
-  WK: ['WK'], AR: ['BAR','BWAR'],
-  PACE: ['PACE','SEAM','PACE'], SPIN: ['OFF','LEG','SLA']
+  OPEN: ['OPEN','OPEN'], BAT: ['TOP','MID','TOP'], WK: ['WK'],
+  AR: ['BAR','BWAR','BAR'], PACE: ['PACE','SEAM','PACE'], SPIN: ['OFF','LEG','SLA']
 };
-function replenishFreeAgentMarket() {
-  const tally = { BAT:0, WK:0, AR:0, PACE:0, SPIN:0 };
-  freeAgents().filter(p => p.nat === 'AUS').forEach(p => {
-    const g = group(p); if (Object.hasOwn(tally, g)) tally[g]++;
+function marketRole(p) { return p.role === 'OPEN' ? 'OPEN' : group(p); }
+function domesticMarketCounts() {
+  const counts=Object.fromEntries(Object.keys(FA_MARKET_FLOOR).map(g=>[g,0]));
+  freeAgents().filter(p=>p.nat==='AUS' && !p.academy).forEach(p=>{
+    const g=marketRole(p);if(counts[g]!=null)counts[g]++;
   });
-  const added = [];
-  // At most 24 domestic entrants per offseason; prioritise scarce specialisms.
-  // Round-robin deficit filling prevents any one group using the entire intake.
-  for (let pass = 0; pass < 24; pass++) {
-    const needed = Object.keys(FA_MARKET_FLOOR)
-      .filter(g => tally[g] < FA_MARKET_FLOOR[g])
-      .sort((a,b) => (tally[a]/FA_MARKET_FLOOR[a]) - (tally[b]/FA_MARKET_FLOOR[b]));
-    if (!needed.length) break;
-    const g = needed[0];
-    const role = pick(FA_INTAKE_ROLES[g]);
-    // Most are affordable state depth, with occasional established club players.
-    const p = makePlayer({ role, q: randInt(57, 72) + RATING_SHIFT, age: randInt(20, 29), nat:'AUS' });
-    seedCareer(p);
-    tally[g]++; added.push(p);
+  return counts;
+}
+function domesticRoleShortage() {
+  // Combined need from real clubs, not a hard quota imposed on individual GMs.
+  const gap=Object.fromEntries(Object.keys(FA_MARKET_FLOOR).map(g=>[g,0]));
+  TEAM_DEFS.forEach(t=>{
+    const count=startingComposition(t.id);
+    for(const g of Object.keys(gap)){
+      const target=g==='BAT'?4:(START_ROLE_TARGETS[g]||0);
+      gap[g]+=Math.max(0,target-count[g]);
+    }
+  });
+  return gap;
+}
+function replenishFreeAgentMarket() {
+  const tally=domesticMarketCounts(), affordable=affordableMarketCounts(), shortage=domesticRoleShortage(), added=[];
+  // Bounded yearly supply; all classes remain available, even if the released
+  // authentic roster contains dozens of MID players. Prevent duplicate intake
+  // in a single year unless consumption creates a new shortage.
+  for(let pass=0;pass<54;pass++){
+    const needed=Object.keys(FA_MARKET_FLOOR).filter(g=>tally[g]<FA_MARKET_FLOOR[g] || affordable[g]<Math.ceil(FA_MARKET_FLOOR[g]/2));
+    if(!needed.length)break;
+    needed.sort((a,b)=>((Math.max(0,FA_MARKET_FLOOR[b]-tally[b]))*2+Math.max(0,Math.ceil(FA_MARKET_FLOOR[b]/2)-affordable[b])*4+shortage[b]*3)-((Math.max(0,FA_MARKET_FLOOR[a]-tally[a]))*2+Math.max(0,Math.ceil(FA_MARKET_FLOOR[a]/2)-affordable[a])*4+shortage[a]*3));
+    const g=needed[0], role=pick(FA_INTAKE_ROLES[g]);
+    // A mix of affordable depth and a few high-potential prospects. No false
+    // historical identities; these are model-generated club-cricket players.
+    const q=randInt(52,69)+RATING_SHIFT;
+    const p=makePlayer({role,q,age:randInt(19,30),nat:'AUS'});
+    p.modelledClubRecruit=true;seedCareer(p);tally[g]++;if(askingSalary(p)<=MIN_SALARY*1.75)affordable[g]++;added.push(p);
   }
-  game.faMarketSeason = game.year;
-  if (added.length) addNews('League', 'Club-cricket recruits enter free agency',
-    `${added.length} unsigned domestic players have entered the market, including specialists where options were scarce.`);
+  game.faMarketSeason=game.year;
+  if(added.length)addNews('League','Club-cricket recruits enter free agency',
+    `${added.length} unsigned domestic players have entered the market to improve recruitment choices across playing roles.`);
   return added;
+}
+function balancedDraftRole() {
+  // Draft intake must not recreate the MID surplus. Guarantee a healthy role
+  // distribution every 18 picks while retaining variability within groups.
+  const roles=['OPEN','OPEN','TOP','MID','MID','WK','WK','BAR','BWAR',
+    'PACE','PACE','PACE','SEAM','SEAM','OFF','LEG','SLA','BAR'];
+  const pool=draftPool();
+  const quota={OPEN:2,BAT:3,WK:2,AR:3,PACE:5,SPIN:3};
+  const count=Object.fromEntries(Object.keys(quota).map(g=>[g,0]));
+  pool.forEach(p=>{const g=marketRole(p);if(count[g]!=null)count[g]++;});
+  const unmet=Object.keys(quota).filter(g=>count[g]<quota[g]);
+  if(!unmet.length)return pick(roles);
+  unmet.sort((a,b)=>(quota[b]-count[b])-(quota[a]-count[a]));
+  return pick(FA_INTAKE_ROLES[unmet[0]]);
 }
 
 // §13 OFF-SEASON ------------------------------------------------------------------
@@ -5730,7 +5776,7 @@ function finaliseExpiring() {
 
 function setupDraft() {
   game.offseason.academy = academyIntake();
-  for (let i = 0; i < 18; i++) makeProspect();
+  for (let i = 0; i < 18; i++) makeProspect(balancedDraftRole());
   const score = id => COMP_ORDER.reduce((a, c) => a + ladderPos(c, id) + (game.season.champions[c] === id ? -2 : 0), 0);
   const order = TEAM_DEFS.map(t => t.id).sort((a, b) => score(b) - score(a));
   game.offseason.draft = { order: [...order, ...order], pick: 0, picks: [] };
