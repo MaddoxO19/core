@@ -802,6 +802,33 @@ body.live-mode .actbar{display:none}
 .series-launch .launch-career-detail{font-size:11px;line-height:1.4;margin:4px 0 10px;}
 .series-launch .launch-resume{min-height:45px;margin:0;border-radius:10px;font-size:12px;}
 .series-launch .ver{justify-content:center;margin:9px auto 0;row-gap:4px;column-gap:8px;font-size:10px;}
+
+/* Build 049: match-day crests use their own full-height slots.
+   The generic .badge.lg (44px) is too small for a detailed shield.
+   Scope to match-day so scorecard / broadcast badges remain compact. */
+.matchday-hero{gap:10px;align-items:center}
+.matchday-hero>.matchday-crest{flex:0 0 72px;display:flex;justify-content:center;align-items:center;cursor:pointer;min-width:0}
+.matchday-hero>.matchday-crest>.domestic-crest-badge.lg{display:flex!important;flex:0 0 72px!important;width:72px!important;height:78px!important;min-width:72px!important;min-height:78px!important;max-width:72px!important;max-height:78px!important;align-items:center;justify-content:center}
+.matchday-hero>.matchday-crest .domestic-crest{display:block;width:72px!important;height:78px!important;max-width:72px!important;max-height:78px!important;object-fit:contain!important}
+.matchday-hero>.mid{min-width:0;flex:1}
+@media(max-width:390px){.matchday-hero{gap:6px}.matchday-hero>.matchday-crest{flex-basis:61px}.matchday-hero>.matchday-crest>.domestic-crest-badge.lg{flex-basis:61px!important;width:61px!important;height:67px!important;min-width:61px!important;min-height:67px!important;max-width:61px!important;max-height:67px!important}.matchday-hero>.matchday-crest .domestic-crest{width:61px!important;height:67px!important;max-width:61px!important;max-height:67px!important}}
+
+/* Build 050: Match Day pitch-report responsive columns. Keep ratings on one line. */
+.pitch-rep{min-width:0}
+.pitch-rep>.grow{min-width:0;flex:1}
+.pgr{display:grid;grid-template-columns:minmax(45px,64px) minmax(48px,1fr) minmax(32px,auto) minmax(36px,auto);gap:7px;align-items:center;min-width:0}
+.pgr>span:first-child{white-space:nowrap}
+.pgr .cells{min-width:0;display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:2px}
+.pgr .cells i{min-width:0}
+.pgr b{white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.pgr em{white-space:nowrap;text-align:left;min-width:0;font-size:11px}
+@media(max-width:440px){
+  .pitch-rep{gap:8px;padding:10px 8px}
+  .pitch-svg{width:28px;height:94px}
+  .pgr{gap:4px;grid-template-columns:43px minmax(35px,1fr) minmax(28px,auto) minmax(32px,auto);font-size:11px}
+  .pgr .cells{gap:1px}
+  .pgr em{font-size:10px}
+}
 </style>
 </head>
 <body>
@@ -860,7 +887,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.15 Build 048', title: 'Crest Rendering Reconciliation', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.15 Build 053', title: 'Offseason Salary Cap Guards', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -3222,8 +3249,8 @@ function isWorldCupYear(year) { return year % 2 === 1; }
 // Australia through its separately managed windows. Pairings rotate by season and block.
 // IDs and the existing match engine remain unchanged for save compatibility.
 function worldTourPairs(year, block) {
-  const ids = Object.keys(NATION_STRENGTH).slice().sort();
-  // Eleven opposition countries: a round-robin rotation with one bye per block.
+  const ids = Object.keys(NATION_STRENGTH).filter(n => !ASSOCIATE_NATIONS.includes(n)).sort();
+  // Eleven Full Members other than Australia: a round-robin rotation with one bye per block.
   // Using a twelfth dummy keeps pairing deterministic and avoids global RNG changes.
   ids.push('BYE');
   const turns = ((year - 2026) * 3 + block) % 11;
@@ -4010,6 +4037,7 @@ function academyIntake() {
 function signAcademy(id) {
   const p = P(id); if (!p || p.teamId) return;
   if (squadOf(U()).length >= SQUAD_MAX) { flash('Squad is full.'); return; }
+  if (capSpace(U()) < ROOKIE_SALARY) { flash('Not enough salary cap space to sign this academy player.'); return; }
   p.teamId = U(); p.contract = { salary: ROOKIE_SALARY, years: 3 }; p.academy = false;
   logTx(`Signed academy graduate ${pname(p)} (${money(ROOKIE_SALARY)} × 3).`);
   addNews('Academy', `${pname(p)} signs from the academy`, `${ROLES[p.role].label}, ${p.age}. Potential ${potGrade(p)}.`);
@@ -5113,6 +5141,42 @@ function aiFreeAgency() {
   });
 }
 
+// LC-11: Domestic club-cricket market intake. Replenish missing specialist roles
+// *after* AI recruitment so the human GM can actually recruit a balanced XI.
+// These are genuine persistent players, not UI-only placeholders. The bounded
+// annual intake avoids adding another 30-40 players to long-running saves.
+const FA_MARKET_FLOOR = { BAT: 5, WK: 3, AR: 3, PACE: 5, SPIN: 3 };
+const FA_INTAKE_ROLES = {
+  BAT: ['OPEN','TOP','MID','OPEN','TOP','MID'],
+  WK: ['WK'], AR: ['BAR','BWAR'],
+  PACE: ['PACE','SEAM','PACE'], SPIN: ['OFF','LEG','SLA']
+};
+function replenishFreeAgentMarket() {
+  const tally = { BAT:0, WK:0, AR:0, PACE:0, SPIN:0 };
+  freeAgents().filter(p => p.nat === 'AUS').forEach(p => {
+    const g = group(p); if (Object.hasOwn(tally, g)) tally[g]++;
+  });
+  const added = [];
+  // At most 16 domestic entrants per offseason; prioritise scarce specialisms.
+  // Round-robin deficit filling prevents any one group using the entire intake.
+  for (let pass = 0; pass < 16; pass++) {
+    const needed = Object.keys(FA_MARKET_FLOOR)
+      .filter(g => tally[g] < FA_MARKET_FLOOR[g])
+      .sort((a,b) => (tally[a]/FA_MARKET_FLOOR[a]) - (tally[b]/FA_MARKET_FLOOR[b]));
+    if (!needed.length) break;
+    const g = needed[0];
+    const role = pick(FA_INTAKE_ROLES[g]);
+    // Most are affordable state depth, with occasional established club players.
+    const p = makePlayer({ role, q: randInt(57, 72) + RATING_SHIFT, age: randInt(20, 29), nat:'AUS' });
+    seedCareer(p);
+    tally[g]++; added.push(p);
+  }
+  game.faMarketSeason = game.year;
+  if (added.length) addNews('League', 'Club-cricket recruits enter free agency',
+    `${added.length} unsigned domestic players have entered the market, including specialists where options were scarce.`);
+  return added;
+}
+
 // §13 OFF-SEASON ------------------------------------------------------------------
 function endSeason() {
   archiveAssociateQualification();
@@ -5282,6 +5346,12 @@ function draftPool() { return Object.values(game.players).filter(p => p.prospect
 function draftOnClock() { const d = game.offseason.draft; return d && d.pick < d.order.length ? d.order[d.pick] : null; }
 function makeDraftPick(teamId, id) {
   const d = game.offseason.draft;
+  // A pick cannot create an over-cap club. AI already checks this in aiDraftChoice;
+  // enforce the same rule for the human GM and for direct callers.
+  if (id && (squadOf(teamId).length >= SQUAD_MAX || capSpace(teamId) < ROOKIE_SALARY)) {
+    if (teamId === U()) { flash('Not enough squad or salary cap space to draft this player.'); return false; }
+    id = null;
+  }
   if (id) {
     const p = P(id);
     p.teamId = teamId; p.prospect = false; p.contract = { salary: ROOKIE_SALARY, years: 2 };
@@ -5289,6 +5359,7 @@ function makeDraftPick(teamId, id) {
     if (teamId === U()) { logTx(`Drafted ${pname(p)} with pick ${d.pick + 1}.`); addNews('Draft', `${pname(p)} drafted`, `${ROLES[p.role].label}, ${p.age}. Scouts rate his potential ${potGrade(p)}.`); }
   } else d.picks.push({ n: d.pick + 1, team: teamId, id: null });
   d.pick++;
+  return true;
 }
 function aiDraftChoice(teamId) {
   if (squadOf(teamId).length >= SQUAD_MAX || capSpace(teamId) < ROOKIE_SALARY) return null;
@@ -5343,7 +5414,7 @@ function offseasonContinue() {
       runDraftUntilUser(false); break;
     case 'draft':
       if (draftOnClock() === U()) { flash('You are on the clock. Pick a player or pass.'); return; }
-      if (runDraftUntilUser(false)) { aiFreeAgency(); game.phase = 'freeagency'; addNews('League', 'Free agency open', 'Unsigned players are available. Trades are open again.'); }
+      if (runDraftUntilUser(false)) { aiFreeAgency(); replenishFreeAgentMarket(); game.phase = 'freeagency'; addNews('League', 'Free agency open', 'Unsigned players are available. Trades are open again.'); }
       break;
     case 'freeagency':
       if (squadOf(U()).length < SQUAD_MIN) autoFillSquad(SQUAD_MIN);
@@ -5354,8 +5425,8 @@ function offseasonContinue() {
 function userDraftPick(id) {
   if (draftOnClock() !== U()) return;
   if (id && squadOf(U()).length >= SQUAD_MAX) { flash('Your squad is full. Pass or release a player.'); return; }
-  makeDraftPick(U(), id);
-  if (runDraftUntilUser(false)) { aiFreeAgency(); game.phase = 'freeagency'; addNews('League', 'Free agency open', 'Unsigned players are available. Trades are open again.'); }
+  if (makeDraftPick(U(), id) === false) return;
+  if (runDraftUntilUser(false)) { aiFreeAgency(); replenishFreeAgentMarket(); game.phase = 'freeagency'; addNews('League', 'Free agency open', 'Unsigned players are available. Trades are open again.'); }
   autosave(); render();
 }
 
@@ -6396,6 +6467,10 @@ function acceptOffer(id) {
 }
 function declineOffer(id) { game.offers=game.offers.filter(x=>x.id!==id);closeModal();autosave();render();flash('Offer declined.'); }
 function renderFA() {
+  // Upgrade an existing save already parked at the 2026-27 (or later) market.
+  if (game.phase === 'freeagency' && game.faMarketSeason !== game.year) {
+    replenishFreeAgentMarket(); autosave();
+  }
   let fas = freeAgents();
   if (ui.faGroup !== 'ALL') fas = fas.filter(p => group(p) === ui.faGroup);
   const key = ui.faSort;
@@ -6587,7 +6662,7 @@ function renderMatchday() {
   const hc = staffIn(me, 'head');
   return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
-    ${panel('', `<div class="hero"><span onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
+    ${panel('', `<div class="hero matchday-hero"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       ${pitchReport(pre, v, fmt, '')}
       ${fmt === 'FC' ? forecastRow(pre, fmt, fx) : ''}
       ${(() => { const busy = isClash(fx), cl = busy ? [] : clashesWith(fx); if (!busy && !cl.length) return '';
@@ -7136,6 +7211,23 @@ function wagonSvg(shots, hand) {
     <rect x="${C - 4}" y="${C - 8}" width="8" height="30" fill="#3d4a2a" rx="1"/>${lines}
     <text x="${offRight ? 200 : 20}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Off</text><text x="${offRight ? 20 : 200}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Leg</text></svg>`;
 }
+// Derived strictly from saved scoring-shot bearings; does not infer control or dot-ball positions.
+function wagonZones(shots) {
+  const sectors = Array.from({length:8}, () => 0);
+  for (const shot of shots || []) {
+    if (!shot || !Number.isFinite(shot[0]) || !Number.isFinite(shot[1])) continue;
+    const bearing = ((shot[0] % 360) + 360) % 360;
+    sectors[Math.floor((bearing + 22.5) % 360 / 45)] += shot[1];
+  }
+  return sectors;
+}
+function wagonZoneSummary(shots) {
+  const zones = wagonZones(shots);
+  const best = zones.reduce((idx, v, i) => v > zones[idx] ? i : idx, 0);
+  const r = zones[best];
+  const breakdown = [1,2,3,4,6].map(n => `${n}s ${shots.filter(s => s && s[1] === n).length}`).join(' · ');
+  return `<div class="wagon-zone-summary"><div class="xs muted">Leading scoring sector</div><div class="b s">${best + 1} of 8 · ${r} runs</div><div class="xs muted">Sector numbers start straight down the ground and rotate around the wheel.</div><div class="xs" style="margin-top:5px">${breakdown}</div></div>`;
+}
 function setWagon(m) { ui.wagon = m; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
 function wagonPanel(M) {
   const inn = ui.liveInn != null && M.innings[ui.liveInn] ? M.innings[ui.liveInn] : curInn(M);
@@ -7166,7 +7258,7 @@ function wagonPanel(M) {
     ${mode === 'player' ? `<label class="wagon-select-label">Batter <select aria-label="Select batter for wagon wheel" onchange="ui.wagonPlayer=this.value;const y=window.scrollY||0;render();window.scrollTo(0,y)">${players}</select></label>` : ''}</div>
     <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, hand)}
       <div class="flex" style="justify-content:center;gap:14px;margin-top:6px"><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
-      ${mode === 'player' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}</div></div>`;
+      ${mode === 'player' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}${shots.length ? wagonZoneSummary(shots) : ''}</div></div>`;
 }
 
 // ---- Game plan (the GM's brief) ----
@@ -7409,7 +7501,7 @@ function editPlayerSheet(id) {
     ${sec('Status', `<div class="grid ed-g ed-g2">${num('pot', 'Potential', p.pot, 15, 99)}${num('form', 'Form', p.form, 0, 100)}${num('fitness', 'Fitness', p.fitness, 0, 100)}${num('morale', 'Morale', p.morale || 65, 0, 100)}</div>
       ${p.injury ? `<label class="switch" style="margin-top:10px" onclick="this.classList.toggle('on')" data-k="healInjury"><i></i>Heal ${esc(p.injury.type)}</label>` : ''}`)}
     ${p.contract ? sec('Contract', `<div class="grid ed-g ed-g2">${num('salaryK', 'Salary ($k a year)', Math.round(p.contract.salary / 1000), Math.round(MIN_SALARY / 1000), 2000)}${num('years', 'Years left', p.contract.years, 1, 6)}</div>`) : ''}</div>`,
-    { foot: `<button class="btn pri" onclick="saveEditPlayer('${id}')">Save player</button><button class="btn ghost" onclick="closeModal()">Cancel</button>` });
+    { foot: `<button class="btn pri" type="button" ontouchend="event.preventDefault();saveEditPlayer('${id}')" onclick="saveEditPlayer('${id}')">Save player</button><button class="btn ghost" onclick="closeModal()">Cancel</button>` });
 }
 function edStep(id, f, d) { const el = document.getElementById('ed_apt_' + f); el.value = clamp((+el.value || 0) + d, -12, 12); edPreview(id); }
 function edPreview(id) {
@@ -7428,8 +7520,13 @@ function edPreview(id) {
   });
 }
 function saveEditPlayer(id) {
+  // Touchend commits immediately in iOS Safari when the software keyboard is open.
+  // A re-entrant tap or synthetic click must not save twice.
+  const form = document.getElementById('edForm');
+  if (!form || form.dataset.saving === '1' || form.dataset.id !== String(id)) return;
+  form.dataset.saving = '1';
   const data = {};
-  document.querySelectorAll('#edForm [data-k]').forEach(el => { const k = el.dataset.k; data[k] = el.classList.contains('switch') ? el.classList.contains('on') : el.value; });
+  form.querySelectorAll('[data-k]').forEach(el => { const k = el.dataset.k; data[k] = el.classList.contains('switch') ? el.classList.contains('on') : el.value; });
   if (data.salaryK !== undefined && data.salaryK !== '') data.salary = +data.salaryK * 1000;
   delete data.salaryK;
   ['age','pot','form','fitness','morale','salary','years'].forEach(k => { if (data[k] !== undefined && data[k] !== '') data[k] = +data[k]; else delete data[k]; });
