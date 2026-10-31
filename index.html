@@ -400,8 +400,6 @@ button,select,[onclick]{touch-action:manipulation}
 .launch .launch-resume{width:100%;font-weight:850;padding:14px}
 .launch .btns{margin:0;grid-template-columns:1fr 1fr}
 .launch .btns .btn{padding:12px 8px}
-.launch-help{display:block;margin:16px auto 0;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:750;padding:10px 16px;cursor:pointer}
-.launch-help:focus-visible{outline:2px solid var(--accent);border-radius:8px}
 .launch .ver{justify-content:center;flex-wrap:wrap;column-gap:9px;row-gap:3px;margin-top:13px;font-size:10px}
 .launch .ver span{overflow-wrap:anywhere}
 @media(max-height:680px){#launch{align-items:flex-start}.launch{margin:auto 0}}
@@ -783,16 +781,41 @@ body.live-mode .actbar{display:none}
 .lead-h{font-size:var(--fs-xs);color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
 .lead-row{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:4px 0}
 .lead-row .lbl-s{font-size:var(--fs-xs);color:var(--muted)}.lead-row .nm{font-weight:700;min-width:0}.lead-row b{font-variant-numeric:tabular-nums}
+
+/* Builds 046–047: Legacy series launch alignment (Football / Basketball). */
+#launch{background:radial-gradient(circle at 50% 13%,#192634 0%,#0a141e 48%,var(--bg) 85%);}
+.series-launch{max-width:430px;text-align:center;}
+.launch-kicker{color:var(--accent);font-size:12px;font-weight:900;letter-spacing:.20em;line-height:1.4;}
+.series-launch h1{font-size:clamp(30px,8vw,37px);font-weight:950;line-height:1.08;letter-spacing:.015em;margin:10px 0 0;color:var(--text);}
+.series-launch h1::after{display:none;}
+.launch-rule{width:50px;height:2px;border-radius:10px;background:var(--accent);margin:16px auto 13px;}
+.launch-tagline{color:#f5d983;font-size:13px;letter-spacing:.03em;font-weight:850;}
+.series-launch .launch-world{color:var(--muted);font-size:12px;line-height:1.5;max-width:350px;margin:10px auto 24px;}
+.launch-actions{display:grid;grid-template-columns:1fr;gap:9px;}
+.launch-actions .btn{width:100%;min-height:49px;font-size:13px;font-weight:900;letter-spacing:.015em;border-radius:12px;}
+.launch-actions .btn:not(.pri){background:var(--s2);border:1px solid var(--line);}
+.launch-save-count{font-size:11px;color:var(--muted);min-height:15px;margin-top:12px;}
+.series-launch .launch-career{text-align:left;margin:0 0 13px;padding:13px 14px;background:var(--s1);border:1px solid var(--line);border-radius:14px;}
+.series-launch .launch-career-kicker{font-size:10px;color:var(--accent);letter-spacing:.12em;font-weight:850;}
+.series-launch .launch-career-name{font-size:17px;margin-top:5px;}
+.series-launch .launch-career-detail{font-size:11px;line-height:1.4;margin:4px 0 10px;}
+.series-launch .launch-resume{min-height:45px;margin:0;border-radius:10px;font-size:12px;}
+.series-launch .ver{justify-content:center;margin:9px auto 0;row-gap:4px;column-gap:8px;font-size:10px;}
 </style>
 </head>
 <body>
 <section id="launch">
-  <div class="launch">
-    <div class="kick">H³O Interactive · Legacy GM series</div>
-    <h1>Legacy <span>Cricket</span></h1>
-    <p>Build your team. Shape your legacy.</p>
-    <div class="btns"><button class="btn pri" onclick="openNewCareer()">New career</button><button class="btn" onclick="openLoadCareer()">Load career</button></div>
-    <button class="launch-help" onclick="showHelp()">How to play</button>
+  <div class="launch series-launch">
+    <div class="launch-kicker">H³O INTERACTIVE PRESENTS</div>
+    <h1>LEGACY CRICKET</h1>
+    <div class="launch-rule" aria-hidden="true"></div>
+    <div class="launch-tagline">Build the Team. Shape the Legacy.</div>
+    <p class="launch-world">A cricket world that evolves with every season.</p>
+    <div class="launch-actions">
+      <button class="btn pri" onclick="openNewCareer()">NEW CAREER</button>
+      <button class="btn" onclick="openLoadCareer()">LOAD CAREER</button>
+    </div>
+    <div id="launchSavedCount" class="launch-save-count" aria-live="polite"></div>
     <div class="ver"><span id="bVer"></span><span id="bTitle"></span><span id="bEng"></span></div>
   </div>
 </section>
@@ -836,7 +859,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.14 Build 045', title: 'Commentary, Crests & Steady Sheets', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.15 Build 047', title: 'Launch Menu Consistency', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -7636,13 +7659,15 @@ function homeExtras() {
   await Store.init();
   if (Store.status === 'none') { const n = document.createElement('div'); n.className = 'note bad'; n.style.marginTop = '12px'; n.innerHTML = 'This browser is not keeping saved data (private browsing or a file preview). Open the game directly in Safari or Chrome, or use Export save in the menu to keep your career.'; document.querySelector('.launch').appendChild(n); }
   const metas = await Store.list(); const last = metas.map((m, i) => m ? Object.assign({ slot: i + 1 }, m) : null).filter(Boolean).sort((a, b) => (b.saved || '').localeCompare(a.saved || ''))[0];
+  const launchSavedCount = $('launchSavedCount');
+  if (launchSavedCount) launchSavedCount.textContent = metas.filter(Boolean).length ? `${metas.filter(Boolean).length} saved career${metas.filter(Boolean).length === 1 ? '' : 's'} available` : '';
   if (last) {
     const card = document.createElement('div'); card.className = 'launch-career';
     const kicker = document.createElement('div'); kicker.className = 'launch-career-kicker'; kicker.textContent = 'CONTINUE CAREER';
     const name = document.createElement('div'); name.className = 'launch-career-name'; name.textContent = teamName(last.team);
     const sub = document.createElement('div'); sub.className = 'launch-career-detail'; sub.textContent = [last.name, last.label].filter(Boolean).join(' · ');
     const btn = document.createElement('button'); btn.className = 'btn pri block launch-resume'; btn.textContent = 'Continue career ›'; btn.onclick = () => loadGame(last.slot);
-    card.append(kicker,name,sub,btn); document.querySelector('.launch .btns').before(card);
+    card.append(kicker,name,sub,btn); document.querySelector('.launch-actions').before(card);
   }
 })();
 
