@@ -918,7 +918,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 068', title: 'Career Diagnostics and Recruitment', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 069', title: 'Balanced New-Career Squads', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4572,6 +4572,80 @@ function seedAuthenticWorld() {
 
 }
 
+// B069: New-career-only domestic allocation. The authentic roster table is a
+// historical source, not a viable 20-player contract allocation: some sides
+// import an entire bench of MID players and no specialist cover. Keep real
+// player identities and skill attributes; rebalance contracts with the existing
+// Australian market, then use transparently modelled local club players only
+// where the market has no suitable candidate. No changes to loaded saves.
+const START_ROLE_TARGETS = Object.freeze({OPEN:3, WK:2, AR:3, PACE:5, SPIN:2});
+function startRole(p) {
+  if(p.role==='OPEN')return 'OPEN';
+  const g=group(p);return g==='BAT'?'BAT':g;
+}
+function startingComposition(teamId) {
+  const counts={OPEN:0,BAT:0,WK:0,AR:0,PACE:0,SPIN:0};
+  squadOf(teamId).forEach(p=>{ counts[startRole(p)]++; });
+  return counts;
+}
+function balanceStartingSquads() {
+  const report=[];
+  const isDomestic=p=>p.nat==='AUS'&&!p.retired&&!p.prospect&&!p.academy;
+  for(const t of TEAM_DEFS) {
+    const changes={team:t.id,released:[],signed:[],modelled:[],before:startingComposition(t.id)};
+    let guard=0;
+    for(const [needRole,target] of Object.entries(START_ROLE_TARGETS)) {
+      while(startingComposition(t.id)[needRole]<target&&guard++<40) {
+        let sq=squadOf(t.id);
+        // Release redundant middle-order depth before expanding a full roster.
+        // Never remove the last three recognised batters or required specialists.
+        const removable=sq.filter(p=>{
+          const role=startRole(p),counts=startingComposition(t.id);
+          return role==='BAT'?counts.BAT>4:role==='OPEN'?counts.OPEN>target+1:
+            counts[role]>(START_ROLE_TARGETS[role]||0)+1;
+        }).sort((a,b)=>{
+          const ra=startRole(a)==='BAT'?0:1,rb=startRole(b)==='BAT'?0:1;
+          return ra-rb||peakOvr(a)-peakOvr(b);
+        });
+        if(sq.length>=21 && removable.length){const p=removable[0];p.teamId=null;p.contract=null;changes.released.push(p.id);}
+        let candidates=freeAgents().filter(p=>isDomestic(p)&&startRole(p)===needRole&&askingSalary(p)<=capSpace(t.id));
+        candidates.sort((a,b)=>peakOvr(b)-peakOvr(a));
+        let recruit=candidates[0];
+        if(!recruit){
+          // Affordable new local talent; do not recode authentic players or
+          // pretend the modelled entrant is a named historical cricketer.
+          const role=needRole==='OPEN'?'OPEN':needRole==='WK'?'WK':needRole==='AR'?'BAR':needRole==='PACE'?'PACE':'OFF';
+          recruit=makePlayer({role,q:61+RATING_SHIFT+randInt(0,6),age:randInt(20,28),nat:'AUS'});
+          recruit.modelledClubRecruit=true;seedCareer(recruit);changes.modelled.push(recruit.id);
+        }
+        let salary=askingSalary(recruit);
+        while((capSpace(t.id)<salary||squadOf(t.id).length>=SQUAD_MAX)&&removable.length) {
+          const p=removable.shift();if(p.teamId!==t.id)continue;
+          p.teamId=null;p.contract=null;changes.released.push(p.id);
+        }
+        // If still unaffordable, do not break the cap to fill a position.
+        if(capSpace(t.id)<MIN_SALARY||squadOf(t.id).length>=SQUAD_MAX)break;
+        salary=Math.min(salary,capSpace(t.id));
+        if(salary<MIN_SALARY)break;
+        recruit.teamId=t.id;
+        recruit.contract={salary:Math.floor(salary/5000)*5000,years:2};
+        changes.signed.push(recruit.id);
+      }
+    }
+    // Do not leave nine interchangeable middle-order players on the bench.
+    // Trim only if the club retains at least 20 contracts and four core batters.
+    while(startingComposition(t.id).BAT>6 && squadOf(t.id).length>20) {
+      const excess=squadOf(t.id).filter(p=>startRole(p)==='BAT').sort((a,b)=>peakOvr(a)-peakOvr(b))[0];
+      if(!excess)break;
+      excess.teamId=null; excess.contract=null; changes.released.push(excess.id);
+    }
+    changes.after=startingComposition(t.id);
+    report.push(changes);
+  }
+  game.startingBalanceReport=report;
+  return report;
+}
+
 function createGame(gmName, teamId, year, nationGm, rosterMode) {
   const seed = (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
   game = null; applyTeamEdits();
@@ -4613,6 +4687,7 @@ function createGame(gmName, teamId, year, nationGm, rosterMode) {
   if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 14; i++) { const p = makePlayer({ role: pick(Object.keys(ROLES)), q: randInt(54, 68) + RATING_SHIFT, age: randInt(20, 35) }); seedCareer(p); }
   const osNats = Object.keys(NATIONS).filter(n => n !== 'AUS');
   if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 82) + RATING_SHIFT, age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
+  balanceStartingSquads();
   game.captain = squadOf(teamId).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0].id;
   balanceLeague();
   ensureStaff(); ensureNationCoach();
@@ -5455,7 +5530,7 @@ function downloadCareerDiagnostic(){
   const data=careerDiagnosticReport();
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`legacy-cricket-diagnostic-${game.year}-B068.json`;document.body.appendChild(a);a.click();
+  a.download=`legacy-cricket-diagnostic-${game.year}-B069.json`;document.body.appendChild(a);a.click();
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
   flash('Career diagnostic exported. Share this JSON for analysis.');
 }
@@ -5476,9 +5551,9 @@ function replenishFreeAgentMarket() {
     const g = group(p); if (Object.hasOwn(tally, g)) tally[g]++;
   });
   const added = [];
-  // At most 16 domestic entrants per offseason; prioritise scarce specialisms.
+  // At most 24 domestic entrants per offseason; prioritise scarce specialisms.
   // Round-robin deficit filling prevents any one group using the entire intake.
-  for (let pass = 0; pass < 16; pass++) {
+  for (let pass = 0; pass < 24; pass++) {
     const needed = Object.keys(FA_MARKET_FLOOR)
       .filter(g => tally[g] < FA_MARKET_FLOOR[g])
       .sort((a,b) => (tally[a]/FA_MARKET_FLOOR[a]) - (tally[b]/FA_MARKET_FLOOR[b]));
