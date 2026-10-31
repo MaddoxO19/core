@@ -829,6 +829,9 @@ body.live-mode .actbar{display:none}
   .pgr .cells{gap:1px}
   .pgr em{font-size:10px}
 }
+
+/* Build 054 match-analysis screens */
+.wagon-zone-names{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;text-align:left;font-size:11px;margin-top:9px}.wagon-zone-names>div{display:flex;justify-content:space-between;border-bottom:1px solid var(--border,#304253);padding:3px}.pitch-map-grid{display:grid;grid-template-columns:74px repeat(5,minmax(0,1fr));gap:3px;max-width:600px;margin:0 auto 15px}.map-axis{font-size:9px;color:var(--muted,#9bb0be);text-align:center;align-self:end;overflow-wrap:anywhere}.map-row-title{text-align:right;align-self:center;padding-right:4px}.map-cell{position:relative;aspect-ratio:1/1.1;min-height:31px;background:color-mix(in srgb,#ed8d21 calc(var(--heat)*86%),#233649);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;border-radius:2px}.map-cell small{color:#fff;font-size:9px;font-weight:800}.map-target{outline:2px solid #f4c542;outline-offset:-2px}.map-hand-title{font-weight:700;font-size:12px;margin:12px 0 8px;text-align:center}.map-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}.map-metrics>div{background:#152735;padding:8px 3px;text-align:center;border-radius:6px}.map-metrics b{display:block;font-size:15px}.map-metrics span{font-size:9px;color:#9fb3be}.wagon-controls select{max-width:100%}
 </style>
 </head>
 <body>
@@ -887,7 +890,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.15 Build 053', title: 'Offseason Salary Cap Guards', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.15 Build 055', title: 'AI Payroll and Recruitment Balance', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2078,6 +2081,40 @@ function checkInningsEnd(M, inn) {
   else if (M.fmt === 'FC' && M.balls >= mMaxBalls(M)) { inn.closed = true; M.timeUp = true; }
 }
 
+// Compact, deterministic modelled ball locations, retained only for the active live match.
+// Columns: wide off, outside off, stumps, leg, wide leg. Rows: full toss, yorker, full, good, short of good, short.
+const MAP_LINES = ['Wide off','Outside off','Stumps','Leg','Wide leg'];
+const MAP_LENGTHS = ['Full toss','Yorker','Full','Good','Short of good','Short'];
+function deliveryTarget(plan) {
+  const line = plan.line === 'stumps' ? 2 : plan.line === 'body' ? 3 : 1;
+  const len = plan.len === 'yorker' ? 1 : plan.len === 'full' ? 2 : plan.len === 'short' ? 5 : 3;
+  return [len,line];
+}
+function recordDeliveryMap(M, inn, ev, batter, bowler) {
+  if (!M.mapBalls) M.mapBalls = [];
+  // A match can have thousands of balls. Keep bounded data only, never in permanent records.
+  if (M.mapBalls.length >= 1800) return;
+  const plan = planFor(M, inn, batter.id);
+  const target = deliveryTarget(plan);
+  const seed = String(M.fxId) + ':' + (M.innings.length-1) + ':' + inn.balls + ':' + inn.overNo + ':' + inn.overBalls + ':' + M.mapBalls.length;
+  const accuracy = Math.max(15,Math.min(99,(bowler.sk.acc||60)-RATING_SHIFT));
+  const death = M.fmt !== 'FC' && phaseOf(M.fmt,inn.overNo,mOvers(M)) === 'death';
+  const deathSkill = (bowler.sk.death||60)-RATING_SHIFT;
+  const concentration = Math.max(.3,Math.min(.87,.23 + accuracy*.006 + (death && plan.len==='yorker' ? (deathSkill-60)*.001 : 0)));
+  const h = n => hash01(seed+':'+n);
+  let row=target[0], col=target[1];
+  if (h('hit') >= concentration) {
+    const spread = accuracy>=78 ? 1 : accuracy>=55 ? 2 : 3;
+    const dx = Math.round((h('side')*2-1)*spread);
+    const dy = Math.round((h('length')*2-1)*(bowler.sk.vari>75+RATING_SHIFT?2:spread));
+    col=Math.max(0,Math.min(4,col+dx));
+    row=Math.max(0,Math.min(5,row+dy));
+    if (row===target[0] && col===target[1]) col=Math.max(0,Math.min(4,col+(h('other')<.5?-1:1)));
+  }
+  // The actual dismissal / boundary is recorded as a cell marker, not generated from the location.
+  M.mapBalls.push([M.innings.length-1,bowler.id,batter.id,batter.hand==='L'?1:0,row,col,ev.wkt?1:0,ev.bat||0,target[0],target[1]]);
+}
+
 // One delivery. Returns an event object (with .text when the match is live).
 function simBall(M) {
   if (M.done) return null;
@@ -2128,6 +2165,9 @@ function simBall(M) {
   }
   checkBallMilestones(M, inn, ev, bowler, sc);
   noteBallChance(M, inn, ev, batter, bowler);
+  // Presentation-only ball placement. Deterministic hash sampling never advances gameplay RNG.
+  // Modelled from the existing analyst plan and completed outcome; never used by simBall probabilities.
+  if (M.live) recordDeliveryMap(M, inn, ev, batter, bowler);
   bf.r += conceded;
   inn.overConceded += conceded;
   inn.overTally = (inn.overTally || 0) + ev.runs;
@@ -4369,7 +4409,7 @@ function seedAuthenticWorld() {
     // Real players carry their real international record only; never a fictional history.
     addRealCareer(p);
     if (REAL_AGES_2026[realSlug(rec.name)]) p.realAge = true;
-    if (tid && TEAM_DEFS.some(t=>t.id===tid)) p.contract = {salary:MIN_SALARY,years:2};
+    if (tid && TEAM_DEFS.some(t=>t.id===tid)) p.contract = {salary:askingSalary(p),years:2};
     else p.contract = null;
     created.set(key,p.id);
     return p;
@@ -4378,6 +4418,20 @@ function seedAuthenticWorld() {
     const entries = AUTHENTIC_ROSTERS.domestic[t.id] || [];
     entries.forEach(rec => add(rec,'AUS',rec.contracted ? t.id : null,'Cricket Australia 2026-27'));
   }
+  // Authentic starting contracts are modelled estimates, not historical salary claims.
+  // Use rating-based values instead of giving every player the $60k minimum.
+  // Preserve the $3m cap even for unusually strong authentic roster mixes.
+  TEAM_DEFS.forEach(t => {
+    const sq = squadOf(t.id);
+    const pay = sq.reduce((sum,p)=>sum+p.contract.salary,0);
+    const budgetShare = 0.76 + ((t.id.charCodeAt(0)*7 + t.id.charCodeAt(t.id.length-1)*3) % 17)/100;
+    if (pay > SALARY_CAP * budgetShare) {
+      const discretionary = sq.reduce((sum,p)=>sum+Math.max(0,p.contract.salary-MIN_SALARY),0);
+      const room = Math.max(0,SALARY_CAP*budgetShare-sq.length*MIN_SALARY);
+      const factor = discretionary ? Math.min(1,room/discretionary) : 1;
+      sq.forEach(p => p.contract.salary = Math.max(MIN_SALARY,Math.round((MIN_SALARY+(p.contract.salary-MIN_SALARY)*factor)/5000)*5000));
+    }
+  });
   // Set one free agent record for international players, excluding people already on Australian domestic teams.
   for (const [nat,entries] of Object.entries(AUTHENTIC_ROSTERS.international)) {
     for (const rec of entries) add(rec,nat,nat==='AUS' ? null : 'X_'+nat,'ICC T20 World Cup 2026');
@@ -5120,22 +5174,33 @@ function extendPlayer(id, salary, years) {
   return { ok: true };
 }
 
-// AI teams fill squads from free agency using a need-aware score.
+// LC-12: AI clubs make value-led recruitment choices rather than stopping at an
+// arbitrary 20 players. Existing contracts are retained; no retroactive salary reset.
+// A weak-value candidate is not signed merely to consume remaining cap space.
 function aiFreeAgency() {
   TEAM_DEFS.forEach(t => {
     if (t.id === U()) return;
     let sq = squadOf(t.id);
     while (sq.length > SQUAD_MAX || (payroll(t.id) > SALARY_CAP && sq.length > SQUAD_MIN)) {
-      const w = sq.sort((a, b) => tradeValue(a) / a.contract.salary - tradeValue(b) / b.contract.salary)[0];
+      const w = sq.sort((a,b) => tradeValue(a)/Math.max(MIN_SALARY,a.contract.salary) - tradeValue(b)/Math.max(MIN_SALARY,b.contract.salary))[0];
       w.teamId = null; w.contract = null; sq = squadOf(t.id);
     }
+    // A club may carry 20–23 players; prioritise position shortages and
+    // meaningful upgrades rather than filling every available slot blindly.
+    const target = 20 + (t.id.charCodeAt(0) + (t.id.charCodeAt(t.id.length-1)||0) + game.year) % 4;
     let guard = 0;
-    while (sq.length < 20 && guard++ < 10) {
+    while (sq.length < target && guard++ < 24) {
       const need = groupNeeds(t.id);
-      const cand = freeAgents().filter(p => askingSalary(p) <= capSpace(t.id) && (p.nat === 'AUS' || overseasCount(t.id) < OVERSEAS_MAX))
-        .map(p => ({ p, s: tradeValue(p) * (1 + need[group(p)]) })).sort((a, b) => b.s - a.s)[0];
+      const candidates = freeAgents().filter(p => askingSalary(p) <= capSpace(t.id) &&
+        (p.nat === 'AUS' || overseasCount(t.id) < OVERSEAS_MAX))
+        .map(p => ({p, value:tradeValue(p), score:tradeValue(p)*(1+need[group(p)]*1.5)}))
+        .sort((a,b)=>b.score-a.score);
+      const cand = candidates[0];
       if (!cand) break;
-      cand.p.teamId = t.id; cand.p.contract = { salary: askingSalary(cand.p), years: randInt(1, 2) };
+      // Beyond a core squad of 20, require a useful player or an acute need.
+      if (sq.length >= 20 && cand.value < 17 && need[group(cand.p)] < 0.5) break;
+      cand.p.teamId = t.id;
+      cand.p.contract = {salary:askingSalary(cand.p),years:randInt(1,3)};
       sq = squadOf(t.id);
     }
   });
@@ -7228,37 +7293,82 @@ function wagonZoneSummary(shots) {
   const breakdown = [1,2,3,4,6].map(n => `${n}s ${shots.filter(s => s && s[1] === n).length}`).join(' · ');
   return `<div class="wagon-zone-summary"><div class="xs muted">Leading scoring sector</div><div class="b s">${best + 1} of 8 · ${r} runs</div><div class="xs muted">Sector numbers start straight down the ground and rotate around the wheel.</div><div class="xs" style="margin-top:5px">${breakdown}</div></div>`;
 }
-function setWagon(m) { ui.wagon = m; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
+function setWagon(m) { ui.wagon=m; const y=window.scrollY||0; render();window.scrollTo(0,y); }
+function setWagonView(v) { ui.wagonView=v;const y=window.scrollY||0;render();window.scrollTo(0,y); }
+function setMapSide(v) {ui.mapSide=v;const y=window.scrollY||0;render();window.scrollTo(0,y);}
+function setMapPerson(v) {ui.mapPerson=v;const y=window.scrollY||0;render();window.scrollTo(0,y);}
+const WAGON_NAMES=['Long-on','Midwicket','Square leg','Fine leg','Third man','Point','Cover','Long-off'];
+function wagonZoneIndex(a,hand) {
+  // Normalise mirrored left-handed shots back to batting-side sectors.
+  const v=hand==='L'?(360-a)%360:a;
+  return Math.floor((((v+22.5)%360)/45+4)%8);
+}
+function zonesGraphic(shots,hand) {
+  const totals=Array(8).fill(0);
+  shots.forEach(s=>{if(s&&Number.isFinite(s[0])) totals[wagonZoneIndex(s[0],hand)]+=s[1]||0;});
+  const max=Math.max(...totals,1);
+  const cx=112,cy=112,r=93;
+  const slices=totals.map((v,i)=>{
+    const a=(-90+i*45)*Math.PI/180,b=(-90+(i+1)*45)*Math.PI/180;
+    const x1=cx+r*Math.cos(a),y1=cy+r*Math.sin(a),x2=cx+r*Math.cos(b),y2=cy+r*Math.sin(b);
+    const dark=v===max&&v>0?'#15803d':v>0?'#4ade80':'#24443a';
+    const mid=(a+b)/2;
+    return `<path d="M${cx} ${cy} L${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${dark}" stroke="#0c1820" stroke-width="1.5"><title>${esc(WAGON_NAMES[i])}: ${v} runs</title></path><text x="${(cx+58*Math.cos(mid)).toFixed(1)}" y="${(cy+58*Math.sin(mid)+4).toFixed(1)}" text-anchor="middle" fill="${v===max&&v>0?'#fff':'#09201b'}" font-size="13" font-weight="700">${v}</text>`;
+  }).join('');
+  const names=WAGON_NAMES.map((name,i)=>`<div><span class="dim">${esc(name)}</span> <b>${totals[i]}</b></div>`).join('');
+  return `<svg class="wagon" viewBox="0 0 224 224" aria-label="Eight scoring zones">${slices}</svg><div class="wagon-zone-names">${names}</div>`;
+}
+function pitchMapGrid(entries,hand) {
+  const cells=Array.from({length:6},()=>Array.from({length:5},()=>({n:0,w:0,r:0})));
+  entries.forEach(e=>{const c=cells[e[4]]?.[e[5]];if(c){c.n++;c.w+=e[6];c.r+=e[7];}});
+  const max=Math.max(1,...cells.flat().map(c=>c.n));
+  const target=entries.length?[entries[0][8],entries[0][9]]:null;
+  return `<div class="map-hand-title">${hand?'Left-handed batters':'Right-handed batters'}</div><div class="pitch-map-grid" role="table" aria-label="Bowling lengths by line">
+    <div class="map-axis"></div>${['Wide off','Off','Stumps','Leg','Wide leg'].map(t=>`<div class="map-axis">${t}</div>`).join('')}
+    ${MAP_LENGTHS.map((t,r)=>`<div class="map-axis map-row-title">${t}</div>${cells[r].map((c,k)=>`<div class="map-cell ${target&&target[0]===r&&target[1]===k?'map-target':''}" style="--heat:${(c.n/max).toFixed(2)}" title="${esc(t)} / ${MAP_LINES[k]}: ${c.n} balls, ${c.w} wickets, ${c.r} bat runs"><strong>${c.n||''}</strong>${c.w?`<small>${c.w}W</small>`:''}</div>`).join('')}`).join('')}</div>`;
+}
+function pitchMapPanel(M,inn) {
+  const all=(M.mapBalls||[]).filter(e=>e[0]===M.innings.indexOf(inn));
+  const side=ui.mapSide==='batter'?'batter':'bowler';
+  const ids=[...new Set(all.map(e=>side==='batter'?e[2]:e[1]))];
+  const selected=ids.includes(ui.mapPerson)?ui.mapPerson:ids[0];
+  const shown=all.filter(e=>(side==='batter'?e[2]:e[1])===selected);
+  const player=selected?P(selected):null;
+  const on=shown.filter(e=>e[4]===e[8]&&e[5]===e[9]);
+  const pct=shown.length?Math.round(on.length/shown.length*100):0;
+  const names=ids.map(id=>`<option value="${esc(id)}" ${id===selected?'selected':''}>${esc(pname(P(id)))}</option>`).join('');
+  const pl=shown[0]?{len:MAP_LENGTHS[shown[0][8]],line:MAP_LINES[shown[0][9]]}:null;
+  return `<div class="seg" style="margin:10px 0"> <button class="${side==='bowler'?'on':''}" onclick="setMapSide('bowler')">Bowler</button><button class="${side==='batter'?'on':''}" onclick="setMapSide('batter')">Batter</button></div>
+    ${ids.length?`<label class="wagon-select-label">${side==='bowler'?'Bowler':'Batter'} <select onchange="setMapPerson(this.value)">${names}</select></label>`:''}
+    <div class="panel" style="margin-top:10px"><div class="pb"><div class="b">${player?esc(pname(player)):'Pitch map'}</div>
+    <div class="xs muted" style="margin:5px 0 12px">Modelled delivery placement, not independent ball tracking. Highlighted cell is the first recorded analyst target for this selection.</div>
+    ${[0,1].map(h=>pitchMapGrid(shown.filter(e=>e[3]===h),h)).join('')}
+    ${pl?`<div class="xs muted" style="margin-top:10px">Plan at first recorded ball: ${esc(pl.line)}, ${esc(pl.len.toLowerCase())}</div>`:''}
+    <div class="map-metrics"><div><b>${shown.length}</b><span>Balls</span></div><div><b>${pct}%</b><span>On target</span></div><div><b>${on.reduce((a,e)=>a+e[6],0)}</b><span>Wickets on target</span></div><div><b>${player?(player.sk.acc||'—'):'—'}</b><span>${side==='bowler'?'Accuracy':'Batter view'}</span></div></div>
+    ${side==='batter'&&player&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:10px">Scouting: ${esc(traitList(player).filter(t=>t.weak).slice(0,2).map(t=>t.text).join(' · ')||'No known weaknesses')}</div>`:''}
+    </div></div>`;
+}
 function wagonPanel(M) {
-  const inn = ui.liveInn != null && M.innings[ui.liveInn] ? M.innings[ui.liveInn] : curInn(M);
-  const valid = inn.card.filter(c => c && c.id && P(c.id));
-  // Keep the chosen batter across strike changes and wickets.
-  // A newly selected innings defaults to its current batter only if the
-  // previous player is not present in that innings.
-  const selected = valid.find(c => c.id === ui.wagonPlayer);
-  const current = valid.find(c => c.id === inn.card[inn.striker]?.id) || valid[0];
-  const mode = ui.wagon === 'inn' ? 'inn' : 'player';
-  const card = selected || current;
-  let shots = [], label = '', hand = 'R';
-  if (mode === 'inn') {
-    valid.forEach(c => (c.shots || []).forEach(shot => shots.push(shot)));
-    label = `${teamDef(inn.bat).short || inn.bat} · ${inn.runs}/${inn.wkts}`;
-  } else if (card) {
-    shots = card.shots || [];
-    const player = P(card.id);
-    label = `${pname(player)} · ${card.r} (${card.b})`;
-    // Stored shot bearings already encode batting handedness.
-    hand = player.hand || 'R';
-  }
-  const count = r => shots.filter(shot => (r === 1 ? shot[1] < 4 : shot[1] === r)).length;
-  const runs = shots.reduce((a, shot) => a + shot[1], 0);
-  const offR = shots.filter(shot => shot[0] > 0 && shot[0] < 180).reduce((a, shot) => a + shot[1], 0);
-  const players = valid.map(c => `<option value="${esc(c.id)}" ${card && c.id === card.id ? 'selected' : ''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
-  return `<div class="wagon-controls"><div class="seg"><button class="${mode === 'player' ? 'on' : ''}" onclick="setWagon('player')">Player</button><button class="${mode === 'inn' ? 'on' : ''}" onclick="setWagon('inn')">Innings</button></div>
-    ${mode === 'player' ? `<label class="wagon-select-label">Batter <select aria-label="Select batter for wagon wheel" onchange="ui.wagonPlayer=this.value;const y=window.scrollY||0;render();window.scrollTo(0,y)">${players}</select></label>` : ''}</div>
-    <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, hand)}
-      <div class="flex" style="justify-content:center;gap:14px;margin-top:6px"><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
-      ${mode === 'player' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}${shots.length ? wagonZoneSummary(shots) : ''}</div></div>`;
+  const inn=ui.liveInn!=null&&M.innings[ui.liveInn]?M.innings[ui.liveInn]:curInn(M);
+  const valid=inn.card.filter(c=>c&&c.id&&P(c.id));
+  const selected=valid.find(c=>c.id===ui.wagonPlayer),current=valid.find(c=>c.id===inn.card[inn.striker]?.id)||valid[0];
+  const mode=ui.wagon==='inn'?'inn':'player',card=selected||current;
+  let shots=[],label='',hand='R';
+  if(mode==='inn') {valid.forEach(c=>(c.shots||[]).forEach(shot=>shots.push([shot[0],shot[1],P(c.id).hand||'R'])));label=`${teamDef(inn.bat).short||inn.bat} · ${inn.runs}/${inn.wkts}`;}
+  else if(card){shots=(card.shots||[]).map(s=>[s[0],s[1],P(card.id).hand||'R']);hand=P(card.id).hand||'R';label=`${pname(P(card.id))} · ${card.r} (${card.b})`;}
+  const view=['spike','zones','pitch'].includes(ui.wagonView)?ui.wagonView:'spike';
+  const players=valid.map(c=>`<option value="${esc(c.id)}" ${card&&c.id===card.id?'selected':''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
+  const groupShots=mode==='inn'?shots:shots;
+  const n=[1,2,3,4,6].map(k=>`${k}s ${shots.filter(s=>s[1]===k).length}`).join(' · ');
+  const off=shots.reduce((a,s)=>{let angle=s[2]==='L'?(360-s[0])%360:s[0];return a+(angle>0&&angle<180?s[1]:0);},0);
+  const total=shots.reduce((a,s)=>a+s[1],0);
+  return `<div class="wagon-controls"><div class="seg"><button class="${mode==='player'?'on':''}" onclick="setWagon('player')">Player</button><button class="${mode==='inn'?'on':''}" onclick="setWagon('inn')">Innings</button></div>
+    ${mode==='player'?`<label class="wagon-select-label">Batter <select onchange="ui.wagonPlayer=this.value;render()">${players}</select></label>`:''}</div>
+    <div class="seg" style="margin:10px 0"><button class="${view==='spike'?'on':''}" onclick="setWagonView('spike')">Spike</button><button class="${view==='zones'?'on':''}" onclick="setWagonView('zones')">Zones</button><button class="${view==='pitch'?'on':''}" onclick="setWagonView('pitch')">Pitch map</button></div>
+    ${view==='pitch'?pitchMapPanel(M,inn):`<div class="panel"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${view==='spike'?wagonSvg(shots,hand):zonesGraphic(shots,hand)}
+    ${view==='spike'?`<div class="flex" style="justify-content:center;gap:12px;margin-top:6px"><span class="xs" style="color:#7dd3fc">1–3s</span><span class="xs win">4s</span><span class="xs" style="color:#f4c542">6s</span></div>`:''}
+    <div class="xs muted" style="margin-top:9px">${n}</div>${mode==='player'&&total?`<div class="xs muted" style="margin-top:5px">${Math.round(off/total*100)}% of runs on the off side</div>`:''}
+    ${view==='zones'&&mode==='player'&&card&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:9px">${esc(traitList(P(card.id)).filter(x=>!x.weak).slice(0,2).map(x=>x.text).join(' · '))}</div>`:''}</div></div>`}`;
 }
 
 // ---- Game plan (the GM's brief) ----
