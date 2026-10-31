@@ -860,6 +860,13 @@ body.live-mode .actbar{display:none}
   .map-cell{min-height:18px}
   .map-metrics{grid-template-columns:repeat(2,1fr)}
 }
+
+/* Build 077: completed matches remain visible before opening the result review. */
+.match-final-result{margin:8px 0 12px;padding:12px 14px;border:1px solid var(--line2);border-radius:10px;font-weight:800;text-align:center;background:var(--s2)}
+.match-final-over{margin-top:10px;padding-top:12px;border-top:1px solid var(--line2)}
+
+/* Build 078: compact two-contribution Player of the Match display. */
+.potm-card .grow{min-width:0}.potm-f{font-size:clamp(12px,3.5vw,16px);white-space:normal;min-width:82px;max-width:43%;line-height:1.3}.potm-n{overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -918,7 +925,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 076', title: 'Editor Interaction & Storage Guard', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 078', title: 'Player Expectations & Match Awards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -3159,17 +3166,46 @@ const PERSONAS = {
 function ensurePersona(p) { if (!p.persona) p.persona = weightedPick(Object.keys(PERSONAS), k => PERSONAS[k].w); if (p.morale == null) p.morale = 68; return p.persona; }
 function moodLabel(m) { return m >= 78 ? 'Delighted' : m >= 62 ? 'Content' : m >= 45 ? 'Unsettled' : m >= 30 ? 'Unhappy' : 'Wants out'; }
 function moodClass(m) { return m >= 62 ? 'good' : m >= 45 ? 'warn' : 'bad'; }
-function expectedStarter(p) {
-  if (!p.teamId || !teamDef(p.teamId) || teamDef(p.teamId).intl) return false;
-  const sq = squadOf(p.teamId).filter(x => !x.injury).sort((a, b) => peakOvr(b) - peakOvr(a));
-  return sq.indexOf(p) > -1 && sq.indexOf(p) < 10;
+// Build 078: expectations are assessed against eligible matches in the player's
+// strongest format, not the club's entire fixture calendar. Older saves without
+// selection history start with a neutral expectation and develop a sample.
+function selectionRole(p) {
+  if (!p || !p.teamId || !teamDef(p.teamId) || teamDef(p.teamId).intl) return {tier:'rotation', fmt:null, target:0.25};
+  const ranked=['FC','OD','T20'].map(f=>({f, v:overall(p,f)})).sort((a,b)=>b.v-a.v);
+  const specialist=ranked[0].v-ranked[2].v>=5;
+  const best=ranked[0].f;
+  const pool=squadOf(p.teamId).filter(x=>!x.retired && !x.injury);
+  const rank=pool.filter(x=>overall(x,best)>overall(p,best)).length;
+  const top=overall(p,best);
+  if(p.age<=22 && (rank>=9 || top < 74)) return {tier:'development',fmt:specialist?best:null,target:0.06};
+  if(rank<7) return {tier:'regular',fmt:specialist?best:null,target:0.62};
+  if(rank<11) return {tier:'rotation',fmt:specialist?best:null,target:0.27};
+  return {tier:'backup',fmt:specialist?best:null,target:0.09};
 }
-// Called from applyMatch for domestic matches: rolling playing-time measure.
+function selectionProgress(p) {
+  const role=selectionRole(p), h=p.selectionHistory;
+  if(!h) return {role, games:0, opportunities:0, fraction:0.6};
+  const keys=role.fmt?[role.fmt]:['FC','OD','T20'];
+  const opportunities=keys.reduce((n,k)=>n+(h[k]?.opp||0),0);
+  const games=keys.reduce((n,k)=>n+(h[k]?.games||0),0);
+  return {role,games,opportunities,fraction:opportunities?games/opportunities:0.6};
+}
+function expectedStarter(p) { return selectionRole(p).tier==='regular'; }
+// Record a real, format-specific eligible opportunity. Absences through injury,
+// international duty or unavailability do not count against the player.
 function trackSelection(M) {
-  [M.home, M.away].forEach(t => {
-    if (!teamDef(t) || teamDef(t).intl) return;
-    const xi = M.xi[t];
-    squadOf(t).forEach(p => { if (p.injury || p.natDuty) return; p.played = (p.played == null ? 0.6 : p.played) * 0.8 + (xi.includes(p.id) ? 0.2 : 0); });
+  [M.home,M.away].forEach(t=>{
+    if(!teamDef(t)||teamDef(t).intl) return;
+    const xi=M.xi[t]||[];
+    squadOf(t).forEach(p=>{
+      if(p.injury||p.natDuty||p.retired) return;
+      p.selectionHistory=p.selectionHistory||{};
+      const h=p.selectionHistory[M.fmt]||(p.selectionHistory[M.fmt]={opp:0,games:0});
+      h.opp++; if(xi.includes(p.id)) h.games++;
+      // Bound the history over multiple decades while retaining recent weighting.
+      if(h.opp>42){h.opp=Math.round(h.opp*0.75);h.games=Math.min(h.opp,Math.round(h.games*0.75));}
+      p.played=(p.played==null?0.6:p.played)*0.8+(xi.includes(p.id)?0.2:0);
+    });
   });
 }
 // Contract value is a club reward, not a recurring morale penalty. Only an explicit,
@@ -3207,13 +3243,18 @@ function weeklyMorale() {
     if (p.retired || !p.teamId || !res[p.teamId]) return;
     const per = ensurePersona(p), r = res[p.teamId];
     let d = 0;
-    if (expectedStarter(p) && !p.injury && !p.natDuty && (p.played == null ? 0.6 : p.played) < 0.4) d -= per === 'ambitious' ? 5 : per === 'easygoing' ? 1 : per === 'volatile' ? 4 : 3;
+    const sel=selectionProgress(p);
+    // No selection grievance until there is a meaningful sample of eligible
+    // opportunities. Backups and development prospects have lower expectations.
+    if(!p.injury&&!p.natDuty&&sel.opportunities>=5&&sel.fraction+0.12<sel.role.target)
+      d -= (per==='ambitious'?4.2:per==='volatile'?3.5:per==='easygoing'?0.7:2.2) *
+        (sel.role.tier==='regular'?1:sel.role.tier==='rotation'?0.55:0.25);
     d += clamp(r.form, -3, 3) * (per === 'ambitious' ? 0.8 : per === 'easygoing' ? 0.2 : 0.45);
     reviewContractExpectation(p);
     if (contractConcern(p)) d -= per === 'volatile' ? 1.5 : per === 'ambitious' ? 1 : 0.25;
     d += (r.mm - 60 - STAFF_SHIFT) / 20;
     if (r.leader) d += 1;
-    if (p.promise && game.day > p.promise.until) { if ((p.played || 0) < 0.45) { d -= 15; p.letDown = game.day; addNews('Locker', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
+    if (p.promise && game.day > p.promise.until) { if (selectionProgress(p).opportunities >= 4 && selectionProgress(p).fraction < 0.4) { d -= 15; p.letDown = game.day; addNews('Locker', `${pname(p)} feels let down`, 'He was promised more cricket and has not had it.'); } p.promise = null; }
     if (per === 'volatile') d *= 1.5; if (per === 'professional') d *= 0.7;
     d += (67 - p.morale) * 0.09;
     // The head coach looks after everyday mood: unsettled players (45-61) get a weekly lift from his man-management.
@@ -3221,7 +3262,7 @@ function weeklyMorale() {
     p.morale = clamp(Math.round(p.morale + d + randn() * 1.2), 5, 100);
     p.form = clamp(Math.round(p.form + (p.morale - 60) / 25), 15, 92);
     if (p.teamId === U()) {
-      if (p.morale < (per === 'volatile' ? 27 : per === 'ambitious' ? 23 : 17) && !p.wantsOut && (per === 'volatile' || per === 'ambitious' || p.letDown || p.contractConcern || (p.played != null && p.played < 0.3))) { p.wantsOut = game.day; addNews('Locker', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
+      if (p.morale < (per === 'volatile' ? 27 : per === 'ambitious' ? 23 : 17) && !p.wantsOut && (per === 'volatile' || per === 'ambitious' || p.letDown || p.contractConcern || (selectionProgress(p).opportunities >= 8 && selectionProgress(p).fraction < selectionProgress(p).role.target * 0.5))) { p.wantsOut = game.day; addNews('Locker', `${pname(p)} asks for a trade`, `${moodLabel(p.morale)}. He wants to leave ${teamDef(U()).nick}. Talk to him, give him games, or move him on.`); }
       if (p.wantsOut && p.morale >= 50) { p.transferListed = false; p.wantsOut = null; addNews('Locker', `${pname(p)} withdraws his trade request`, 'He is settled again.'); }
     } else if (p.morale >= 50) p.wantsOut = null;
   });
@@ -6004,7 +6045,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // centred dialogs on PC). Every page render returns an HTML string.
 const ui = { page:'home', squadTab:'list', listFmt:'T20', squadSort:'ovr', squadGroup:'ALL', xiFmt:'T20', tacFmt:'T20',
   fxMine:true, fxComp:'ALL', leagueTab:'ladders', ladComp:'SHIELD', leadFmt:'T20', leadStat:'runs', officeTab:'board',
-  tradePartner:null, tradeGive:[], tradeGet:[], search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, homeComp:null, homeMode:null };
+  tradePartner:null, tradeGive:[], tradeGet:[], search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, matchReview:false, homeComp:null, homeMode:null };
 
 function $(id) { return document.getElementById(id); }
 function go(page) { ui.page = page; render(); window.scrollTo(0, 0); if(page === 'matchday') showFixtureClashPrompt(); }
@@ -7275,7 +7316,7 @@ function startLive() {
   const M = createMatch(fx);
   M.live = true;
   const w = doToss(M);
-  game.live = M; ui.liveTab = 'comm'; ui.liveInn = null;
+  game.live = M; ui.liveTab = 'comm'; ui.liveInn = null; ui.matchReview = false;
   M.notes.forEach(n => M.log.unshift({ cls:'sys', text: n }));
   // The captain makes the toss call, guided by conditions.
   const d = tossDecisionAI(M); setTossDecision(M, d);
@@ -7336,12 +7377,14 @@ function inningsSummary(M, inn) {
   }
   return t;
 }
+function showMatchReview() { if (!game.live || !game.live.done) return; ui.matchReview = true; render(); window.scrollTo(0, 0); }
+function backToFinalOver() { if (!game.live || !game.live.done) return; ui.matchReview = false; render(); window.scrollTo(0, 0); }
 function finishLive() {
   const M = game.live; if (!M || !M.done) return;
   setBusy(fixtureById(M.fxId), M);
   applyMatch(M);
   const fxId = M.fxId;
-  game.live = null; game.pendingFx = null;
+  game.live = null; game.pendingFx = null; ui.matchReview = false;
   autosave(); go('home'); showAwaySummary();
 }
 function setLiveTab(t) { ui.liveTab = t; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
@@ -7522,12 +7565,24 @@ function renderLive() {
     : liveTab === 'bowler' ? bowlerPanel(M)
     : commentaryHtml(M);
   let bar;
-  if (M.done) bar = `<button class="btn" onclick="liveScorecardSheet()">Scorecard</button><button class="btn pri" style="grid-column:span 2" onclick="finishLive()">Done ▸</button>`;
+  if (M.done) bar = ui.matchReview
+    ? `<button class="btn" onclick="backToFinalOver()">Final over</button><button class="btn pri" style="grid-column:span 2" onclick="finishLive()">Done ▸</button>`
+    : `<button class="btn" onclick="liveScorecardSheet()">Scorecard</button><button class="btn pri" style="grid-column:span 2" onclick="showMatchReview()">Match review ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
   else if (M.pause) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="resumeLive()">${M.pause.type === 'stumps' ? `Start day ${M.pause.day + 2}` : 'Resume play'} ▸</button>`;
   else bar = `<button class="btn pri" style="grid-column:span 2" onclick="liveStep('over')">Next over ▸</button>
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
-  if (M.done) return `<div class="grid">${recap}</div><div class="livebar three">${bar}</div>`;
+  // Build 077: hold the completed innings in the match centre until the GM requests the review.
+  // M.done is already finalised by the engine; no additional balls can be bowled here.
+  if (M.done && ui.matchReview) return `<div class="grid">${recap}</div><div class="livebar three">${bar}</div>`;
+  if (M.done) {
+    const over = inn.thisOver && inn.thisOver.length ? inn.thisOver : inn.lastOver && inn.lastOver.syms || [];
+    const lastOver = `<div class="broadcast-recent match-final-over"><span class="broadcast-label">FINAL OVER · ${oversStr(inn.balls)} OVERS BOWLED</span><div>${over.map(ballSym).join('') || '<span class="dim xs">Innings complete</span>'}</div></div>`;
+    const result = `<div class="broadcast-result match-final-result">${esc(M.result && M.result.text || 'Match complete')}</div>`;
+    return `<div class="grid"><section class="panel broadcast-panel"><div class="pb">${broadcast}${result}${lastOver}</div></section>
+      ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], liveTab, 'setLiveTab')}${body}
+    </div><div class="livebar three">${bar}</div>`;
+  }
   if (recap) return `<div class="grid">${recap}
     ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], (ui.liveTab==='wagon'?'batter':ui.liveTab), 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
@@ -7614,12 +7669,18 @@ function highlightsOf(M) {
   return (M.milestones || []).slice().sort((a, b) => rank(a.type) - rank(b.type)).slice(0, 3);
 }
 function potmCard(M) {
-  const p = P(M.potm); let r = 0, b = 0, out = false, batted = false, w = 0, rc = 0, balls = 0;
-  M.innings.forEach(i => { i.card.forEach(c => { if (c.id === M.potm && c.in) { batted = true; r += c.r; b += c.b; out = out || !!c.out; } }); const f = i.bw[M.potm]; if (f) { w += f.w; rc += f.r; balls += f.balls; } });
-  const bat = batted && (r >= 20 || !balls) ? `${r}${out ? '' : '*'} <small>(${b})</small>` : '';
-  const bowl = balls && (w || !bat) ? `${w}/${rc} <small>(${oversStr(balls)})</small>` : '';
-  const trophy = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6M10 17h4"/></svg>';
-  return `<div class="potm-card tap" onclick="showPlayer('${p.id}')"><span class="potm-trophy">${trophy}</span><div class="grow"><div class="potm-l">Player of the match</div><div class="potm-n">${esc(pname(p))} <span class="dim xs">${esc(teamDef(p.teamId) ? (teamDef(p.teamId).short || '') : '')}</span></div></div><div class="potm-f">${[bat, bowl].filter(Boolean).join('<span class="dim"> · </span>')}</div></div>`;
+  const p=P(M.potm); if(!p) return '';
+  const contributions=[];
+  M.innings.forEach(i=>{
+    i.card.forEach(c=>{if(c.id===M.potm&&c.in) contributions.push({score:c.r+(c.r>=50?10:0)+(c.r>=100?20:0),text:`${c.r}${c.out?'':'*'}`,type:'bat'});});
+    const f=i.bw[M.potm];if(f&&f.balls) contributions.push({score:f.w*(M.fmt==='FC'?18:22),text:`${f.w}/${f.r}`,type:'bowl'});
+  });
+  // One compact contribution per innings. The two strongest explain the award
+  // without overwhelming the narrow mobile card.
+  contributions.sort((a,b)=>b.score-a.score);
+  const shown=contributions.filter(x=>x.score>0).slice(0,2).map(x=>x.text);
+  const trophy='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M9 20h6M10 17h4"/></svg>';
+  return `<div class="potm-card tap" onclick="showPlayer('${p.id}')"><span class="potm-trophy">${trophy}</span><div class="grow"><div class="potm-l">Player of the match</div><div class="potm-n">${esc(pname(p))} <span class="dim xs">${esc(teamDef(p.teamId)?(teamDef(p.teamId).short||''):'')}</span></div></div><div class="potm-f">${shown.join(' <span class="dim">&amp;</span> ')}</div></div>`;
 }
 function resultRecap(M) {
   // Best innings per batter; combined match figures per bowler.
@@ -7950,11 +8011,11 @@ function renderDressingRoom() {
   const needs = sq.filter(gmIssue), care = sq.filter(p => !gmIssue(p) && p.morale < 62);
   const coach = h ? `Coach ${esc(h.last)}` : 'Your coaching staff';
   const careLine = care.length ? `${coach} is working with ${care.length} unsettled player${care.length > 1 ? 's' : ''}: ${care.map(p => esc(p.last)).join(', ')}. ${h ? `His man-management (${h.mm}) lifts them a little each week.` : 'Hire a head coach to settle them faster.'}` : `${coach} reports a settled group.`;
-  const needRows = needs.map(p => playerRow(p, { sub: `<span class="loss">${gmIssue(p)}</span> · ${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}`, end: `${chip(moodClass(p.morale), p.transferListed ? 'Listed' : moodLabel(p.morale))}<button class="btn sm" onclick="event.stopPropagation();talkSheet('${p.id}')">Talk</button>` })).join('');
+  const needRows = needs.map(p => playerRow(p, { sub: `<span class="loss">${gmIssue(p)}</span> · ${PERSONAS[ensurePersona(p)].label} · ${selectionProgress(p).opportunities ? Math.round(selectionProgress(p).fraction * 100) + '% relevant games' : 'new'}`, end: `${chip(moodClass(p.morale), p.transferListed ? 'Listed' : moodLabel(p.morale))}<button class="btn sm" onclick="event.stopPropagation();talkSheet('${p.id}')">Talk</button>` })).join('');
   return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${tm < 50 ? 'loss' : tm >= 65 ? 'win' : ''}">${tm}</div><div class="l">Morale</div></div><div class="kpi"><div class="v ${needs.length ? 'loss' : ''}">${needs.length}</div><div class="l">Need you</div></div><div class="kpi"><div class="v">${sq.filter(p => p.wantsOut).length}</div><div class="l">Trade asks</div></div><div class="kpi"><div class="v">${h ? h.mm : '–'}</div><div class="l">Coach care</div></div></div>
     <div style="height:8px"></div><div class="xs muted" style="margin-bottom:8px">${care.length} players with coaching staff · ${needs.length} need GM attention</div>
     ${panel(`Needs the GM · ${needs.length}`, needs.length ? `<div class="rows">${needRows}</div>` : '<div class="empty">Nobody needs you right now. Your coach is handling the squad.</div>', { flush: true })}
-    <details class="panel locker-more"><summary>Other players · ${sq.length-needs.length}</summary><div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${p.played != null ? Math.round(p.played * 100) + '% games' : 'new'}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div></details>
+    <details class="panel locker-more"><summary>Other players · ${sq.length-needs.length}</summary><div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${selectionProgress(p).opportunities ? Math.round(selectionProgress(p).fraction * 100) + '% relevant games' : 'new'}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div></details>
     `;
 }
 function talkSheet(id) {
