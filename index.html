@@ -829,37 +829,13 @@ body.live-mode .actbar{display:none}
   .pgr .cells{gap:1px}
   .pgr em{font-size:10px}
 }
-
-/* Build 056 live analysis layout and compact pitch maps */
-.wagon-zone-names{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px;text-align:left;font-size:11px;margin-top:9px}
-.wagon-zone-names>div{display:flex;justify-content:space-between;border-bottom:1px solid var(--border,#304253);padding:3px}
-.wagon-controls{display:grid;gap:8px}
-.wagon-controls select{max-width:100%}
-.pitch-map-wrap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
-.pitch-map-card{min-width:0}
-.map-hand-title{font-weight:700;font-size:11px;margin:0 0 6px;text-align:center;color:var(--text,#eaf2f8)}
-.pitch-map-grid{display:grid;grid-template-columns:24px repeat(5,minmax(0,1fr));gap:2px;width:100%;margin:0}
-.map-axis{font-size:8px;color:var(--muted,#9bb0be);text-align:center;align-self:end;overflow-wrap:anywhere;line-height:1.1}
-.map-row-title{text-align:right;align-self:center;padding-right:2px}
-.map-cell{position:relative;aspect-ratio:1/1;min-height:22px;background:color-mix(in srgb,#f59e0b calc(var(--heat)*88%),#182a39);border:1px solid rgba(255,255,255,.06);border-radius:2px}
-.map-cell::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.08),transparent 50%);pointer-events:none}
-.map-target{outline:2px solid #f4c542;outline-offset:-2px}
-.map-cell small{position:absolute;right:2px;bottom:1px;color:#fff;font-size:8px;font-weight:800;line-height:1}
-.map-key{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:8px}
-.map-key span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted,#9fb3be)}
-.map-swatch{width:11px;height:11px;border-radius:2px;background:#182a39;border:1px solid rgba(255,255,255,.08)}
-.map-swatch.mid{background:color-mix(in srgb,#f59e0b 45%,#182a39)}
-.map-swatch.hot{background:color-mix(in srgb,#f59e0b 88%,#182a39)}
-.map-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
-.map-metrics>div{background:#152735;padding:8px 3px;text-align:center;border-radius:6px}
-.map-metrics b{display:block;font-size:15px}
-.map-metrics span{font-size:9px;color:#9fb3be}
-@media(max-width:480px){
-  .pitch-map-grid{grid-template-columns:20px repeat(5,minmax(0,1fr));gap:1px}
-  .map-axis{font-size:7px}
-  .map-cell{min-height:18px}
-  .map-metrics{grid-template-columns:repeat(2,1fr)}
-}
+/* Build 054 match analysis: view switch, zones pie, pitch map grid and its stat tiles. */
+.an-views{margin:0 0 8px}
+.wagon.zones{max-width:320px}
+.pitch-grid{width:100%;max-width:340px;height:auto;display:block;margin:0 auto}
+.pm-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:8px}
+.pm-stats>div{background:var(--s2);border-radius:9px;padding:6px 4px;text-align:center;min-width:0}
+.pm-stats b{display:block;font-size:15px}.pm-stats span{display:block;font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -918,7 +894,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.15 Build 057', title: 'Wagon and Zones Alignment', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.15 Build 054', title: 'Match Analysis: Spike, Zones & Pitch Map', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1907,7 +1883,7 @@ function ballContext(M, inn, batter, bowler, sc) {
   const accMul = clamp(1.5 - bowler.sk.acc / 100, 0.5, 1.4);
   const keeper = P(M.keeper[inn.bowl]);
   const byeMul = keeper ? clamp(1.7 - keeper.sk.keep / 100, 0.6, 1.5) : 1.5;
-  return { pW: calibratedWicketChance(pW, M.fmt), weights, pWide: B.wide * accMul * pe.wideMul, pNb: B.nb * accMul, pBye: B.bye * byeMul, mix: pe.mix };
+  return { pW: calibratedWicketChance(pW, M.fmt), weights, pWide: B.wide * accMul * pe.wideMul, pNb: B.nb * accMul, pBye: B.bye * byeMul, mix: pe.mix, locCtx: pe.locCtx };
 }
 const RUN_VALUES = [0, 1, 2, 3, 4, 6];
 function sampleRuns(w) {
@@ -2109,40 +2085,6 @@ function checkInningsEnd(M, inn) {
   else if (M.fmt === 'FC' && M.balls >= mMaxBalls(M)) { inn.closed = true; M.timeUp = true; }
 }
 
-// Compact, deterministic modelled ball locations, retained only for the active live match.
-// Columns: wide off, outside off, stumps, leg, wide leg. Rows: full toss, yorker, full, good, short of good, short.
-const MAP_LINES = ['Wide off','Outside off','Stumps','Leg','Wide leg'];
-const MAP_LENGTHS = ['Full toss','Yorker','Full','Good','Short of good','Short'];
-function deliveryTarget(plan) {
-  const line = plan.line === 'stumps' ? 2 : plan.line === 'body' ? 3 : 1;
-  const len = plan.len === 'yorker' ? 1 : plan.len === 'full' ? 2 : plan.len === 'short' ? 5 : 3;
-  return [len,line];
-}
-function recordDeliveryMap(M, inn, ev, batter, bowler) {
-  if (!M.mapBalls) M.mapBalls = [];
-  // A match can have thousands of balls. Keep bounded data only, never in permanent records.
-  if (M.mapBalls.length >= 1800) return;
-  const plan = planFor(M, inn, batter.id);
-  const target = deliveryTarget(plan);
-  const seed = String(M.fxId) + ':' + (M.innings.length-1) + ':' + inn.balls + ':' + inn.overNo + ':' + inn.overBalls + ':' + M.mapBalls.length;
-  const accuracy = Math.max(15,Math.min(99,(bowler.sk.acc||60)-RATING_SHIFT));
-  const death = M.fmt !== 'FC' && phaseOf(M.fmt,inn.overNo,mOvers(M)) === 'death';
-  const deathSkill = (bowler.sk.death||60)-RATING_SHIFT;
-  const concentration = Math.max(.3,Math.min(.87,.23 + accuracy*.006 + (death && plan.len==='yorker' ? (deathSkill-60)*.001 : 0)));
-  const h = n => hash01(seed+':'+n);
-  let row=target[0], col=target[1];
-  if (h('hit') >= concentration) {
-    const spread = accuracy>=78 ? 1 : accuracy>=55 ? 2 : 3;
-    const dx = Math.round((h('side')*2-1)*spread);
-    const dy = Math.round((h('length')*2-1)*(bowler.sk.vari>75+RATING_SHIFT?2:spread));
-    col=Math.max(0,Math.min(4,col+dx));
-    row=Math.max(0,Math.min(5,row+dy));
-    if (row===target[0] && col===target[1]) col=Math.max(0,Math.min(4,col+(h('other')<.5?-1:1)));
-  }
-  // The actual dismissal / boundary is recorded as a cell marker, not generated from the location.
-  M.mapBalls.push([M.innings.length-1,bowler.id,batter.id,batter.hand==='L'?1:0,row,col,ev.wkt?1:0,ev.bat||0,target[0],target[1]]);
-}
-
 // One delivery. Returns an event object (with .text when the match is live).
 function simBall(M) {
   if (M.done) return null;
@@ -2191,11 +2133,10 @@ function simBall(M) {
       }
     }
   }
+  // Build 054: place the ball on the pitch map after its result is known (no effect on the result).
+  recordDelivery(M, inn, ev, ctx.locCtx, bowler, sc);
   checkBallMilestones(M, inn, ev, bowler, sc);
   noteBallChance(M, inn, ev, batter, bowler);
-  // Presentation-only ball placement. Deterministic hash sampling never advances gameplay RNG.
-  // Modelled from the existing analyst plan and completed outcome; never used by simBall probabilities.
-  if (M.live) recordDeliveryMap(M, inn, ev, batter, bowler);
   bf.r += conceded;
   inn.overConceded += conceded;
   inn.overTally = (inn.overTally || 0) + ev.runs;
@@ -2364,6 +2305,16 @@ const SHOT_TALK = {
   mid:      { run:['whips it through midwicket', 'turns it into the leg side'], four:['whips it through midwicket for four', ['pulls it through midwicket for four', 'pace']], six:['heaves it over midwicket for six', ['pulls it over midwicket for six', 'pace'], ['skips down and lofts it over midwicket for six', 'spin']] },
   longon:   { run:['drives it down to long-on', 'pushes it past mid-on'], four:['drives past mid-on for four', 'lofts it over mid-on for four'], six:['launches it over long-on for six', ['dances down and clears long-on for six', 'spin']] }
 };
+// Dot balls described from where the ball landed (Build 054), so the text matches the pitch map.
+function dotTalkFor(cell) {
+  const r = Math.floor(cell / 5), c = cell % 5;
+  if (c === 0) return ['leaves it outside off', 'lets it go wide of off stump'];
+  if (r === 5) return c >= 3 ? ['sways out of the way', 'ducks under a short one', 'fends it down off the body'] : ['ducks under a short one', 'sways out of the way', 'lets the bouncer go'];
+  if (r <= 1) return r === 0 ? ['hits the full toss straight to a fielder', 'drives the full toss to a fielder'] : ['digs out a yorker', 'jams down on a yorker'];
+  if (c === 1) return ['is beaten outside off', 'plays and misses', 'leaves it outside off', 'defends in the corridor'];
+  if (c === 2) return ['defends', 'blocks it back to the bowler', 'is struck on the pad', 'pushes it straight to a fielder'];
+  return ['is cramped and can only defend', 'clips it straight to a fielder', 'is struck on the pad'];
+}
 const DOT_TALK = ['defends', 'leaves it outside off', 'is beaten outside off', 'plays and misses', 'blocks it back to the bowler', 'pushes it straight to a fielder'];
 const RUN_TAIL = { 1:['for one', 'for a single'], 2:['and they come back for two', 'for two'], 3:['and they run three', 'for three'], 5:['and they run five'] };
 // One rand() draw per ball, the same as the old phrase pick, so live matches keep the same random sequence.
@@ -2371,12 +2322,14 @@ const RUN_TAIL = { 1:['for one', 'for a single'], 2:['and they come back for two
 function shotPhrase(inn, ev, bowler, r) {
   const kind = isSpin(bowler) ? 'spin' : 'pace';
   let list;
-  if (!ev.bat) list = DOT_TALK;
+  if (!ev.bat) list = ev.cell != null ? dotTalkFor(ev.cell) : DOT_TALK;
   else { const z = SHOT_TALK[ev.zone || 'cover']; list = (ev.bat === 6 ? z.six : ev.bat === 4 ? z.four : z.run).filter(x => typeof x === 'string' || x[1] === kind).map(x => typeof x === 'string' ? x : x[0]); if (!list.length) list = ev.bat === 6 ? ['clears the rope for six'] : ['finds the gap']; }
   const key = `${inn.overNo}`, used = (inn.phraseOver && inn.phraseOver.k === key) ? inn.phraseOver.used : [];
   inn.phraseOver = { k: key, used };
   let i = Math.floor(r * list.length), tries = 0;
   while (used.includes(list[i]) && tries++ < list.length) i = (i + 1) % list.length;
+  // A short cell-specific dot list can run out within an over; fall back to the general dot phrases.
+  if (used.includes(list[i]) && !ev.bat) { const spare = DOT_TALK.filter(x => !used.includes(x)); if (spare.length) { list = spare; i = Math.floor(r * list.length); } }
   const base = list[i]; used.push(base);
   let text = base;
   if (ev.bat && ev.bat !== 4 && ev.bat !== 6) { const tails = RUN_TAIL[ev.bat] || [`for ${ev.bat}`]; text = `${base} ${tails[Math.floor(r * 997) % tails.length]}`; }
@@ -2696,11 +2649,50 @@ function planFor(M, inn, batterId) {
   if (!M.aiPlans[key]) M.aiPlans[key] = analystPlan(M.fmt, inn.bowl, batterId, death, M.fxId + inn.bowl);
   return M.aiPlans[key];
 }
+// ---- Ball location (Build 054) ----
+// Every delivery is given a cell on a 6 x 5 grid, seen from the bowler's end and relative to the batter:
+// rows (length) 0 full toss, 1 yorker, 2 full, 3 good, 4 short of a length, 5 short;
+// columns (line) 0 wide outside off, 1 outside off (the corridor), 2 stumps, 3 leg stump/body, 4 wide down leg.
+// Placement only: the ball's result is decided exactly as before, then placeBall chooses where it landed.
+// The choice starts from the bowler's spread around the analyst's target cell (Accuracy, Variation and the
+// bowling coach set how often he hits it; Death bowling for yorkers at the death) and weights each cell by
+// how likely that result was there: wickets favour dangerous cells and the batter's weak areas, boundaries
+// favour loose balls, dots favour tight ones, and the dismissal type points to a line (bowled and lbw at the
+// stumps, caught behind outside off). It uses a hash of the ball, never rand(), so results, calibration and
+// the random sequence are unchanged from Build 053. No location data is stored for AI-only matches.
+const LOC_ROWS = ['Full toss', 'Yorker', 'Full', 'Good length', 'Short of a length', 'Short'];
+const LOC_ROW_SHORT = ['FT', 'Y', 'F', 'G', 'SG', 'S'];
+const LOC_COLS = ['Wide outside off', 'Outside off', 'Stumps', 'Leg stump', 'Wide down leg'];
+const PLAN_ROW = { yorker:1, full:2, good:3, short:5 };
+const PLAN_COL = { wide:0, off:1, stumps:2, body:3 };
+const ROW_TRAIT = [null, 'yorker', 'full', 'good', null, 'short'];
+const COL_TRAIT = [null, 'off', 'stumps', 'body', null];
+// Relative danger to the batter (wicket) and scoring value (runs) of each length and line, used as
+// likelihoods when placing a ball whose result is already known.
+const LOC_W = { pace:[0.45, 1.25, 1.12, 1.05, 0.95, 1.00], spin:[0.45, 1.00, 1.15, 1.08, 0.90, 0.55] };
+const LOC_R = { pace:[1.70, 0.75, 1.18, 0.88, 1.00, 1.15], spin:[1.70, 1.05, 1.12, 0.90, 1.05, 1.70] };
+const LOC_CW = [0.60, 1.15, 1.10, 0.90, 0.55], LOC_CR = [1.10, 0.95, 0.95, 1.10, 1.40];
+const locCell = (r, c) => r * 5 + c;
+// Probability of landing in each cell for a target, given accuracy-driven execution and spread.
+function locDistribution(tr, tc, exec, acc) {
+  const out = {}, add = (r, c, p) => { r = clamp(r, 0, 5); c = clamp(c, 0, 4); const k = locCell(r, c); out[k] = (out[k] || 0) + p; };
+  add(tr, tc, exec);
+  const miss = 1 - exec, far = clamp((92 - acc) / 120, 0.05, 0.45);   // share of misses that stray two cells
+  const steps = [[0.45, [[1, 0], [-1, 0]]], [0.35, [[0, 1], [0, -1]]], [0.20, [[1, 1], [1, -1], [-1, 1], [-1, -1]]]];
+  steps.forEach(([w, dirs]) => dirs.forEach(([dr, dc]) => {
+    const p = miss * w / dirs.length;
+    add(tr + dr, tc + dc, p * (1 - far));
+    add(tr + dr * 2, tc + dc * 2, p * far);
+  }));
+  // Rows beyond the grid clamp onto its edge, so a yorker that goes too full becomes a full toss.
+  return out;
+}
 function planEffect(M, inn, bowler, batter, sc) {
   const plan = planFor(M, inn, batter.id);
   const L = PLAN_LINES[plan.line] || PLAN_LINES.off, N = PLAN_LENGTHS[plan.len] || PLAN_LENGTHS.good;
   const specMul = staffSpec(inn.bowl, 'bowl') ? (staffSpec(inn.bowl, 'bowl') === (isSpin(bowler) ? 'spin' : 'pace') ? 1.3 : 0.7) : 1;
-  const exec = clamp((bowler.sk.acc * 0.7 + bowler.sk.vari * 0.3 - RATING_SHIFT) / 100 + (staffEff(inn.bowl, 'bowl') - 60) / 400 * specMul, 0.3, 0.97);
+  const coach = (staffEff(inn.bowl, 'bowl') - 60) / 400 * specMul;
+  const exec = clamp((bowler.sk.acc * 0.7 + bowler.sk.vari * 0.3 - RATING_SHIFT) / 100 + coach, 0.3, 0.97);
   const ph = phaseOf(M.fmt, inn.overNo, mOvers(M));
   let wkt = L.wkt * N.wkt, run = L.run * N.run, wideMul = L.wide || 1;
   const spin = isSpin(bowler);
@@ -2721,7 +2713,78 @@ function planEffect(M, inn, bowler, batter, sc) {
   if (plan.line === 'off') mix['caught behind'] = 1.25;
   if (plan.len === 'short' || plan.line === 'body') mix.caught = 1.3;
   if (plan.len === 'full' || plan.len === 'yorker') { mix.bowled *= 1.3; mix.lbw *= 1.2; }
-  return { plan, wkt: clamp(wkt, 0.5, 1.8), run: clamp(run, 0.7, 1.4), wideMul, mix, adapt, m };
+  // What placeBall needs later; nothing here draws a random number or changes this ball's odds.
+  const deathYorker = plan.len === 'yorker' && !spin && ph === 'death';
+  const hitP = deathYorker ? clamp(((bowler.sk.death || bowler.sk.acc) * 0.6 + bowler.sk.acc * 0.4 - RATING_SHIFT) / 100 + coach, 0.3, 0.95) : exec;
+  const locCtx = { plan, hitP, acc: bowler.sk.acc - RATING_SHIFT, vari: bowler.sk.vari - RATING_SHIFT, kind: spin ? 'spin' : 'pace', tr, adapt };
+  return { plan, wkt: clamp(wkt, 0.5, 1.8), run: clamp(run, 0.7, 1.4), wideMul, mix, adapt, m, locCtx };
+}
+// Deterministic uniform numbers for one ball (FNV-1a hash), so placement never touches the game RNG.
+function locHash(str, salt) { let h = 2166136261 ^ salt; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } h ^= h >>> 13; h = Math.imul(h, 2246822507); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+// Where a ball with a known result landed. Returns { cell, target, hit, variation }.
+function placeBall(M, inn, ev, lc) {
+  const plan = lc.plan, key = `${M.fxId || ''}|${M.innings.length}|${(inn.bl || '').length}|${ev.o}.${ev.b}|${ev.bowler}`;
+  const u1 = locHash(key, 1), u2 = locHash(key, 2);
+  const spin = lc.kind === 'spin';
+  const pRow = PLAN_ROW[plan.len] != null ? PLAN_ROW[plan.len] : 3, tCol = PLAN_COL[plan.line] != null ? PLAN_COL[plan.line] : 1;
+  let tRow = pRow, variation = false;
+  // Skilled bowlers mix in deliberate variations (bouncer or yorker for pace, flight or the quicker one for spin).
+  const pVar = clamp((lc.vari - 55) / 250, 0, 0.16);
+  if (u1 < pVar) { variation = true; const alt = spin ? (u1 / pVar < 0.5 ? 2 : 4) : (u1 / pVar < 0.5 ? 5 : 1); tRow = alt !== pRow ? alt : (spin ? 3 : 2); }
+  const dist = locDistribution(tRow, tCol, lc.hitP, lc.acc);
+  const tr = lc.tr || {}, adapt = lc.adapt || 1, kind = lc.kind;
+  const cellW = k => { const r = Math.floor(k / 5), c = k % 5; const ma = -((tr[ROW_TRAIT[r]] || 0) + (tr[COL_TRAIT[c]] || 0)); return LOC_W[kind][r] * LOC_CW[c] * (1 + 0.4 * ma * adapt); };
+  const cellR = k => { const r = Math.floor(k / 5), c = k % 5; const ma = -((tr[ROW_TRAIT[r]] || 0) + (tr[COL_TRAIT[c]] || 0)); return LOC_R[kind][r] * LOC_CR[c] * (1 - 0.1 * ma * adapt); };
+  const cells = Object.keys(dist).map(Number);
+  let eW = 0, eR = 0; cells.forEach(k => { eW += dist[k] * cellW(k); eR += dist[k] * cellR(k); });
+  const how = ev.wkt || '';
+  const like = k => {
+    const r = Math.floor(k / 5), c = k % 5;
+    if (ev.wkt && how !== 'run out') {
+      let l = cellW(k) / eW;
+      if (how === 'bowled' || how === 'lbw') l *= c === 2 ? 3 : c === 1 || c === 3 ? 0.8 : 0.15;
+      else if (how === 'caught behind') l *= c <= 1 ? 2.5 : c === 2 ? 0.8 : 0.3;
+      else if (how === 'stumped') l *= r === 2 || r === 3 ? 2 : 0.4;
+      return l;
+    }
+    if (ev.extra === 'wd' || ev.extra === 'b' || ev.extra === 'lb' || how === 'run out') return 1;
+    const rr = cellR(k) / eR, bat = ev.bat || 0;
+    return bat >= 4 ? rr * rr : bat > 0 ? rr : 1 / rr;
+  };
+  let tot = 0; const post = cells.map(k => { const p = dist[k] * like(k); tot += p; return p; });
+  let cell = cells[cells.length - 1], acc = 0;
+  for (let i = 0; i < cells.length; i++) { acc += post[i] / tot; if (u2 <= acc) { cell = cells[i]; break; } }
+  return { cell, target: locCell(pRow, tCol), hit: cell === locCell(tRow, tCol), variation };
+}
+// Compact per-ball delivery record for user and live matches (inn.bl, 4 characters a ball):
+// bits 0-4 cell, 5-8 bowler index in the bowling XI, 9-12 batter card index, 13-15 runs off the bat,
+// 16 wicket credited to the bowler, 17-18 extra (0 none, 1 wide, 2 no-ball, 3 bye/leg-bye),
+// 19 on target, 20 deliberate variation. Plan targets per batter and phase are kept in inn.pt.
+const BL_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+function blEncode(v) { let s = ''; for (let i = 0; i < 4; i++) { s += BL_CHARS[v & 63]; v >>>= 6; } return s; }
+function blDecode(str) {
+  const out = [];
+  for (let i = 0; i + 3 < (str || '').length; i += 4) {
+    let v = 0; for (let j = 3; j >= 0; j--) v = v * 64 + BL_CHARS.indexOf(str[i + j]);
+    out.push({ cell: v & 31, bowler: (v >> 5) & 15, batter: (v >> 9) & 15, runs: (v >> 13) & 7, wkt: (v >> 16) & 1, ext: (v >> 17) & 3, hit: (v >> 19) & 1, variation: (v >> 20) & 1 });
+  }
+  return out;
+}
+function recordDelivery(M, inn, ev, lc, bowler, sc) {
+  if (!lc) return;
+  if (M.trackLoc === undefined) M.trackLoc = !!(M.live || isUserTeam(M.home) || isUserTeam(M.away));
+  if (!M.trackLoc && !M.live) return;
+  const loc = placeBall(M, inn, ev, lc);
+  ev.cell = loc.cell;
+  let cell = loc.cell;
+  if (ev.extra === 'wd') { const c = cell % 5; cell = Math.floor(cell / 5) * 5 + (c <= 2 ? 0 : 4); }
+  const bi = Math.max(0, (M.xi[inn.bowl] || []).indexOf(bowler.id)), ti = Math.max(0, inn.card.indexOf(sc));
+  const ext = ev.extra === 'wd' ? 1 : ev.extra === 'nb' ? 2 : (ev.extra === 'b' || ev.extra === 'lb') ? 3 : 0;
+  const w = ev.wkt && ev.wkt !== 'run out' ? 1 : 0;
+  const v = cell | (bi << 5) | (ti << 9) | (Math.min(7, ev.bat || 0) << 13) | (w << 16) | (ext << 17) | ((loc.hit && ext !== 1 ? 1 : 0) << 19) | ((loc.variation ? 1 : 0) << 20);
+  inn.bl = (inn.bl || '') + blEncode(v);
+  const death = phaseOf(M.fmt, inn.overNo, mOvers(M)) === 'death' ? 'd' : 'n';
+  inn.pt = inn.pt || {}; const pk = ti + death; if (inn.pt[pk] == null) inn.pt[pk] = loc.target;
 }
 function planLabel(plan) { return `${(PLAN_LINES[plan.line] || PLAN_LINES.off).label}, ${(PLAN_LENGTHS[plan.len] || PLAN_LENGTHS.good).label.toLowerCase()}`; }
 
@@ -4437,7 +4500,7 @@ function seedAuthenticWorld() {
     // Real players carry their real international record only; never a fictional history.
     addRealCareer(p);
     if (REAL_AGES_2026[realSlug(rec.name)]) p.realAge = true;
-    if (tid && TEAM_DEFS.some(t=>t.id===tid)) p.contract = {salary:askingSalary(p),years:2};
+    if (tid && TEAM_DEFS.some(t=>t.id===tid)) p.contract = {salary:MIN_SALARY,years:2};
     else p.contract = null;
     created.set(key,p.id);
     return p;
@@ -4446,20 +4509,6 @@ function seedAuthenticWorld() {
     const entries = AUTHENTIC_ROSTERS.domestic[t.id] || [];
     entries.forEach(rec => add(rec,'AUS',rec.contracted ? t.id : null,'Cricket Australia 2026-27'));
   }
-  // Authentic starting contracts are modelled estimates, not historical salary claims.
-  // Use rating-based values instead of giving every player the $60k minimum.
-  // Preserve the $3m cap even for unusually strong authentic roster mixes.
-  TEAM_DEFS.forEach(t => {
-    const sq = squadOf(t.id);
-    const pay = sq.reduce((sum,p)=>sum+p.contract.salary,0);
-    const budgetShare = 0.76 + ((t.id.charCodeAt(0)*7 + t.id.charCodeAt(t.id.length-1)*3) % 17)/100;
-    if (pay > SALARY_CAP * budgetShare) {
-      const discretionary = sq.reduce((sum,p)=>sum+Math.max(0,p.contract.salary-MIN_SALARY),0);
-      const room = Math.max(0,SALARY_CAP*budgetShare-sq.length*MIN_SALARY);
-      const factor = discretionary ? Math.min(1,room/discretionary) : 1;
-      sq.forEach(p => p.contract.salary = Math.max(MIN_SALARY,Math.round((MIN_SALARY+(p.contract.salary-MIN_SALARY)*factor)/5000)*5000));
-    }
-  });
   // Set one free agent record for international players, excluding people already on Australian domestic teams.
   for (const [nat,entries] of Object.entries(AUTHENTIC_ROSTERS.international)) {
     for (const rec of entries) add(rec,nat,nat==='AUS' ? null : 'X_'+nat,'ICC T20 World Cup 2026');
@@ -4527,13 +4576,22 @@ function addNews(tag, title, body) {
 function logTx(text) { game.transactions.unshift({ text, day: game.day, year: game.year }); if (game.transactions.length > 80) game.transactions.length = 80; }
 function fixtureById(id) { return game.season.fixtures.find(f => f.id === id); }
 
+// Pitch-map delivery data is kept on the 12 most recent scorecards that have it (about 4 KB per
+// first-class innings); older matches keep their scorecard and wagon wheel but lose the pitch map.
+const PITCH_KEEP = 12;
+function prunePitchData() {
+  const withBl = Object.keys(game.scorecards || {}).filter(id => game.scorecards[id].innings.some(i => i.bl));
+  if (withBl.length <= PITCH_KEEP) return;
+  const order = id => { const f = fixtureById(id); return f ? f.day : 0; };
+  withBl.sort((a, b) => order(a) - order(b)).slice(0, withBl.length - PITCH_KEEP).forEach(id => game.scorecards[id].innings.forEach(i => { delete i.bl; delete i.pt; }));
+}
 function compactScorecard(M) {
   return {
     condText: condSummary(M), overs: M.overs || null, crowd: M.crowd || null, crowd: M.crowd || null,
     comp: M.comp, fmt: M.fmt, home: M.home, away: M.away, venue: M.venue, stage: M.stage, toss: M.toss, result: M.result, potm: M.potm, xi: M.xi, milestones: (M.milestones || []).slice(),
     innings: M.innings.map(i => ({ maxOvers: M.overs || null, bat: i.bat, bowl: i.bowl, runs: i.runs, wkts: i.wkts, balls: i.balls, ext: i.ext, declared: i.declared, allOut: i.allOut, followOn: i.followOn, target: i.target,
       card: i.card.map(c => ({ id: c.id, r: c.r, b: c.b, f4: c.f4, f6: c.f6, out: c.out, in: c.in, shots: c.shots })),
-      bw: Object.keys(i.bw).map(id => Object.assign({ id }, i.bw[id])), fow: i.fow, overRuns: i.overRuns }))
+      bw: Object.keys(i.bw).map(id => Object.assign({ id }, i.bw[id])), fow: i.fow, overRuns: i.overRuns, ...(i.bl ? { bl: i.bl, pt: i.pt } : {}) }))
   };
 }
 
@@ -4584,6 +4642,7 @@ function applyIntlMatch(M) {
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
   if (/^(wc(semi|final)|global(semi|final))/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
   if (M.home === 'AUS' || M.away === 'AUS' || /^(wc(semi|final)|global(semi|final))/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
+  prunePitchData();
   if (!fx.result.noResult) rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5);
   if (fx.stage === 'world') archiveWorldSeries();
   trackWtcResult(fx);
@@ -4666,6 +4725,7 @@ function applyMatch(M) {
   fx.result = { winner: res.winner, draw: !!res.draw && !res.advanced, tie: !!res.tie, noResult: !!res.noResult && !res.advanced, text: res.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M), milestones: (M.milestones || []).slice() };
   gateTakings(M);
   if (M.home === U() || M.away === U() || fx.stage !== 'league') game.scorecards[fx.id] = compactScorecard(M);
+  prunePitchData();
   if (M.home === U() || M.away === U()) squadOf(U()).forEach(p => { p.rest = false; });
 
   matchWear(M, inXI);
@@ -5202,33 +5262,22 @@ function extendPlayer(id, salary, years) {
   return { ok: true };
 }
 
-// LC-12: AI clubs make value-led recruitment choices rather than stopping at an
-// arbitrary 20 players. Existing contracts are retained; no retroactive salary reset.
-// A weak-value candidate is not signed merely to consume remaining cap space.
+// AI teams fill squads from free agency using a need-aware score.
 function aiFreeAgency() {
   TEAM_DEFS.forEach(t => {
     if (t.id === U()) return;
     let sq = squadOf(t.id);
     while (sq.length > SQUAD_MAX || (payroll(t.id) > SALARY_CAP && sq.length > SQUAD_MIN)) {
-      const w = sq.sort((a,b) => tradeValue(a)/Math.max(MIN_SALARY,a.contract.salary) - tradeValue(b)/Math.max(MIN_SALARY,b.contract.salary))[0];
+      const w = sq.sort((a, b) => tradeValue(a) / a.contract.salary - tradeValue(b) / b.contract.salary)[0];
       w.teamId = null; w.contract = null; sq = squadOf(t.id);
     }
-    // A club may carry 20–23 players; prioritise position shortages and
-    // meaningful upgrades rather than filling every available slot blindly.
-    const target = 20 + (t.id.charCodeAt(0) + (t.id.charCodeAt(t.id.length-1)||0) + game.year) % 4;
     let guard = 0;
-    while (sq.length < target && guard++ < 24) {
+    while (sq.length < 20 && guard++ < 10) {
       const need = groupNeeds(t.id);
-      const candidates = freeAgents().filter(p => askingSalary(p) <= capSpace(t.id) &&
-        (p.nat === 'AUS' || overseasCount(t.id) < OVERSEAS_MAX))
-        .map(p => ({p, value:tradeValue(p), score:tradeValue(p)*(1+need[group(p)]*1.5)}))
-        .sort((a,b)=>b.score-a.score);
-      const cand = candidates[0];
+      const cand = freeAgents().filter(p => askingSalary(p) <= capSpace(t.id) && (p.nat === 'AUS' || overseasCount(t.id) < OVERSEAS_MAX))
+        .map(p => ({ p, s: tradeValue(p) * (1 + need[group(p)]) })).sort((a, b) => b.s - a.s)[0];
       if (!cand) break;
-      // Beyond a core squad of 20, require a useful player or an acute need.
-      if (sq.length >= 20 && cand.value < 17 && need[group(cand.p)] < 0.5) break;
-      cand.p.teamId = t.id;
-      cand.p.contract = {salary:askingSalary(cand.p),years:randInt(1,3)};
+      cand.p.teamId = t.id; cand.p.contract = { salary: askingSalary(cand.p), years: randInt(1, 2) };
       sq = squadOf(t.id);
     }
   });
@@ -6384,7 +6433,18 @@ function showScorecard(fxId, k) {
   if (!S) { flash('Scorecard not available.'); return; }
   _scFx = fxId;
   const f = fixtureById(fxId);
-  sheet(`${fixtureContextLabel(f) || COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(S.result.text)}</span>` : '' });
+  // Build 054: Scorecard and Analysis (Spike, Zones, Pitch map) views of a saved match.
+  const kk = k == null ? 0 : +k, view = ui.scView === 'an' ? 'an' : 'card';
+  const tabs = seg([['card', 'Scorecard'], ['an', 'Analysis']], view, "(v=>{ui.scView=v;showScorecard(_scFx,ui._scK)})");
+  ui._scK = kk;
+  let body;
+  if (view === 'an') {
+    const ki = kk >= S.innings.length ? S.innings.length - 1 : kk;
+    const innTabs = S.innings.length > 1 ? `<div style="margin:8px 0">${seg(S.innings.map((x, i) => [String(i), `${teamDef(x.bat).short || x.bat}${S.fmt === 'FC' ? (i < 2 ? ' 1st' : ' 2nd') : ''}`]), String(ki), '(v=>showScorecard(_scFx,+v))')}</div>` : '';
+    body = tabs + innTabs + analysisPanel(S, ki, 'sc');
+  } else body = tabs + '<div style="height:8px"></div>' + scorecardHtml(S, kk, 'scInn');
+  if (sheetSwap('sc:' + fxId, body, '')) return;
+  sheet(`${fixtureContextLabel(f) || COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, body, { tall: true, key: 'sc:' + fxId,  wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(S.result.text)}</span>` : '' });
 }
 function scInn(k) { showScorecard(_scFx, k); }
 
@@ -7125,12 +7185,9 @@ function renderLive() {
   const broadcast = broadcastScore(M) + broadcastMetrics(M, inn) + broadcastCrease(M, inn);
   // Recap screens take over the top of the live view at every turning point.
   const recap = M.done ? resultRecap(M) : inn.closed ? inningsRecap(M, inn) : M.pause ? breakRecap(M, M.pause) : '';
-  const liveTab=(ui.liveTab==='wagon'?'batter':ui.liveTab);
-  const body = liveTab === 'card'
+  const body = ui.liveTab === 'card'
     ? scorecardHtml(Object.assign(compactScorecard(M), { result: M.done ? M.result : null }), ui.liveInn, 'setLiveInn', true)
-    : liveTab === 'batter' ? batterPanel(M)
-    : liveTab === 'bowler' ? bowlerPanel(M)
-    : commentaryHtml(M);
+    : ui.liveTab === 'wagon' ? wagonPanel(M) : commentaryHtml(M);
   let bar;
   if (M.done) bar = `<button class="btn" onclick="liveScorecardSheet()">Scorecard</button><button class="btn pri" style="grid-column:span 2" onclick="finishLive()">Done ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
@@ -7139,14 +7196,14 @@ function renderLive() {
     <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
   if (M.done) return `<div class="grid">${recap}</div><div class="livebar three">${bar}</div>`;
   if (recap) return `<div class="grid">${recap}
-    ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], (ui.liveTab==='wagon'?'batter':ui.liveTab), 'setLiveTab')}${body}
+    ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Analysis']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
   return `<div class="grid">
     <section class="panel broadcast-panel"><div class="pb">${broadcast}
       ${M.fmt === 'FC' ? ballConditionHtml(M,inn) : ''}
       ${M.fmt !== 'FC' && M.innings.length > 1 ? `<div class="live-worm"><div class="xs muted">Run chase</div>${wormSvg(M.innings, M.fmt)}</div>` : ''}
     </div></section>
-    ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], (ui.liveTab==='wagon'?'batter':ui.liveTab), 'setLiveTab')}${body}
+    ${seg([['comm','Commentary'],['card','Scorecard'],['wagon','Analysis']], ui.liveTab, 'setLiveTab')}${body}
   </div><div class="livebar three">${bar}</div>`;
 }
 
@@ -7296,12 +7353,6 @@ function commentaryHtml(M) {
   }).join('');
   return `<div style="margin:0 0 6px">${seg([['0','Key moments'],['1','Every ball']], all ? '1' : '0', 'setCommAll')}</div><div class="panel comm2">${html || '<div class="empty">The first ball is yet to be bowled.</div>'}</div>`;
 }
-// Shared, unobtrusive pitch reference. The batter stands at the centre,
-// looking down the ground towards the bottom of both charts.
-function wagonPitchReference(cx,cy) {
-  return `<g aria-hidden="true" opacity=".27"><rect x="${cx-3.5}" y="${cy-1}" width="7" height="42" rx="1" fill="#9cb49c"/>
-    <path d="M${cx-7} ${cy+4}h14 M${cx-7} ${cy+34}h14 M${cx-4} ${cy+7}v-8 M${cx} ${cy+7}v-8 M${cx+4} ${cy+7}v-8" stroke="#e2f0e5" stroke-width=".85" fill="none"/></g>`;
-}
 function wagonSvg(shots, hand) {
   const C = 110, R = 98;
   // View from the batting end: the bowler is at the bottom.
@@ -7310,157 +7361,176 @@ function wagonSvg(shots, hand) {
   const lines = shots.map(([a, r]) => { const len = r >= 6 ? R + 6 : r === 4 ? R : 26 + r * 20; const rad = a * Math.PI / 180; const x = C - Math.sin(rad) * len * mirror, y = C + Math.cos(rad) * len; const col = r >= 6 ? '#f4c542' : r === 4 ? '#4ade80' : '#7dd3fc'; return `<line x1="${C}" y1="${C}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="${r >= 4 ? 1.8 : 1.1}" stroke-opacity="${r >= 4 ? 0.95 : 0.6}"/>`; }).join('');
   const offRight = hand === 'L';
   return `<svg viewBox="0 0 220 220" class="wagon"><circle cx="${C}" cy="${C}" r="${R}" fill="#0f2a1e" stroke="#1f4d36"/><circle cx="${C}" cy="${C}" r="54" fill="none" stroke="#1f4d36" stroke-dasharray="3 3"/>
-    ${wagonPitchReference(C,C)}${lines}
+    <rect x="${C - 4}" y="${C - 8}" width="8" height="30" fill="#3d4a2a" rx="1"/>${lines}
     <text x="${offRight ? 200 : 20}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Off</text><text x="${offRight ? 20 : 200}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Leg</text></svg>`;
 }
-// Derived strictly from saved scoring-shot bearings; does not infer control or dot-ball positions.
-function wagonZones(shots) {
-  const sectors = Array.from({length:8}, () => 0);
-  for (const shot of shots || []) {
-    if (!shot || !Number.isFinite(shot[0]) || !Number.isFinite(shot[1])) continue;
-    const bearing = ((shot[0] % 360) + 360) % 360;
-    sectors[Math.floor((bearing + 22.5) % 360 / 45)] += shot[1];
+// ---- Match analysis (Build 054): Spike, Zones and Pitch map ----
+// Works on a live match (M) or a saved scorecard (S): both carry innings with card[].shots, bw, and for
+// user and live matches the per-ball delivery record inn.bl with plan targets inn.pt (see recordDelivery).
+const ZONE_NAMES = ['Long-off', 'Cover', 'Point', 'Third man', 'Fine leg', 'Square leg', 'Midwicket', 'Long-on'];
+// Shot angles are stored as drawn (already mirrored for left-handers). This returns the angle relative to
+// the batter, as if he were right-handed, so sector names and off/leg splits are correct for both hands.
+function batterBearing(angle, hand) { const a = ((angle % 360) + 360) % 360; return hand === 'L' ? (360 - a) % 360 : a; }
+function zoneRuns(shotsWithHand) {
+  const z = Array.from({ length: 8 }, () => 0);
+  shotsWithHand.forEach(([s, hand]) => { if (s && Number.isFinite(s[0]) && Number.isFinite(s[1])) z[Math.floor(batterBearing(s[0], hand) / 45) % 8] += s[1]; });
+  return z;
+}
+// Batter strengths that show up in particular scoring areas.
+const TRAIT_ZONES = { full:[0, 7, 1], short:[6, 5], body:[5, 4] };
+function zonesSvg(z, mirror, hot) {
+  const C = 120, R = 104, max = Math.max(1, ...z), best = z.indexOf(Math.max(...z));
+  const pt = (deg, rad) => { const t = (mirror ? 360 - deg : deg) * Math.PI / 180; return [C - Math.sin(t) * rad, C + Math.cos(t) * rad]; };
+  let out = '';
+  for (let k = 0; k < 8; k++) {
+    const [x1, y1] = pt(k * 45, R), [x2, y2] = pt((k + 1) * 45, R), sweep = mirror ? 0 : 1;
+    const op = z[k] ? 0.22 + 0.6 * z[k] / max : 0.08;
+    out += `<path d="M${C},${C} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 0 ${sweep} ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${k === best && z[k] ? '#2f9e5b' : `rgba(74,222,128,${op.toFixed(2)})`}" stroke="${hot.has(k) ? '#f4c542' : '#0c1c28'}" stroke-width="${hot.has(k) ? 2 : 1.5}"/>`;
+    const [tx, ty] = pt(k * 45 + 22.5, R * 0.64);
+    out += `<text x="${tx.toFixed(1)}" y="${(ty - 4).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="#cfe3d6">${ZONE_NAMES[k]}</text><text x="${tx.toFixed(1)}" y="${(ty + 13).toFixed(1)}" text-anchor="middle" font-size="15" font-weight="800" fill="#eaf3f8">${z[k]}</text>`;
   }
-  return sectors;
+  return `<svg viewBox="0 0 240 240" class="wagon zones" role="img" aria-label="Runs by scoring zone">${out}<circle cx="${C}" cy="${C}" r="3" fill="#eaf3f8"/></svg>`;
 }
-function wagonZoneSummary(shots) {
-  const zones = wagonZones(shots);
-  const best = zones.reduce((idx, v, i) => v > zones[idx] ? i : idx, 0);
-  const r = zones[best];
-  const breakdown = [1,2,3,4,6].map(n => `${n}s ${shots.filter(s => s && s[1] === n).length}`).join(' · ');
-  return `<div class="wagon-zone-summary"><div class="xs muted">Leading scoring sector</div><div class="b s">${best + 1} of 8 · ${r} runs</div><div class="xs muted">Sector numbers start straight down the ground and rotate around the wheel.</div><div class="xs" style="margin-top:5px">${breakdown}</div></div>`;
+// Decode an innings' deliveries with the over each ball came in (for the plan phase) and the plan target.
+function inningsDeliveries(inn, fmt, overs) {
+  const out = []; let legal = 0;
+  blDecode(inn.bl).forEach(d => {
+    const over = Math.floor(legal / 6), death = phaseOf(fmt, over, overs) === 'death' ? 'd' : 'n';
+    const pt = inn.pt || {}; d.target = pt[d.batter + death] != null ? pt[d.batter + death] : pt[d.batter + 'n'] != null ? pt[d.batter + 'n'] : pt[d.batter + 'd'];
+    out.push(d); if (d.ext !== 1 && d.ext !== 2) legal++;
+  });
+  return out;
 }
-function setWagon(m) { ui.wagon=m; const y=window.scrollY||0; render();window.scrollTo(0,y); }
-function setWagonView(v) { ui.wagonView=v;const y=window.scrollY||0;render();window.scrollTo(0,y); }
-function setMapSide(v) {ui.mapSide=v;const y=window.scrollY||0;render();window.scrollTo(0,y);}
-function setMapPerson(v) {ui.mapPerson=v;const y=window.scrollY||0;render();window.scrollTo(0,y);}
-// Sector geometry matches wagonSvg precisely: 0 degrees points towards
-// the bottom of the screen, 90 left, 180 up and 270 right. A left-hander's
-// zoneAngle is already physically mirrored by the engine, so do not mirror
-// it again before grouping shots.
-const WAGON_NAMES_R=['Long-off','Cover','Point','Third man','Fine leg','Square leg','Midwicket','Long-on'];
-const WAGON_NAMES_L=['Long-on','Midwicket','Square leg','Fine leg','Third man','Point','Cover','Long-off'];
-function wagonZoneIndex(a) {
-  const v=((a%360)+360)%360;
-  return Math.floor(v/45)%8;
+function cellLabel(k) { return `${LOC_COLS[k % 5].toLowerCase()}, ${LOC_ROWS[Math.floor(k / 5)].toLowerCase()}`; }
+// 6 x 5 grid from the bowler's end. Right-handers: off side on the left; left-handers: mirrored.
+function pitchGridSvg(cells, hand, target, mode, marks) {
+  const L = 34, T = 24, CW = 52, RH = 30, order = hand === 'L' ? [4, 3, 2, 1, 0] : [0, 1, 2, 3, 4];
+  const max = Math.max(1, ...Object.values(cells).map(c => c[0]));
+  const head = hand === 'L' ? ['Wide', 'Leg', 'Stumps', 'Off', 'Wide'] : ['Wide', 'Off', 'Stumps', 'Leg', 'Wide'];
+  let s = head.map((h, i) => `<text x="${L + i * CW + CW / 2}" y="15" text-anchor="middle" font-size="9.5" fill="#8ea7b8">${h}</text>`).join('');
+  LOC_ROW_SHORT.forEach((r, ri) => {
+    const mk = marks && marks[ri];
+    s += `<text x="${L - 6}" y="${T + ri * RH + RH / 2 + 4}" text-anchor="end" font-size="10" font-weight="700" fill="${mk === 'weak' ? '#fb7185' : mk === 'strong' ? '#4ade80' : '#8ea7b8'}">${r}</text>`;
+    order.forEach((c, ci) => {
+      const k = ri * 5 + c, v = cells[k], x = L + ci * CW, y = T + ri * RH;
+      const op = v ? 0.18 + 0.72 * v[0] / max : 0;
+      s += `<rect x="${x + 1}" y="${y + 1}" width="${CW - 2}" height="${RH - 2}" rx="3" fill="${v ? `rgba(244,197,66,${op.toFixed(2)})` : '#10222f'}" stroke="#1f3d53"/>`;
+      if (v) {
+        const main = mode === 'batter' ? v[1] : v[0];
+        s += `<text x="${x + CW / 2 - (v[2] ? 8 : 0)}" y="${y + RH / 2 + 4}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${op > 0.55 ? '#0c1c28' : '#eaf3f8'}">${main}</text>`;
+        if (v[2]) s += `<text x="${x + CW / 2 + 12}" y="${y + RH / 2 + 4}" text-anchor="middle" font-size="10" font-weight="900" fill="#e11d48">${v[2]}W</text>`;
+      }
+    });
+  });
+  // Plan targets: the main one bold, others (plans for other batters or phases) fainter.
+  [].concat(target == null ? [] : target).forEach((t, i) => { const ri = Math.floor(t / 5), ci = order.indexOf(t % 5); s += `<rect x="${L + ci * CW + 2.5}" y="${T + ri * RH + 2.5}" width="${CW - 5}" height="${RH - 5}" rx="3" fill="none" stroke="#eaf3f8" stroke-width="${i ? 1 : 1.6}" stroke-opacity="${i ? 0.55 : 1}" stroke-dasharray="${i ? '2 3' : '4 3'}"/>`; });
+  return `<svg viewBox="0 0 ${L + 5 * CW + 4} ${T + 6 * RH + 4}" class="pitch-grid" role="img" aria-label="Pitch map">${s}</svg>`;
 }
-function zonesGraphic(shots,hand) {
-  const totals=Array(8).fill(0);
-  shots.forEach(s=>{if(s&&Number.isFinite(s[0])) totals[wagonZoneIndex(s[0])]+=s[1]||0;});
-  const max=Math.max(...totals,1);
-  const namesForHand=hand==='L'?WAGON_NAMES_L:WAGON_NAMES_R;
-  const cx=112,cy=112,r=93;
-  // Use the exact same polar projection as Spike: x = C - sin(a)*r,
-  // y = C + cos(a)*r. No visual rotation or independent mirroring.
-  const xy=(a,rad)=>[cx-Math.sin(a)*rad,cy+Math.cos(a)*rad];
-  const slices=totals.map((v,i)=>{
-    const a=i*Math.PI/4,b=(i+1)*Math.PI/4;
-    const [x1,y1]=xy(a,r),[x2,y2]=xy(b,r);
-    const dark=v===max&&v>0?'#15803d':v>0?'#4ade80':'#24443a';
-    const [tx,ty]=xy((a+b)/2,58);
-    return `<path d="M${cx} ${cy} L${x1.toFixed(2)} ${y1.toFixed(2)} A${r} ${r} 0 0 0 ${x2.toFixed(2)} ${y2.toFixed(2)} Z" fill="${dark}" stroke="#0c1820" stroke-width="1.5"><title>${esc(namesForHand[i])}: ${v} runs</title></path>`;
-  }).join('');
-  const labels=totals.map((v,i)=>{const a=(i+.5)*Math.PI/4;const [tx,ty]=xy(a,58);return `<text x="${tx.toFixed(1)}" y="${(ty+4).toFixed(1)}" text-anchor="middle" fill="${v===max&&v>0?'#fff':'#09201b'}" font-size="13" font-weight="700">${v}</text>`;}).join('');
-  const names=namesForHand.map((name,i)=>`<div><span class="dim">${esc(name)}</span> <b>${totals[i]}</b></div>`).join('');
-  return `<svg class="wagon" viewBox="0 0 224 224" aria-label="Eight scoring zones from the batter's view">${slices}${wagonPitchReference(cx,cy)}${labels}<text x="21" y="14" fill="#8ea7b8" font-size="10" text-anchor="middle">${hand==='L'?'Leg':'Off'}</text><text x="203" y="14" fill="#8ea7b8" font-size="10" text-anchor="middle">${hand==='L'?'Off':'Leg'}</text></svg><div class="wagon-zone-names">${names}</div>`;
+function anSet(k, v) { ui[k] = v; anRefresh(); }
+function anRefresh() { if (ui._anSrc === 'sc' && _scFx) showScorecard(_scFx, ui._anInn); else { const y = window.scrollY || 0; render(); window.scrollTo(0, y); } }
+function setWagon(m) { anSet('wagon', m); }
+function analysisPanel(src, innIdx, srcKind) {
+  ui._anSrc = srcKind; ui._anInn = innIdx;
+  const inn = innIdx != null && src.innings[innIdx] ? src.innings[innIdx] : src.innings[src.innings.length - 1];
+  if (!inn) return '<div class="empty">No play yet.</div>';
+  const view = ['spike', 'zones', 'pitch'].includes(ui.anView) ? ui.anView : 'spike';
+  const top = `<div class="an-views">${seg([['spike', 'Spike'], ['zones', 'Zones'], ['pitch', 'Pitch map']], view, "(v=>anSet('anView',v))")}</div>`;
+  return top + (view === 'pitch' ? pitchMapPanel(src, inn) : battingChartPanel(src, inn, view));
 }
-function pitchMapGrid(entries,hand,showTarget) {
-  const cells=Array.from({length:6},()=>Array.from({length:5},()=>({n:0,w:0,r:0})));
-  entries.forEach(e=>{const c=cells[e[4]]?.[e[5]];if(c){c.n++;c.w+=e[6];c.r+=e[7];}});
-  const max=Math.max(1,...cells.flat().map(c=>c.n));
-  const target=showTarget&&entries.length?[entries[0][8],entries[0][9]]:null;
-  return `<div class="pitch-map-card"><div class="map-hand-title">${hand?'LHB':'RHB'}</div><div class="pitch-map-grid" role="table" aria-label="Pitch map heat grid">
-    <div class="map-axis"></div>${['OFF','OFF','ST','LEG','LEG'].map(t=>`<div class="map-axis">${t}</div>`).join('')}
-    ${MAP_LENGTHS.map((t,r)=>`<div class="map-axis map-row-title">${['FT','Y','F','G','SG','S'][r]}</div>${cells[r].map((c,k)=>`<div class="map-cell ${target&&target[0]===r&&target[1]===k?'map-target':''}" style="--heat:${(c.n/max).toFixed(2)}" title="${esc(t)} / ${MAP_LINES[k]}: ${c.n} balls, ${c.w} wickets, ${c.r} bat runs">${c.w?`<small>W</small>`:''}</div>`).join('')}`).join('')}
-  </div></div>`;
+function battingChartPanel(src, inn, view) {
+  const valid = inn.card.filter(c => c && c.id && P(c.id));
+  const live = inn.striker != null ? inn.card[inn.striker] : null;
+  const card = valid.find(c => c.id === ui.wagonPlayer) || valid.find(c => live && c.id === live.id) || valid.find(c => c.in) || valid[0];
+  const mode = ui.wagon === 'inn' ? 'inn' : 'player';
+  let shots = [], label = '', hand = 'R', player = null;
+  if (mode === 'inn') { valid.forEach(c => (c.shots || []).forEach(s => shots.push([s, P(c.id).hand || 'R']))); label = `${teamDef(inn.bat).short || inn.bat} · ${inn.runs}/${inn.wkts}`; }
+  else if (card) { player = P(card.id); hand = player.hand || 'R'; shots = (card.shots || []).map(s => [s, hand]); label = `${pname(player)} · ${card.r} (${card.b})${hand === 'L' ? ' · left-hander' : ''}`; }
+  const raw = shots.map(x => x[0]), runs = raw.reduce((a, s) => a + s[1], 0);
+  const count = r => raw.filter(s => (r === 1 ? s[1] < 4 : s[1] === r)).length;
+  const offR = shots.filter(([s, h]) => { const b = batterBearing(s[0], h); return b > 0 && b < 180; }).reduce((a, [s]) => a + s[1], 0);
+  const players = valid.map(c => `<option value="${esc(c.id)}" ${card && c.id === card.id ? 'selected' : ''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
+  const controls = `<div class="wagon-controls"><div class="seg"><button class="${mode === 'player' ? 'on' : ''}" onclick="anSet('wagon','player')">Batter</button><button class="${mode === 'inn' ? 'on' : ''}" onclick="anSet('wagon','inn')">Innings</button></div>
+    ${mode === 'player' ? `<label class="wagon-select-label">Batter <select aria-label="Select batter" onchange="anSet('wagonPlayer',this.value)">${players}</select></label>` : ''}</div>`;
+  let chart, extra = '';
+  if (view === 'zones') {
+    const z = zoneRuns(shots), hot = new Set();
+    const lines = [];
+    if (player) {
+      const lvl = scoutLevel(player);
+      if (lvl >= 2) traitList(player).filter(t => !t.weak && TRAIT_ZONES[t.k]).forEach(t => { TRAIT_ZONES[t.k].forEach(k => hot.add(k)); lines.push(`<div class="xs"><span class="win">▲</span> ${esc(t.text)} <span class="dim">· ${TRAIT_ZONES[t.k].map(k => ZONE_NAMES[k].toLowerCase()).join(', ')}</span></div>`); });
+      if (player.focus && player.focus !== 'none' && DEV_FOCUS[player.focus]) lines.push(`<div class="xs"><span class="dim">Training:</span> ${esc(DEV_FOCUS[player.focus].label)}</div>`);
+      if (lvl < 2) lines.push('<div class="xs dim">Scout him to see which areas suit his game.</div>');
+    }
+    const best = z.indexOf(Math.max(...z));
+    chart = zonesSvg(z, mode === 'player' && hand === 'L', hot);
+    extra = `${runs ? `<div class="xs" style="margin-top:6px">Most runs: <b>${ZONE_NAMES[best]}</b> (${z[best]} of ${runs})</div>` : ''}${hot.size ? '<div class="xs dim">Gold outline: areas that match his strengths.</div>' : ''}${lines.join('')}${mode === 'inn' ? '<div class="xs dim" style="margin-top:4px">Zones are relative to each batter, drawn for a right-hander.</div>' : ''}`;
+  } else chart = wagonSvg(raw, hand);
+  return `${controls}<div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${chart}
+    <div class="flex" style="justify-content:center;gap:14px;margin-top:6px;flex-wrap:wrap"><span class="xs">1s ${raw.filter(s => s[1] === 1).length}</span><span class="xs">2s ${raw.filter(s => s[1] === 2).length}</span><span class="xs">3s ${raw.filter(s => s[1] === 3).length}</span><span class="xs win">4s ${count(4)}</span><span class="xs" style="color:#f4c542">6s ${count(6)}</span></div>
+    ${runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : '<div class="xs dim" style="margin-top:4px">No scoring shots yet.</div>'}${extra}</div></div>`;
 }
-function pitchMapMeta(mode, player, inn, shown, on) {
-  if (mode==='bowler') {
-    const f=player&&inn&&inn.bw?inn.bw[player.id]:null;
-    const overs=f?oversStr(f.balls):'—';
-    const econ=f&&f.balls?((f.r/(f.balls/6))||0).toFixed(2):'—';
-    return {
-      title: player?esc(pname(player)):'Pitch map',
-      sub: player&&f?`${overs} ov · ${f.m||0} m · ${f.r||0} r · ${f.w||0} w · econ ${econ}`:'Modelled delivery placement, not independent ball tracking.',
-      metrics:[
-        [shown.length,'Balls'],
-        [`${shown.length?Math.round(on.length/shown.length*100):0}%`,'On target'],
-        [on.reduce((a,e)=>a+e[6],0),'Wkts on target'],
-        [player?(player.sk.acc||'—'):'—','Accuracy']
-      ]
-    };
+function pitchMapPanel(src, inn) {
+  if (!inn.bl) return `<div class="panel" style="margin-top:8px"><div class="pb"><div class="empty">No delivery data for this innings. Pitch maps are kept for live matches and your 12 most recent matches, from Build 054 on.</div></div></div>`;
+  const fmt = src.fmt, xi = (src.xi && src.xi[inn.bowl]) || [], dels = inningsDeliveries(inn, fmt, src.overs || FORMATS[fmt].overs);
+  const side = ui.pmSide === 'batter' ? 'batter' : 'bowler';
+  const sideSeg = `<div class="seg"><button class="${side === 'bowler' ? 'on' : ''}" onclick="anSet('pmSide','bowler')">Bowler</button><button class="${side === 'batter' ? 'on' : ''}" onclick="anSet('pmSide','batter')">Batter</button></div>`;
+  const addCell = (cells, d, runs) => { const c = cells[d.cell] = cells[d.cell] || [0, 0, 0]; c[0]++; c[1] += runs; c[2] += d.wkt; };
+  if (side === 'bowler') {
+    const bowlerIdx = [...new Set(dels.map(d => d.bowler))];
+    if (!bowlerIdx.length) return sideSeg + '<div class="empty">No deliveries yet.</div>';
+    const want = xi.indexOf(ui.pmBowlerId), cur = inn.curBowler != null ? xi.indexOf(inn.curBowler) : dels.length ? dels[dels.length - 1].bowler : -1;
+    const pick = bowlerIdx.includes(want) ? want : bowlerIdx.includes(cur) ? cur : bowlerIdx[bowlerIdx.length - 1];
+    const bw = P(xi[pick]);
+    const mine = dels.filter(d => d.bowler === pick);
+    const handOf = d => (P(inn.card[d.batter] && inn.card[d.batter].id) || {}).hand || 'R';
+    const hands = ['R', 'L'].filter(h => mine.some(d => handOf(d) === h));
+    const hand = hands.includes(ui.pmHand) ? ui.pmHand : hands.sort((a, b) => mine.filter(d => handOf(d) === b).length - mine.filter(d => handOf(d) === a).length)[0];
+    const set = mine.filter(d => handOf(d) === hand), cells = {};
+    set.forEach(d => addCell(cells, d, d.runs));
+    const tally = {}; set.forEach(d => { if (d.target != null) tally[d.target] = (tally[d.target] || 0) + 1; });
+    const main = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+    const nonWide = set.filter(d => d.ext !== 1), hits = nonWide.filter(d => d.hit).length, wk = set.filter(d => d.wkt).length, wkOn = set.filter(d => d.wkt && d.hit).length, vars = set.filter(d => d.variation).length;
+    const opts = bowlerIdx.map(i => `<option value="${esc(xi[i])}" ${i === pick ? 'selected' : ''}>${esc(pname(P(xi[i])))}</option>`).join('');
+    const hb = hands.length > 1 ? `<div class="seg">${hands.map(h => `<button class="${h === hand ? 'on' : ''}" onclick="anSet('pmHand','${h}')">${h === 'R' ? 'v right-handers' : 'v left-handers'}</button>`).join('')}</div>` : `<div class="xs dim">All deliveries to ${hand === 'R' ? 'right' : 'left'}-handers</div>`;
+    const lo = FORMATS[fmt].overs ? ` · Death bowling <b>${Math.round(bw.sk.death || 0)}</b>` : '';
+    return `<div class="wagon-controls">${sideSeg}<label class="wagon-select-label">Bowler <select aria-label="Select bowler" onchange="ui.pmHand=null;anSet('pmBowlerId',this.value)">${opts}</select></label>${hb}</div>
+      <div class="panel" style="margin-top:8px"><div class="pb">
+        <div class="b s">${esc(pname(bw))} · ${esc(BOWL_TYPES[bw.bowlType].label)}</div>
+        <div class="xs dim" style="margin-bottom:6px">Accuracy <b>${Math.round(bw.sk.acc)}</b> · Variation <b>${Math.round(bw.sk.vari)}</b>${lo}</div>
+        ${pitchGridSvg(cells, hand, Object.keys(tally).sort((a, b) => tally[b] - tally[a]).map(Number), 'bowler')}
+        <div class="pm-stats"><div><b>${set.length}</b><span>Balls</span></div><div><b>${nonWide.length ? Math.round(hits / nonWide.length * 100) : 0}%</b><span>On target</span></div><div><b>${wk}</b><span>Wickets</span></div></div>
+        ${wk ? `<div class="xs" style="margin-top:6px">${wkOn} of ${wk} wicket${wk === 1 ? '' : 's'} came from balls on target.</div>` : ''}
+        ${main != null ? `<div class="xs" style="margin-top:6px"><span class="dim">Main plan (dashed):</span> ${esc(cellLabel(+main))}${Object.keys(tally).length > 1 ? `<div class="dim">Fainter outlines: the analyst's plans for other batters or the death overs.</div>` : ''}</div>` : ''}
+        ${vars ? `<div class="xs dim">${vars} deliberate variation${vars === 1 ? '' : 's'}.</div>` : ''}
+        <div class="xs dim" style="margin-top:4px">Numbers are balls; W marks wickets. Rows: FT full toss, Y yorker, F full, G good length, SG short of a length, S short.</div></div></div>`;
   }
-  if (mode==='batter') {
-    const c=player&&inn?inn.card.find(x=>x&&x.id===player.id):null;
-    return {
-      title: player?esc(pname(player)):'Pitch map',
-      sub: player&&c?`${c.r}${c.out?'':'*'} from ${c.b} · where the batter was bowled to this innings`:'Modelled delivery placement, not independent ball tracking.',
-      metrics:[
-        [shown.length,'Balls faced'],
-        [shown.reduce((a,e)=>a+e[7],0),'Runs off map'],
-        [shown.reduce((a,e)=>a+e[6],0),'Dismissals'],
-        [player&&typeof traitList==='function'?(traitList(player).filter(t=>t.weak).slice(0,1).map(t=>t.text).join('')||'—'):'—','Scout note']
-      ]
-    };
-  }
-  return {
-    title: `${esc(teamDef(inn.bowl).short||inn.bowl)} bowling innings`,
-    sub: `All modelled deliveries in this innings. Highlight removed because bowlers had different plans.`,
-    metrics:[
-      [shown.length,'Balls'],
-      [`${shown.length?Math.round(on.length/shown.length*100):0}%`,'On target'],
-      [shown.reduce((a,e)=>a+e[6],0),'Wickets'],
-      [Object.keys(inn.bw||{}).filter(id=>inn.bw[id]&&inn.bw[id].balls).length,'Bowlers used']
-    ]
-  };
+  const valid = inn.card.map((c, i) => [c, i]).filter(([c]) => c && c.id && P(c.id) && dels.some(d => d.batter === inn.card.indexOf(c)));
+  if (!valid.length) return sideSeg + '<div class="empty">No deliveries yet.</div>';
+  const curId = ui.pmBatterId && valid.some(([c]) => c.id === ui.pmBatterId) ? ui.pmBatterId : (inn.striker != null && inn.card[inn.striker] && valid.some(([c]) => c.id === inn.card[inn.striker].id) ? inn.card[inn.striker].id : valid[0][0].id);
+  const ti = inn.card.findIndex(c => c.id === curId), player = P(curId), hand = player.hand || 'R';
+  const set = dels.filter(d => d.batter === ti && d.ext !== 1), cells = {};
+  set.forEach(d => addCell(cells, d, d.runs));
+  const marks = {}, lines = [], lvl = scoutLevel(player);
+  if (lvl > 0) traitList(player).filter(t => lvl >= 2 || t.weak).forEach(t => {
+    const row = ROW_TRAIT.indexOf(t.k), col = COL_TRAIT.indexOf(t.k);
+    if (row >= 0) marks[row] = t.weak ? 'weak' : 'strong';
+    const where = row >= 0 ? `${LOC_ROW_SHORT[row]} row` : col >= 0 ? `${LOC_COLS[col].toLowerCase()} column` : '';
+    lines.push(`<div class="xs"><span class="${t.weak ? 'loss' : 'win'}">${t.weak ? '▼' : '▲'}</span> ${esc(t.text)}${where ? ` <span class="dim">· ${where}</span>` : ''}</div>`);
+  });
+  const tally = {}; set.forEach(d => tally[d.cell] = (tally[d.cell] || 0) + 1);
+  const most = Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
+  const card = inn.card[ti];
+  const opts = valid.map(([c]) => `<option value="${esc(c.id)}" ${c.id === curId ? 'selected' : ''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
+  return `<div class="wagon-controls">${sideSeg}<label class="wagon-select-label">Batter <select aria-label="Select batter" onchange="anSet('pmBatterId',this.value)">${opts}</select></label></div>
+    <div class="panel" style="margin-top:8px"><div class="pb">
+      <div class="b s">${esc(pname(player))} · ${card.r} (${card.b})${hand === 'L' ? ' · left-hander' : ''}</div>
+      <div class="xs dim" style="margin-bottom:6px">Where he was bowled to. Numbers are runs scored; W is where he got out.</div>
+      ${pitchGridSvg(cells, hand, null, 'batter', marks)}
+      ${most != null ? `<div class="xs" style="margin-top:6px"><span class="dim">Bowled at most:</span> ${esc(cellLabel(+most))} (${Math.round(tally[most] / set.length * 100)}%)</div>` : ''}
+      ${lines.length ? `<div style="margin-top:6px">${lines.join('')}</div>` : '<div class="xs dim" style="margin-top:6px">Scout him to see his strengths and weaknesses on the map.</div>'}
+      ${Object.keys(marks).length ? '<div class="xs dim">Row labels in red or green mark his scouted weaknesses and strengths.</div>' : ''}</div></div>`;
 }
-function pitchMapPanel(M,inn) {
-  const all=(M.mapBalls||[]).filter(e=>e[0]===M.innings.indexOf(inn));
-  const mode=ui.mapSide==='batter'?'batter':ui.mapSide==='innings'?'innings':'bowler';
-  const ids=mode==='innings'?[]:[...new Set(all.map(e=>mode==='batter'?e[2]:e[1]))];
-  const selected=ids.includes(ui.mapPerson)?ui.mapPerson:ids[0];
-  const shown=mode==='innings'?all:all.filter(e=>(mode==='batter'?e[2]:e[1])===selected);
-  const player=selected?P(selected):null;
-  const on=shown.filter(e=>e[4]===e[8]&&e[5]===e[9]);
-  const names=ids.map(id=>`<option value="${esc(id)}" ${id===selected?'selected':''}>${esc(pname(P(id)))}</option>`).join('');
-  const meta=pitchMapMeta(mode,player,inn,shown,on);
-  const showTarget=mode!=='innings';
-  return `<div class="seg" style="margin:10px 0"><button class="${mode==='bowler'?'on':''}" onclick="setMapSide('bowler')">Bowler</button><button class="${mode==='batter'?'on':''}" onclick="setMapSide('batter')">Batter</button><button class="${mode==='innings'?'on':''}" onclick="setMapSide('innings')">Innings</button></div>
-    ${ids.length?`<label class="wagon-select-label">${mode==='bowler'?'Bowler':'Batter'} <select onchange="setMapPerson(this.value)">${names}</select></label>`:''}
-    <div class="panel" style="margin-top:10px"><div class="pb"><div class="b">${meta.title}</div>
-    <div class="xs muted" style="margin:5px 0 12px">${meta.sub}</div>
-    <div class="pitch-map-wrap">${[0,1].map(h=>pitchMapGrid(shown.filter(e=>e[3]===h),h,showTarget)).join('')}</div>
-    <div class="map-key"><span><i class="map-swatch"></i>Cooler</span><span><i class="map-swatch mid"></i>Busier</span><span><i class="map-swatch hot"></i>Hot</span><span><b style="font-size:10px;color:#fff">W</b> wicket cell</span>${showTarget?'<span><b style="font-size:10px;color:#f4c542">▣</b> plan target</span>':''}</div>
-    <div class="map-metrics">${meta.metrics.map(([v,l])=>`<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>
-    ${mode==='batter'&&player&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:10px">Scouting: ${esc(traitList(player).filter(t=>t.weak).slice(0,2).map(t=>t.text).join(' · ')||'No known weaknesses')}</div>`:''}
-    </div></div>`;
-}
-function batterPanel(M) {
-  const inn=ui.liveInn!=null&&M.innings[ui.liveInn]?M.innings[ui.liveInn]:curInn(M);
-  const valid=inn.card.filter(c=>c&&c.id&&P(c.id));
-  const selected=valid.find(c=>c.id===ui.wagonPlayer),current=valid.find(c=>c.id===inn.card[inn.striker]?.id)||valid[0];
-  const mode=ui.wagon==='inn'?'inn':'player',card=selected||current;
-  let shots=[],label='',hand='R';
-  if(mode==='inn') {valid.forEach(c=>(c.shots||[]).forEach(shot=>shots.push([shot[0],shot[1],P(c.id).hand||'R'])));hand=shots.length&&shots.every(s=>s[2]==='L')?'L':'R';label=`${teamDef(inn.bat).short||inn.bat} · ${inn.runs}/${inn.wkts}`;}
-  else if(card){shots=(card.shots||[]).map(s=>[s[0],s[1],P(card.id).hand||'R']);hand=P(card.id).hand||'R';label=`${pname(P(card.id))} · ${card.r} (${card.b})`;}
-  const view=['spike','zones'].includes(ui.wagonView)?ui.wagonView:'spike';
-  const players=valid.map(c=>`<option value="${esc(c.id)}" ${card&&c.id===card.id?'selected':''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
-  const n=[1,2,3,4,6].map(k=>`${k}s ${shots.filter(s=>s[1]===k).length}`).join(' · ');
-  const off=shots.reduce((a,s)=>{let angle=s[2]==='L'?(360-s[0])%360:s[0];return a+(angle>0&&angle<180?s[1]:0);},0);
-  const total=shots.reduce((a,s)=>a+s[1],0);
-  return `<div class="wagon-controls"><div class="seg"><button class="${mode==='player'?'on':''}" onclick="setWagon('player')">Player</button><button class="${mode==='inn'?'on':''}" onclick="setWagon('inn')">Innings</button></div>
-    ${mode==='player'?`<label class="wagon-select-label">Batter <select onchange="ui.wagonPlayer=this.value;render()">${players}</select></label>`:''}</div>
-    <div class="seg" style="margin:10px 0"><button class="${view==='spike'?'on':''}" onclick="setWagonView('spike')">Spike</button><button class="${view==='zones'?'on':''}" onclick="setWagonView('zones')">Zones</button></div>
-    <div class="panel"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${view==='spike'?wagonSvg(shots,hand):zonesGraphic(shots,hand)}
-    ${view==='spike'?`<div class="flex" style="justify-content:center;gap:12px;margin-top:6px"><span class="xs" style="color:#7dd3fc">1–3s</span><span class="xs win">4s</span><span class="xs" style="color:#f4c542">6s</span></div>`:''}
-    <div class="xs muted" style="margin-top:9px">${n}</div>${mode==='player'&&total?`<div class="xs muted" style="margin-top:5px">${Math.round(off/total*100)}% of runs on the off side</div>`:''}
-    ${view==='zones'&&mode==='inn'&&shots.some(s=>s[2]==='L')&&shots.some(s=>s[2]==='R')?'<div class="xs muted" style="margin-top:7px">Mixed right- and left-handed batters. The sectors show physical shot directions; off/leg labels use the right-handed reference.</div>':''}
-    ${view==='zones'&&mode==='player'&&card&&typeof traitList==='function'?`<div class="xs muted" style="margin-top:9px">${esc(traitList(P(card.id)).filter(x=>!x.weak).slice(0,2).map(x=>x.text).join(' · '))}</div>`:''}</div></div>`;
-}
-function bowlerPanel(M) {
-  const inn=ui.liveInn!=null&&M.innings[ui.liveInn]?M.innings[ui.liveInn]:curInn(M);
-  return pitchMapPanel(M,inn);
-}
+function wagonPanel(M) { return analysisPanel(M, ui.liveInn, 'live'); }
 
 // ---- Game plan (the GM's brief) ----
 // Pre-match view of the coach's plan, built from the conditions on a stub match.
