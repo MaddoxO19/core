@@ -685,6 +685,14 @@ button,select,[onclick]{touch-action:manipulation}
   .livebar.three {align-items:stretch;}
   .livebar.three .btn,.livebar.three .skip{min-height:45px;min-width:0;box-sizing:border-box;}
 }
+
+/* Build 040: compact innings overs and single clean section dividers. */
+.broadcast-overs {font-size:.64em;font-weight:500;color:var(--muted);letter-spacing:0;vertical-align:baseline}
+.broadcast-panel .broadcast-metrics.broadcast-metrics-inline {border-bottom:0;margin-bottom:4px;padding-bottom:5px}
+.broadcast-panel .broadcast-people {border-top:1px solid var(--line2);margin-top:3px;padding-top:11px}
+.broadcast-panel .broadcast-recent {border-bottom:0;margin-top:8px;padding-bottom:9px}
+.broadcast-panel .ball-condition {border-top:1px solid var(--line2);margin-top:0;padding-top:11px}
+.day-scoreboard + .day-situation {margin:8px 0 11px}
 </style>
 </head>
 <body>
@@ -737,7 +745,7 @@ button,select,[onclick]{touch-action:manipulation}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.9 Build 039', title: 'Match Centre Refinement & Partnership Integrity', engine: 'C2.2 Ball-by-Ball' };
+const BUILD = { version: 'v0.9.9 Build 040', title: 'Viewing Persistence & Partnership Milestones', engine: 'C2.2 Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1890,10 +1898,6 @@ function checkBallMilestones(M, inn, ev, bowler, sc) {
    (inn.milestoneFifties||(inn.milestoneFifties=[])).push(sc.id);
    noteMilestone(M,'fifty',sc.id,inningsNo,`${pname(P(sc.id))} reaches fifty!`);
  }
- if(inn.part.r>=100 && !(inn.milestonePartHundreds||[]).includes(inn.wkts)) {
-   (inn.milestonePartHundreds||(inn.milestonePartHundreds=[])).push(inn.wkts);
-   noteMilestone(M,'hundred-partnership',`${inn.wkts}`,inningsNo,`Century partnership for the ${ordinal(inn.wkts+1)} wicket!`);
- }
  if(sc.r>=100 && !(inn.milestoneCenturies||[]).includes(sc.id)) {
    (inn.milestoneCenturies||(inn.milestoneCenturies=[])).push(sc.id);
    noteMilestone(M,'century',sc.id,inningsNo,`${pname(P(sc.id))} brings up a century!`);
@@ -1985,6 +1989,20 @@ function simBall(M) {
   inn.overConceded += conceded;
   inn.overTally = (inn.overTally || 0) + ev.runs;
   inn.runs += ev.runs; inn.part.r += ev.runs;
+  // Partnership landmarks are based on the actual stand, not individual scores.
+  // Store announced thresholds on the stand so a resumed save cannot repeat them.
+  if (M.live && ev.runs > 0 && inn.part && inn.part.r >= 50) {
+    const marks = inn.part.announced || (inn.part.announced = []);
+    for (let mark = 50; mark <= inn.part.r; mark += 50) {
+      if (marks.includes(mark)) continue;
+      marks.push(mark);
+      const striker = inn.card[inn.striker], nonStriker = inn.card[inn.non];
+      const mate = striker && striker.id !== sc.id ? striker : nonStriker && nonStriker.id !== sc.id ? nonStriker : null;
+      const other = mate ? mate.id : null;
+      const pair = other && P(other) ? `${pname(P(sc.id))} and ${pname(P(other))}` : `the ${ordinal(inn.wkts + 1)} wicket`;
+      noteMilestone(M, `partnership-${mark}`, `${inn.wkts}`, M.innings.length, `${mark}-run partnership for ${pair}!`);
+    }
+  }
   if(ev.bat>0)checkCareerRunMilestones(M,inn,sc);
   const ran = ev.extra === 'wd' ? 0 : ev.extra === 'nb' ? ev.bat : ev.runs;
   if (!ev.wkt && ran % 2 === 1) swapStrike(inn);
@@ -6265,11 +6283,11 @@ function renderMatchday() {
 // Grades run 1-10 from the combined venue and pitch factors the engine uses.
 function pitchGrade(f) { return clamp(Math.round(5.5 + (f - 1) * 45), 1, 10); }
 const PITCH_OUTLOOK = {
-  standard: 'Wears gradually. Spin comes in from day 3.',
-  green: 'Seam fades after the first day. Batting gets easier.',
-  flat: 'Stays good for batting. Spin late in the match at best.',
-  dry: 'Turns from day 2 and keeps turning more.',
-  cracked: 'Uneven bounce now and worse every day. Spinners will dominate late.'
+  standard: 'The surface will gradually wear, offering more assistance to spin later in the match.',
+  green: 'Early seam movement should ease as the surface settles.',
+  flat: 'The pitch should remain favourable for batting, with some wear late in the match.',
+  dry: 'Spin bowlers are expected to find increasing turn as the pitch wears.',
+  cracked: 'Uneven bounce may increase as cracks develop, making batting more difficult.'
 };
 const PITCH_WB = {
   standard: 'A fair surface for both sides.', green: 'Seamers will enjoy the new ball.', flat: 'Expect a big total and a fast outfield.',
@@ -6395,8 +6413,9 @@ function liveStep(mode) {
     if ((mode === 'over' || mode === 'five' || mode === 'session') && inn.overBalls === 0 && legal >= target) break;
   }
   M.noPause = false;
-  ui.liveInn = null;
-  autosave(); render(); window.scrollTo(0, 0);
+  // Preserve the active scorecard or wagon-wheel innings and reading position.
+  const beforeY = window.scrollY || document.documentElement.scrollTop || 0;
+  autosave(); render(); window.scrollTo(0, beforeY);
 }
 function liveSkip(v) { if (v) liveStep(v); }
 function resumeLive() { const M = game.live; if (!M) return; M.pause = null; autosave(); render(); window.scrollTo(0, 0); }
@@ -6430,8 +6449,8 @@ function finishLive() {
   autosave(); go('home');
   if (game.scorecards[fxId]) showScorecard(fxId, 0);
 }
-function setLiveTab(t) { ui.liveTab = t; render(); }
-function setLiveInn(k) { ui.liveInn = +k; render(); }
+function setLiveTab(t) { ui.liveTab = t; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
+function setLiveInn(k) { ui.liveInn = +k; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
 function liveMyTeam(M) { return isUserTeam(M.home) ? M.home : M.away; }
 // Brief sheet. At an innings break the brief applies at once; mid-innings it is relayed at the next drinks break.
 // The GM encourages the side but never selects on-field tactics.
@@ -6487,7 +6506,7 @@ function broadcastScore(M, compact) {
   const team = id => {
     const played = innings.filter(i => i.bat === id);
     const totals = played.length ? played.map(i => (i.balls === 0 && i.runs === 0 && i.wkts === 0 && !i.closed ? '—' : inningsLine(i, M.fmt))) : ['—'];
-    const totalHtml = totals.map((v, idx) => `<span class="broadcast-innings-score">${esc(v)}</span>`).join(totals.length > 1 ? '<span class="broadcast-score-sep">&amp;</span>' : '');
+    const totalHtml = totals.map((v, idx) => `<span class="broadcast-innings-score">${esc(v).replace(/\s*\((\d+(?:\.\d+)?)\)$/, ' <small class="broadcast-overs">($1)</small>')}</span>`).join(totals.length > 1 ? '<span class="broadcast-score-sep">&amp;</span>' : '');
     return `<div class="broadcast-team"><div class="broadcast-identity">${broadcastBadge(id)}<span class="broadcast-name">${esc(broadcastNation(id) ? (teamDef(id).short || id) : teamName(id))}</span></div><div class="broadcast-total${totals.length > 1 ? ' broadcast-multi' : ''}">${totalHtml}</div></div>`;
   };
   const target = current && !M.done && M.fmt !== 'FC' && current.target;
@@ -6668,20 +6687,20 @@ function breakRecap(M, r) {
     const stat = (value, caption) => `<div><strong>${Number(value).toLocaleString('en-AU')}</strong><span>${caption}</span></div>`;
     const performers = `<div class="day-sections"><div class="day-section-title">${label.toUpperCase()} · SESSION HIGHLIGHTS</div>${topBat ? `<div class="day-session-row"><span>Leading batter</span><b>${esc(pshort(P(topBat[0])))} · ${topBat[1]} runs</b></div>` : ''}${topBowl ? `<div class="day-session-row"><span>Leading bowler</span><b>${esc(pshort(P(topBowl[0])))} · ${topBowl[1]}/${topBowl[2]}</b></div>` : ''}${!topBat && !topBowl ? '<div class="day-session-row"><span>No individual highlights recorded</span></div>' : ''}</div>`;
     const nd = M.cond && M.cond.days ? M.cond.days[r.day] : null;
-    const outlook = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">UP NEXT</span><b>${r.type === 'lunch' ? 'Afternoon session' : 'Evening session'}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>${esc(SKY_SHORT[nd.sky])}</strong><span>${esc(PITCH_OUTLOOK[M.cond.pitch] || 'Play resumes after the interval.')}</span></div></div></div>` : '';
+    const outlook = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">UP NEXT</span><b>${r.type === 'lunch' ? 'Afternoon session' : 'Evening session'}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>Weather · ${esc(SKY_SHORT[nd.sky])}</strong><span>Pitch · ${esc(PITCH_OUTLOOK[M.cond.pitch] || 'Conditions remain unchanged.')}</span></div></div></div>` : '';
     const summary = M.innings.map((i,idx) => `<div class="day-innings-row"><div class="day-innings-team">${broadcastBadge(i.bat)}<span>${esc(teamName(i.bat))}${idx === M.innings.length-1 && !i.closed ? '<small> · batting</small>' : ''}</span></div><div class="day-innings-fig"><b>${i.runs}/${i.wkts}</b><small>${oversStr(i.balls)} ov</small></div></div>`).join('');
-    return `<section class="panel recap day-recap session-recap"><div class="pb"><div class="rc-e">${label} · Day ${r.day+1}</div><div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT ${label.toUpperCase()}</div>${summary}</div><div class="day-stats">${stat(r.sess.runs,'Session runs')}${stat(r.sess.wkts,'Wickets')}${stat(r.sess.overs,'Overs')}</div>${performers}${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${outlook}</div></section>`;
+    return `<section class="panel recap day-recap session-recap"><div class="pb"><div class="rc-e">${label} · Day ${r.day+1}</div><div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT ${label.toUpperCase()}</div>${summary}</div>${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}<div class="day-stats">${stat(r.sess.runs,'Session runs')}${stat(r.sess.wkts,'Wickets')}${stat(r.sess.overs,'Overs')}</div>${performers}${outlook}</div></section>`;
   }
   const d = r.dayStats || {runs:0,wkts:0,overs:0,bat:[],bowl:[]}, nd = M.cond.days[r.day + 1];
   const potd = (() => { const b = d.bat[0], w = d.bowl[0]; if (!b && !w) return null; if (w && (!b || w[1] * 22 >= b[1])) return `${esc(pname(P(w[0])))} · ${w[1]}/${w[2]}`; return `${esc(pname(P(b[0])))} · ${b[1]} runs`; })();
   const trend = nd ? (r.day + 2 >= 3 ? 'The surface is wearing: spinners get more help each day, quicks a little less.' : PITCH_OUTLOOK[M.cond.pitch]) : '';
   const summary = M.innings.map((i,idx) => `<div class="day-innings-row"><div class="day-innings-team">${broadcastBadge(i.bat)}<span>${esc(teamName(i.bat))}${idx === M.innings.length - 1 && !i.closed ? '<small> · batting</small>' : ''}</span></div><div class="day-innings-fig"><b>${i.runs}/${i.wkts}</b><small>${oversStr(i.balls)} ov</small></div></div>`).join('');
   const breaks = (r.breaks || []).map(x => `<div class="day-session-row"><span>${{ lunch:'Lunch',tea:'Tea',stumps:'Stumps' }[x.type] || esc(x.type)}</span><b>${esc(x.score)}</b></div>`).join('');
-  const next = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">NEXT</span><b>Day ${r.day + 2}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>${esc(SKY_SHORT[nd.sky])}${nd.lost ? ` · about ${nd.lost} overs lost` : ''}</strong><span>${esc(trend)}</span></div></div></div>` : '';
+  const next = nd ? `<div class="day-next"><div class="day-next-heading"><span class="day-step">NEXT</span><b>Day ${r.day + 2}</b></div><div class="day-weather"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[nd.sky] || ''}</svg><div><strong>Weather · ${esc(SKY_SHORT[nd.sky])}${nd.lost ? ` · approximately ${nd.lost} overs lost` : ''}</strong><span>Pitch · ${esc(trend)}</span></div></div></div>` : '';
   const inner = `<div class="day-scoreboard"><div class="day-scoreboard-label">MATCH AT CLOSE OF PLAY</div>${summary}</div>
-    <div class="day-stats"><div><strong>${d.runs.toLocaleString('en-AU')}</strong><span>Runs today</span></div><div><strong>${d.wkts}</strong><span>Wickets</span></div><div><strong>${d.overs}</strong><span>Overs today</span></div></div>
+    ${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}<div class="day-stats"><div><strong>${d.runs.toLocaleString('en-AU')}</strong><span>Runs today</span></div><div><strong>${d.wkts}</strong><span>Wickets</span></div><div><strong>${d.overs}</strong><span>Overs today</span></div></div>
     <div class="day-sections"><div class="day-section-title">DAY ${r.day + 1} · SESSION CHECKPOINTS</div>${breaks}${potd ? `<div class="day-session-row day-player"><span>Player of the day</span><b>${potd}</b></div>` : ''}</div>
-    ${sit ? `<div class="day-situation">${esc(sit)}</div>` : ''}${next}
+    ${next}
     `;
   return `<section class="panel recap day-recap"><div class="pb"><div class="rc-e">Close of play · Day ${r.day + 1}</div>${inner}</div></section>`;
 }
@@ -6759,7 +6778,7 @@ function wagonSvg(shots, hand) {
     <rect x="${C - 4}" y="${C - 8}" width="8" height="30" fill="#3d4a2a" rx="1"/>${lines}
     <text x="${offRight ? 200 : 20}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Off</text><text x="${offRight ? 20 : 200}" y="16" fill="#8ea7b8" font-size="10" text-anchor="middle">Leg</text></svg>`;
 }
-function setWagon(m) { ui.wagon = m; render(); }
+function setWagon(m) { ui.wagon = m; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
 function wagonPanel(M) {
   const inn = ui.liveInn != null && M.innings[ui.liveInn] ? M.innings[ui.liveInn] : curInn(M);
   const valid = inn.card.filter(c => c && c.id && P(c.id));
@@ -6786,7 +6805,7 @@ function wagonPanel(M) {
   const offR = shots.filter(shot => shot[0] > 0 && shot[0] < 180).reduce((a, shot) => a + shot[1], 0);
   const players = valid.map(c => `<option value="${esc(c.id)}" ${card && c.id === card.id ? 'selected' : ''}>${esc(pname(P(c.id)))} · ${c.r} (${c.b})</option>`).join('');
   return `<div class="wagon-controls"><div class="seg"><button class="${mode === 'player' ? 'on' : ''}" onclick="setWagon('player')">Player</button><button class="${mode === 'inn' ? 'on' : ''}" onclick="setWagon('inn')">Innings</button></div>
-    ${mode === 'player' ? `<label class="wagon-select-label">Batter <select aria-label="Select batter for wagon wheel" onchange="ui.wagonPlayer=this.value;render()">${players}</select></label>` : ''}</div>
+    ${mode === 'player' ? `<label class="wagon-select-label">Batter <select aria-label="Select batter for wagon wheel" onchange="ui.wagonPlayer=this.value;const y=window.scrollY||0;render();window.scrollTo(0,y)">${players}</select></label>` : ''}</div>
     <div class="panel" style="margin-top:8px"><div class="pb center"><div class="b s" style="margin-bottom:6px">${esc(label)}</div>${wagonSvg(shots, hand)}
       <div class="flex" style="justify-content:center;gap:14px;margin-top:6px"><span class="xs"><b style="color:#7dd3fc">—</b> 1–3s ${count(1)}</span><span class="xs"><b class="win">—</b> 4s ${count(4)}</span><span class="xs"><b style="color:#f4c542">—</b> 6s ${count(6)}</span></div>
       ${mode === 'player' && runs ? `<div class="xs dim" style="margin-top:4px">${Math.round(offR / runs * 100)}% of runs on the off side</div>` : ''}</div></div>`;
