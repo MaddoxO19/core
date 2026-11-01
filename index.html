@@ -936,7 +936,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 081', title: 'Full Match Day Nation Names', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 082', title: 'Match Day Navigation Hotfix', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -7227,6 +7227,7 @@ function showFixtureClashPrompt() {
     <div class="clash-option"><strong>Club · ${esc(fxLabel(clubFx))}</strong><button class="btn block" onclick="chooseClashFixture('${clubFx.id}','${nationFx.id}')">Manage Club</button></div>`,
     {foot:'<button class="btn ghost block" onclick="closeModal()">Decide later</button>'});
 }
+function isNationalFixture(fx) { return !!fx && (fx.home === 'AUS' || fx.away === 'AUS' || fx.stage === 'intl' || fx.comp === 'TEST' || fx.comp === 'ODI' || fx.comp === 'T20I'); }
 function renderMatchday() {
   const fx = fixtureById(game.pendingFx), fmt = COMPS[fx.comp].fmt;
   const me = myTeamIn(fx), opp = me === fx.home ? fx.away : fx.home, v = teamDef(fx.venue || fx.home);
@@ -7239,7 +7240,7 @@ function renderMatchday() {
   const hc = staffIn(me, 'head');
   return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
-    ${panel('', `<div class="hero matchday-hero ${national(fx) ? 'matchday-national' : ''}"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs matchday-name">${esc(teamDef(fx.home).nick)} v ${esc(teamDef(fx.away).nick)}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
+    ${panel('', `<div class="hero matchday-hero ${isNationalFixture(fx) ? 'matchday-national' : ''}"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs matchday-name">${esc(teamDef(fx.home).nick)} v ${esc(teamDef(fx.away).nick)}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       ${pitchReport(pre, v, fmt, '')}
       ${fmt === 'FC' ? forecastRow(pre, fmt, fx) : ''}
       ${(() => { const busy = isClash(fx), cl = busy ? [] : clashesWith(fx); if (!busy && !cl.length) return '';
