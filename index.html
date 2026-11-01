@@ -869,6 +869,15 @@ body.live-mode .actbar{display:none}
 
 /* Build 078: compact two-contribution Player of the Match display. */
 .potm-card .grow{min-width:0}.potm-f{font-size:clamp(12px,3.5vw,16px);white-space:normal;min-width:82px;max-width:43%;line-height:1.3}.potm-n{overflow-wrap:anywhere}
+
+/* Build 080: never truncate match-day nation names. Keep the flag columns compact
+   and allow the full fixture heading to wrap naturally on small devices. */
+.matchday-hero .matchday-name{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:normal;word-break:normal;line-height:1.25;text-wrap:balance}
+.matchday-national{gap:8px}
+.matchday-national>.matchday-crest{flex:0 0 48px;min-width:48px}
+.matchday-national>.mid{min-width:0;flex:1 1 auto}
+.matchday-national .matchday-name{font-size:clamp(14px,3.7vw,17px)}
+@media(max-width:390px){.matchday-national{gap:5px}.matchday-national>.matchday-crest{flex-basis:42px;min-width:42px}.matchday-national .matchday-name{font-size:14px}}
 </style>
 </head>
 <body>
@@ -927,7 +936,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 079', title: 'Worm Wicket Markers', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 081', title: 'Full Match Day Nation Names', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1876,9 +1885,16 @@ function battingIntent(M, inn) {
     } else {
       const ballsLeft = mMaxBalls(M) - M.balls, need = inn.target - inn.runs;
       const req = need / Math.max(1, ballsLeft) * 6;
-      if (req > 5.5 || (inn.wkts >= 6 && req > 3.2)) i -= 0.6;
-      else if (req > 4) i += 0.25;
-      else if (req < 3) i += 0.1;
+      // B081: a fourth-innings chase must distinguish a viable pursuit from
+      // playing out time. Defensive intent affects established batting tactics
+      // only; the C3.1 ball-outcome equations are unchanged.
+      const hoursLeft = ballsLeft / 15; // approximate playing hours, used only as context
+      const wicketsInHand = Math.max(0, 10 - inn.wkts);
+      const feasible = req <= (wicketsInHand <= 3 ? 3.15 : wicketsInHand <= 5 ? 3.65 : 4.45);
+      const danger = (inn.wkts >= 4 ? 0.12 : 0) + (inn.wkts >= 6 ? 0.16 : 0);
+      if (!feasible && ballsLeft >= 30) i -= Math.min(0.75, 0.43 + danger + (hoursLeft <= 2 ? 0.12 : 0));
+      else if (feasible && req >= 3.6) i += 0.18;
+      else if (req < 2.8 && ballsLeft < 90) i += 0.1;
     }
   } else if (M.fmt === 'FC' && M.innings.length === 3 && !inn.followOn) {
     const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
@@ -2040,14 +2056,24 @@ function chooseBowler(M, inn) {
 function shouldDeclare(M, inn) {
   if (M.fmt !== 'FC' || inn.target) return false;
   const idx = M.innings.indexOf(inn);
-  const oversLeft = (mMaxBalls(M) - M.balls) / 6;
-  if (idx <= 1) return (inn.runs >= 560 && inn.wkts <= 8) || (inn.runs >= 470 && inn.overNo >= 150);
+  const oversLeft = Math.max(0, (mMaxBalls(M) - M.balls) / 6);
+  // B081: first-innings declarations remain rare, but are not made simply
+  // because an innings has reached a historical total. Enough time must
+  // remain to create a result, and the opposition must have a chance to bat.
+  if (idx <= 1) {
+    if (inn.runs >= 620 && inn.wkts <= 8 && oversLeft >= 115) return true;
+    if (inn.runs >= 510 && inn.overNo >= 150 && oversLeft >= 130) return true;
+    return false;
+  }
   if (idx === 2) {
     const lead = teamRuns(M, inn.bat) - teamRuns(M, inn.bowl);
-    if (lead >= 450) return true;
-    if (lead >= 330 && oversLeft <= 125) return true;
-    if (lead >= 250 && oversLeft <= 85) return true;
-    if (lead >= 180 && oversLeft <= 50) return true;
+    const available = oversLeft;
+    // A declaration with a narrow lead and almost no time is poor captaincy.
+    // Conversely, enormous leads justify leaving more time to take wickets.
+    if (lead >= 420 && available >= 25) return true;
+    if (lead >= 300 && available <= 125 && available >= 45) return true;
+    if (lead >= 235 && available <= 90 && available >= 42) return true;
+    if (lead >= 180 && available <= 62 && available >= 36) return true;
   }
   return false;
 }
@@ -7213,7 +7239,7 @@ function renderMatchday() {
   const hc = staffIn(me, 'head');
   return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
-    ${panel('', `<div class="hero matchday-hero"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs ell">${teamDef(fx.home).nick} v ${teamDef(fx.away).nick}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
+    ${panel('', `<div class="hero matchday-hero ${national(fx) ? 'matchday-national' : ''}"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs matchday-name">${esc(teamDef(fx.home).nick)} v ${esc(teamDef(fx.away).nick)}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       ${pitchReport(pre, v, fmt, '')}
       ${fmt === 'FC' ? forecastRow(pre, fmt, fx) : ''}
       ${(() => { const busy = isClash(fx), cl = busy ? [] : clashesWith(fx); if (!busy && !cl.length) return '';
