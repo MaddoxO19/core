@@ -1069,7 +1069,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.22 Build 098', title: 'Domestic Crest Render Integrity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.23 Build 099', title: 'Domestic Editor Integrity Integrity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4076,9 +4076,69 @@ function applyTeamEdits() {
   const e = (game && game.teamEdits) || {};
   TEAM_DEFS.forEach(t => { if (e[t.id]) Object.assign(t, e[t.id]); });
 }
+// Editor integrity: a player's fundamental bowling discipline cannot switch between pace and spin.
+const EDIT_PACE_ROLES = ['PACE','SEAM'];
+const EDIT_SPIN_ROLES = ['OFF','LEG','SLA'];
+function editorDiscipline(p) {
+  const kind = BOWL_TYPES[p.bowlType]?.kind || 'none';
+  if (kind === 'pace' || kind === 'spin') return kind;
+  if (EDIT_PACE_ROLES.includes(p.role)) return 'pace';
+  if (EDIT_SPIN_ROLES.includes(p.role)) return 'spin';
+  return 'none';
+}
+function editorRoleOptions(p) {
+  const kind = editorDiscipline(p);
+  return Object.keys(ROLES).filter(r => kind === 'pace' ? !EDIT_SPIN_ROLES.includes(r) : kind === 'spin' ? !EDIT_PACE_ROLES.includes(r) : ![...EDIT_PACE_ROLES,...EDIT_SPIN_ROLES,'BWAR'].includes(r));
+}
+function editorBowlOptions(p, role) {
+  const kind = editorDiscipline(p);
+  const target = EDIT_PACE_ROLES.includes(role) ? 'pace' : EDIT_SPIN_ROLES.includes(role) ? 'spin' : kind;
+  const allowed = target === 'none' ? ['NONE'] : Object.keys(BOWL_TYPES).filter(k => BOWL_TYPES[k].kind === target);
+  return allowed.filter(k => k !== 'NONE' || target === 'none');
+}
+function editorStyleOptions(role,bowlType) {
+  const kind = BOWL_TYPES[bowlType]?.kind || 'none';
+  return Object.keys(STYLES).filter(k => STYLES[k].roles.includes(role) && (!STYLES[k].kind || STYLES[k].kind === kind));
+}
+function resetEditedPlayerHistory(p) {
+  p.stats = { season:{},career:{} };
+  FMT_LIST.forEach(f => { p.stats.season[f] = blankStats(); p.stats.career[f] = blankStats(); });
+  // Age changes are a new statistical identity, including prior international caps.
+  if (p.caps || p.stats.intl) { p.stats.intl = {}; FMT_LIST.forEach(f => p.stats.intl[f] = blankStats()); }
+  p.caps = {FC:0,OD:0,T20:0};
+  p.hist = [];
+  p.log = [];
+  p.selectionHistory = {};
+  p.played = 0;
+  p.realCareer = null;
+  p.realAge = false;
+  p.ageResetYear = game.year;
+}
+function edUpdateChoices(id) {
+  const p = P(id), form = document.getElementById('edForm');
+  if (!p || !form) return;
+  const roleEl = document.getElementById('ed_role'), bowlEl = document.getElementById('ed_bowlType'), styleEl = document.getElementById('ed_style');
+  if (!roleEl || !bowlEl || !styleEl) return;
+  const currentRole = roleEl.value;
+  const roles = editorRoleOptions(p);
+  if (!roles.includes(currentRole)) roleEl.value = p.role;
+  const permitted = editorBowlOptions(p, roleEl.value);
+  const selectedBowl = permitted.includes(bowlEl.value) ? bowlEl.value : permitted.includes(p.bowlType) ? p.bowlType : permitted[0];
+  bowlEl.innerHTML = permitted.map(k => `<option value="${k}">${BOWL_TYPES[k].label}</option>`).join('');
+  bowlEl.value = selectedBowl;
+  const allowedStyles = editorStyleOptions(roleEl.value, selectedBowl);
+  const currentStyle = styleEl.value;
+  styleEl.innerHTML = `<option value="">None</option>` + allowedStyles.map(k => `<option value="${k}">${STYLES[k].label}</option>`).join('');
+  styleEl.value = allowedStyles.includes(currentStyle) ? currentStyle : '';
+  edPreviewSoon(id);
+}
 function editPlayerApply(id, data) {
   const p = P(id); if (!p) return;
   ['first','last'].forEach(k => { if (data[k]) p[k] = String(data[k]).slice(0, 24); });
+  const originalAge = p.age, originalDiscipline = editorDiscipline(p);
+  if (data.bowlType && BOWL_TYPES[data.bowlType]?.kind !== originalDiscipline) throw new Error('Bowling discipline cannot be changed');
+  if (data.role && !editorRoleOptions(p).includes(data.role)) throw new Error('Incompatible role');
+  if (data.style && !editorStyleOptions(data.role || p.role, data.bowlType || p.bowlType).includes(data.style)) data.style = null;
   ['age','pot','form','fitness','morale'].forEach(k => { if (data[k] != null && !isNaN(data[k])) p[k] = clamp(Math.round(+data[k]), k === 'age' ? 15 : 0, k === 'age' ? 45 : 100); });
   ['nat','role','hand','bowlType','persona'].forEach(k => { if (data[k]) p[k] = data[k]; });
   if (data.style !== undefined) p.style = data.style && STYLES[data.style] ? data.style : null;
@@ -8727,7 +8787,7 @@ function editPlayerSheet(id) {
   const fld = (label, html, k) => `<div><label class="lbl" for="ed_${k}">${label}</label>${html}</div>`;
   const num = (k, label, v, min, max) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" type="number" inputmode="numeric" min="${min}" max="${max}" value="${Math.round(v)}" oninput="edPreviewSoon('${id}')">`, k);
   const txt = (k, label, v) => fld(label, `<input class="input" id="ed_${k}" data-k="${k}" value="${esc(v)}">`, k);
-  const dd = (k, label, opts, cur) => fld(label, `<select class="full" id="ed_${k}" data-k="${k}" onchange="edPreviewSoon('${id}')">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`, k);
+  const dd = (k, label, opts, cur) => fld(label, `<select class="full" id="ed_${k}" data-k="${k}" onchange="${['role','bowlType'].includes(k) ? `edUpdateChoices('${id}')` : `edPreviewSoon('${id}')`}">${opts.map(([v, l]) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`, k);
   const sec = (title, inner, note) => `<div class="ed-sec"><div class="ed-h">${title}</div>${note ? `<div class="xs dim" style="margin:-4px 0 8px">${note}</div>` : ''}${inner}</div>`;
   const teams = [['', 'Free agent'], ...TEAM_DEFS.map(t => [t.id, t.name]), ...Object.keys(NATION_STRENGTH).map(n => ['X_' + n, NATIONS[n] + ' (national pool)'])];
   const step = f => { const v = (p.apt || {})[f] || 0; return `<div class="ed-step"><div class="lbl">${compName(f)}</div><div class="flex"><button type="button" class="btn sm" aria-label="Lower ${compName(f)}" onclick="edStep('${id}','${f}',-1)">−</button><input class="input" data-k="apt_${f}" id="ed_apt_${f}" type="number" inputmode="numeric" min="-12" max="12" value="${v}" oninput="edPreviewSoon('${id}')"><button type="button" class="btn sm" aria-label="Raise ${compName(f)}" onclick="edStep('${id}','${f}',1)">+</button></div></div>`; };
@@ -8737,15 +8797,15 @@ function editPlayerSheet(id) {
   sheet('Editor', esc(pname(p)), `<div id="edForm" data-id="${id}">${prev}
     ${sec('Identity', `<div class="grid ed-g ed-g2">${txt('first', 'First name', p.first)}${txt('last', 'Last name', p.last)}</div>
       <div class="grid ed-g ed-g3">${num('age', 'Age', p.age, 15, 45)}${dd('nat', 'Nation', Object.keys(NATIONS).map(n => [n, n]), p.nat)}${dd('hand', 'Bats', [['R','Right'],['L','Left']], p.hand)}</div>`)}
-    ${sec('Role', `<div class="grid ed-g ed-g2">${dd('role', 'Role', Object.keys(ROLES).map(r => [r, ROLES[r].label]), p.role)}${dd('bowlType', 'Bowling', Object.keys(BOWL_TYPES).map(b => [b, BOWL_TYPES[b].label]), p.bowlType)}
+    ${sec('Role', `<div class="xs muted" style="margin-bottom:8px">Bowling disciplines are locked to protect career records. Role, bowling type and style options remain compatible.</div><div class="grid ed-g ed-g2">${dd('role', 'Role', editorRoleOptions(p).map(r => [r, ROLES[r].label]), p.role)}${dd('bowlType', 'Bowling', editorBowlOptions(p,p.role).map(b => [b, BOWL_TYPES[b].label]), p.bowlType)}
       ${dd('team', 'Team', teams, p.teamId || '')}${dd('persona', 'Personality', Object.keys(PERSONAS).map(k => [k, PERSONAS[k].label]), ensurePersona(p))}</div>
-      <div class="ed-g">${dd('style', 'Style', [['', 'None'], ...Object.keys(STYLES).map(k => [k, STYLES[k].label])], p.style || '')}</div>`)}
+      <div class="ed-g">${dd('style', 'Style', [['', 'None'], ...editorStyleOptions(p.role,p.bowlType).map(k => [k, STYLES[k].label])], p.style || '')}</div>`)}
     ${sec('Format fit', `<div class="grid ed-g ed-g3">${FMT_LIST.map(step).join('')}</div>`, 'Raises or lowers his rating in each format, from −12 to +12.')}
     ${sec('Skills', skills)}
     ${sec('Status', `<div class="grid ed-g ed-g2">${num('pot', 'Potential', p.pot, 15, 99)}${num('form', 'Form', p.form, 0, 100)}${num('fitness', 'Fitness', p.fitness, 0, 100)}${num('morale', 'Morale', p.morale || 65, 0, 100)}</div>
       ${p.injury ? `<label class="switch" style="margin-top:10px" onclick="this.classList.toggle('on')" data-k="healInjury"><i></i>Heal ${esc(p.injury.type)}</label>` : ''}`)}
     ${p.contract ? sec('Contract', `<div class="grid ed-g ed-g2">${num('salaryK', 'Salary ($k a year)', Math.round(p.contract.salary / 1000), Math.round(MIN_SALARY / 1000), 2000)}${num('years', 'Years left', p.contract.years, 1, 6)}</div>`) : ''}</div>`,
-    { foot: `<button class="btn pri" type="button" ontouchend="event.preventDefault();saveEditPlayer('${id}')" onclick="saveEditPlayer('${id}')">Save player</button><button class="btn ghost" onclick="closeModal()">Cancel</button>` });
+    { foot: `<button class="btn pri" type="button" onclick="saveEditPlayer('${id}')">Save player</button><button class="btn ghost" onclick="closeModal()">Cancel</button>` });
 }
 function edStep(id, f, d) { const el = document.getElementById('ed_apt_' + f); el.value = clamp((+el.value || 0) + d, -12, 12); edPreviewSoon(id); }
 let _editorPreviewFrame = 0;
@@ -8783,6 +8843,7 @@ function saveEditPlayer(id) {
   // saveGame() serialises synchronously; doing that while the sheet remains open
   // makes the iOS Save button appear unresponsive, inviting repeated taps.
   try {
+    if (data.age !== undefined && data.age !== P(id).age && !confirm('Changing age will reset this player’s career statistics, caps, awards-related personal history and match logs. Continue?')) { form.dataset.saving = '0'; return; }
     editPlayerApply(id, data);
     closeModal();
     render();
