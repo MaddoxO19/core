@@ -981,13 +981,29 @@ body.live-mode .actbar{display:none}
 @media(max-width:550px){#launch.career-wizard-open .cw-page{padding:18px 13px 44px}#launch.career-wizard-open .cw-card,#launch.career-wizard-open .cw-slot{padding:14px}#launch.career-wizard-open .cw-teams{grid-template-columns:1fr}#launch.career-wizard-open .cw-setting{align-items:flex-start}#launch.career-wizard-open .cw-setting select{width:100%;max-width:100%;margin-top:8px}}
 
 /* Build 093: compact international series helper, office layout and save controls */
-.series-helper{margin:8px 1px 4px;line-height:1.4;text-align:left;color:var(--muted);font-weight:600}
+.series-helper{margin:8px auto 4px;line-height:1.4;text-align:center;color:var(--muted);font-weight:600;width:100%}
 .office-navigation .seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible;gap:5px;background:transparent;border:0;padding:0}
 .office-navigation .seg button{min-width:0;white-space:normal;font-size:11.5px;line-height:1.2;padding:10px 4px;background:var(--s1);border:1px solid var(--line);border-radius:9px}
 .office-navigation .seg button.on{background:var(--s3);border-color:var(--accent);color:var(--accent)}
 .save-centre-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .save-centre-actions .btn{white-space:normal;min-height:44px}
 @media(min-width:720px){.office-navigation .seg{grid-template-columns:repeat(7,minmax(0,1fr))}.office-navigation .seg button{font-size:12.5px}.save-centre-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* Build 095: one trade task at a time */
+.trade-workspace-nav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px}
+.trade-nav-btn{position:relative;min-width:0;padding:10px 6px;border:1px solid var(--line);border-radius:10px;background:var(--s1);color:var(--muted);font-size:12px;font-weight:800;cursor:pointer;line-height:1.25}
+.trade-nav-btn.on{border-color:var(--accent);color:var(--accent);background:var(--s2)}
+.trade-nav-count{display:inline-block;min-width:17px;padding:1px 4px;border-radius:10px;background:var(--accent);color:var(--accent-ink);font-size:10px}
+.trade-workspace-body{min-width:0}
+.trade-view-intro{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 12px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:var(--s1)}
+.trade-view-intro b{font-size:13px}.trade-view-intro .btn{flex:none}
+.trade-inbox-row{display:grid;grid-template-columns: minmax(90px,.75fr) minmax(0,1.5fr) auto;gap:10px;align-items:center;width:100%;border:0;border-top:1px solid var(--line2);text-align:left;background:transparent;color:var(--text);padding:12px;font:inherit;cursor:pointer}
+.trade-inbox-row:first-child{border-top:0}
+.trade-inbox-club{font-size:12px;font-weight:800;overflow-wrap:anywhere}
+.trade-inbox-details{font-size:12px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}
+.trade-inbox-open{color:var(--accent);white-space:nowrap;font-size:11px;font-weight:800}
+.trade-blank{padding:24px 12px;text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--line2);border-radius:10px;background:var(--s1)}
+@media(max-width:420px){.trade-nav-btn{font-size:11px;padding:10px 4px}.trade-inbox-row{grid-template-columns:1fr auto;gap:4px 8px}.trade-inbox-details{grid-column:1;grid-row:2}.trade-inbox-open{grid-column:2;grid-row:1 / span 2}}
 </style>
 </head>
 <body>
@@ -1046,7 +1062,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.18 Build 093', title: 'Office, Save Centre and Series Status', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.19 Build 095', title: 'Compact Trade Workspace', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -6358,7 +6374,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // centred dialogs on PC). Every page render returns an HTML string.
 const ui = { page:'home', squadTab:'list', listFmt:'T20', squadSort:'ovr', squadGroup:'ALL', xiFmt:'T20', tacFmt:'T20',
   fxMine:true, fxComp:'ALL', leagueTab:'ladders', ladComp:'SHIELD', leadFmt:'T20', leadStat:'runs', officeTab:'board',
-  tradePartner:null, tradeGive:[], tradeGet:[], search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, matchReview:false, homeComp:null, homeMode:null };
+  tradePartner:null, tradeGive:[], tradeGet:[], tradeView:'inbox', search:'', searchTeam:'ALL', faSort:'value', faGroup:'ALL', liveTab:'comm', liveInn:null, matchReview:false, homeComp:null, homeMode:null };
 
 function $(id) { return document.getElementById(id); }
 function go(page) { ui.page = page; render(); window.scrollTo(0, 0); if(page === 'matchday') showFixtureClashPrompt(); }
@@ -7319,7 +7335,7 @@ function renderBoard() {
 function applyAdvisorTrade(partner,giveText,getText) {
   const give=giveText.split(',').filter(Boolean),get=getText.split(',').filter(Boolean);
   if(!tradeWindowOpen()||tradeCheck(partner,give,get).length){flash('This proposed trade is no longer available.');return;}
-  ui.tradePartner=partner;ui.tradeGive=give;ui.tradeGet=get;render();
+  ui.tradePartner=partner;ui.tradeGive=give;ui.tradeGet=get;ui.tradeView='manual';render();
   flash('Trade loaded. Review the players before proposing.');
 }
 function tradeAdvisorHtml() {
@@ -7348,11 +7364,15 @@ function renderTrades() {
   const needTxt = Object.keys(need).filter(g => need[g] > 0.2).map(g => ({ BAT:'batting', WK:'keeping', AR:'all-rounders', PACE:'pace', SPIN:'spin' }[g])).join(', ') || 'nothing in particular';
   const list = (team, selIds, fn) => sortPlayers(squadOf(team), 'ovr', 'T20').map(p => { const on = selIds.includes(p.id); return `<div class="row tap ${on?'me':''}" onclick="${fn}('${p.id}')"><div class="stack"><div class="main-t ell">${esc(pname(p))}</div><div class="sub-t">${ROLES[p.role].short} · ${p.age}</div></div><div class="end">${on?chip('good','✓'):''}${pill(peakOvr(p))}</div></div>`; }).join('');
   const sum = ids => ids.map(id => pname(P(id))).join(', ') || 'nobody';
-  return `${tradeAdvisorHtml()}<div style="height:8px"></div>${offers ? panel('Offers received', `<div class="rows">${offers}</div>`, { flush: true }) + '<div style="height:8px"></div>' : ''}
-    ${open ? '' : '<div class="note warn" style="margin-bottom:8px">Trade window closed. It reopens in free agency.</div>'}
+  const mode=ui.tradeView||'inbox';
+  const tabs=`<div class="trade-workspace-nav"><button class="trade-nav-btn ${mode==='inbox'?'on':''}" onclick="ui.tradeView='inbox';render()">Offers received${game.offers.length?` <span class="trade-nav-count">${game.offers.length}</span>`:''}</button><button class="trade-nav-btn ${mode==='advisor'?'on':''}" onclick="ui.tradeView='advisor';render()">GM advisor</button><button class="trade-nav-btn ${mode==='manual'?'on':''}" onclick="ui.tradeView='manual';render()">Make a trade</button></div>`;
+  const inbox=offers?panel('Incoming offers',`<div class="rows">${game.offers.map(o=>`<button class="trade-inbox-row" onclick="reviewTradeOffer('${o.id}')"><span class="trade-inbox-club">${esc(teamName(o.from))}</span><span class="trade-inbox-details">Send ${esc(sum2(o.want))}<br>Receive ${esc(sum2(o.give))}</span><span class="trade-inbox-open">Review ›</span></button>`).join('')}</div>`,{flush:true}):`<div class="trade-blank">No offers from other clubs right now.</div>`;
+  const advisor=`<div class="trade-view-intro"><div><b>GM trade suggestions</b><div class="xs muted">Request recommendations based on squad needs and salary limits.</div></div><button class="btn pri sm" onclick="ui.tradeAdvisorRequested=true;render()">${ui.tradeAdvisorRequested?'Refresh suggestions':'Get suggestions'}</button></div>${ui.tradeAdvisorRequested?tradeAdvisorHtml():''}`;
+  const manual=`${open?'':'<div class="note warn" style="margin-bottom:8px">Trade window closed. It reopens in free agency.</div>'}<div class="trade-view-intro"><div><b>Propose a trade</b><div class="xs muted">Select the club and players to exchange.</div></div></div>
     <div class="flex wrap"><span class="s muted">Trade with</span>${sel(TEAM_DEFS.filter(t => t.id !== U()).map(t => [t.id, t.name]), partner, "ui.tradePartner=this.value;ui.tradeGet=[];render()")}<span class="xs muted">Short of ${needTxt} · cap space ${money(capSpace(partner))}</span></div><div style="height:8px"></div>
-    <div class="grid g2">${panel(`You give · ${ui.tradeGive.length}`, `<div class="rows" style="max-height:52vh;overflow:auto">${list(U(), ui.tradeGive, 'toggleGive')}</div>`, { flush: true })}${panel(`You get · ${ui.tradeGet.length}`, `<div class="rows" style="max-height:52vh;overflow:auto">${list(partner, ui.tradeGet, 'toggleGet')}</div>`, { flush: true })}</div>
+    <div class="grid g2">${panel(`You give · ${ui.tradeGive.length}`, `<div class="rows" style="max-height:45vh;overflow:auto">${list(U(), ui.tradeGive, 'toggleGive')}</div>`, { flush: true })}${panel(`You get · ${ui.tradeGet.length}`, `<div class="rows" style="max-height:45vh;overflow:auto">${list(partner, ui.tradeGet, 'toggleGet')}</div>`, { flush: true })}</div>
     <div class="panel" style="margin-top:8px"><div class="pb flex"><div class="grow s"><div class="ell">Give: <b>${esc(sum(ui.tradeGive))}</b></div><div class="ell">Get: <b>${esc(sum(ui.tradeGet))}</b></div></div><button class="btn pri" ${open && ui.tradeGive.length && ui.tradeGet.length ? '' : 'disabled'} onclick="proposeTrade()">Propose</button></div></div>`;
+  return `${tabs}<div class="trade-workspace-body">${mode==='manual'?manual:mode==='advisor'?advisor:inbox}</div>`;
 }
 function toggleGive(id) { ui.tradeGive = ui.tradeGive.includes(id) ? ui.tradeGive.filter(x => x !== id) : [...ui.tradeGive, id]; render(); }
 function toggleGet(id) { ui.tradeGet = ui.tradeGet.includes(id) ? ui.tradeGet.filter(x => x !== id) : [...ui.tradeGet, id]; render(); }
