@@ -379,7 +379,7 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .worm-legend{display:flex;flex-wrap:wrap;gap:7px 14px;align-items:center;margin-bottom:3px;font-size:11px;color:var(--text)}
 .worm-key{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-weight:700}
 .worm-key i{width:14px;height:3px;border-radius:4px;display:inline-block}
-.worm-key-dot i{width:9px;height:9px;border-radius:999px;background:#de5a5a;box-shadow:0 0 0 1px #0d1f2d inset}
+.worm-key-dot i{width:10px;height:10px;border-radius:999px;border:2px solid #de5a5a;box-sizing:border-box;background:var(--wicket-fill,#f1c64f)}
 .worm-wicket{pointer-events:none}
 .worm-target{font-size:10px;color:var(--muted);margin-left:auto}
 .worm-axis{text-align:center;color:var(--muted);font-size:10px;margin-top:-3px}
@@ -1062,7 +1062,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.19 Build 095', title: 'Compact Trade Workspace', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.21 Build 097', title: 'Team-Coloured Wicket Markers', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -6284,43 +6284,72 @@ function unpackStats(o) {
 }
 function serialiseGame() { game.rng = rngState; return JSON.stringify(game, (k, v) => k === '_names' ? undefined : isStatLine(v) ? packStats(v) : v); }
 function saveKey(slot) { return SAVE_PREFIX + slot; }
-let _saving = Promise.resolve();
+// Save requests are coalesced. Only the latest pending snapshot is written after an
+// in-flight IndexedDB transaction; routine autosaves cannot queue hundreds of writes.
+let _saving = Promise.resolve(true);
+let _saveBusy = false;
+let _pendingSave = null;
 let _autosaveTicker = null;
 function startAutosaveTicker() {
   if (_autosaveTicker) clearInterval(_autosaveTicker);
-  _autosaveTicker = setInterval(() => { if (game && document.visibilityState === 'visible') saveGame(game.meta.slot, false); }, 45000);
+  _autosaveTicker = setInterval(() => {
+    if (game && document.visibilityState === 'visible') saveGame(game.meta.slot, false);
+  }, 60000);
 }
 function stopAutosaveTicker() { if (_autosaveTicker) { clearInterval(_autosaveTicker); _autosaveTicker = null; } }
 function emergencySaveSnapshot() {
   if (!game || !Store.lsOk) return false;
   const slot = game.meta.slot || 1;
   game.meta.slot = slot;
-  game.meta.saved = new Date().toISOString();
-  game.meta.build = BUILD.version;
-  const str = serialiseGame();
-  const meta = metaOf(game);
-  const ok = writeLocalSaveMirror(slot, str, meta);
-  if (ok) Store.lastSaved = new Date();
-  return ok;
+  game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
+  try {
+    const ok = writeLocalSaveMirror(slot, serialiseGame(), metaOf(game));
+    if (ok) Store.lastSaved = new Date();
+    return ok;
+  } catch (e) { Store.lastError = String(e); return false; }
+}
+function saveStatusUpdate(message, bad=false) {
+  const el = document.getElementById('save-centre-result');
+  if (el) { el.textContent=message; el.style.color=bad?'var(--bad)':'var(--muted)'; }
+}
+async function drainSaveQueue() {
+  if (_saveBusy) return _saving;
+  _saveBusy = true;
+  let overall = true;
+  try {
+    while (_pendingSave) {
+      const job = _pendingSave;
+      _pendingSave = null;
+      let ok = false;
+      try { ok = await Store.put(job.slot, job.str, job.meta); }
+      catch (e) { Store.lastError=String(e); }
+      if (!ok) overall = false;
+      if (job.notify) {
+        flash(ok ? `Saved to slot ${job.slot}.` : 'Save failed. Export your career JSON.');
+        saveStatusUpdate(ok ? `Saved at ${new Date().toLocaleTimeString('en-AU')}.` : 'Save failed. Please export JSON.', !ok);
+      }
+    }
+  } finally { _saveBusy = false; }
+  return overall;
 }
 function saveGame(slot, notify) {
-  if (!game) return false;
-  // A file preview or restricted Safari session may have no writable persistence.
-  // Avoid expensive synchronous JSON serialisation when it cannot be saved.
-  if (Store.status === 'none' && !Store.idbOk && !Store.lsOk) {
-    if (notify) flash('This browser cannot keep saves. Export your career to a file.');
-    return false;
+  if (!game) return Promise.resolve(false);
+  if (!Store.idbOk && !Store.lsOk) {
+    if (notify) { flash('Browser storage unavailable. Export career JSON.'); saveStatusUpdate('Browser storage unavailable.', true); }
+    return Promise.resolve(false);
   }
   slot = slot || game.meta.slot || 1;
-  game.meta.slot = slot; game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
-  const str = serialiseGame(), meta = metaOf(game);
+  game.meta.slot = slot;
+  game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
+  let str, meta;
+  try { str = serialiseGame(); meta = metaOf(game); }
+  catch (e) { Store.lastError=String(e); if(notify) flash('Save encoding failed. Export backup.'); return Promise.resolve(false); }
+  // Keep a best-effort synchronous fallback for Safari page suspension.
   if (Store.lsOk) writeLocalSaveMirror(slot, str, meta);
-  _saving = _saving.catch(() => false).then(() => Store.put(slot, str, meta)).then(ok => {
-    if (notify) flash(ok ? `Saved to slot ${slot}.` : 'Save failed: this browser is not keeping data. Use Export save.');
-    if (!ok) Store.status = 'none';
-    return ok;
-  }).catch(e => { Store.lastError=String(e); if (notify) flash('Save failed. Export your career JSON.'); return false; });
-  return true;
+  const previous = _pendingSave;
+  _pendingSave = {slot,str,meta,notify:!!notify || !!previous?.notify};
+  if (!_saveBusy) _saving = drainSaveQueue();
+  return _saving;
 }
 function autosave() { if (game) saveGame(game.meta.slot, false); }
 async function loadGame(slot) {
@@ -7137,12 +7166,12 @@ function wormSvg(innings, fmt) {
       const stack = group.length > 1 ? (idx - (group.length - 1) / 2) * 8 : 0;
       const cx = x(f.ov);
       const cy = y(f.r) - stack;
-      const label = `Wicket ${f.w} at ${f.r}/${f.w} (${f.rawOv} ov)`;
-      return `<g class="worm-wicket" aria-label="${label}"><circle cx="${cx}" cy="${cy}" r="5.25" fill="#de5a5a" stroke="#0d1f2d" stroke-width="1.6" vector-effect="non-scaling-stroke"/><title>${label}</title></g>`;
+      const label = `${teamDef(inn.bat).short || inn.bat} wicket ${f.w} at ${f.r}/${f.w} (${f.rawOv} ov)`;
+      return `<g class="worm-wicket" aria-label="${esc(label)}"><circle cx="${cx}" cy="${cy}" r="5.25" fill="${palette[k%2]}" stroke="#de5a5a" stroke-width="2" vector-effect="non-scaling-stroke"/><title>${esc(label)}</title></g>`;
     }));
   }).flat().join('');
   const legends = valid.map((i,k) => `<span class="worm-key"><i style="background:${palette[k%2]}"></i>${esc(teamDef(i.bat).short || i.bat)} ${i.runs}/${i.wkts}</span>`).join('')
-    + `<span class="worm-key worm-key-dot"><i></i>Wicket</span>`;
+    + valid.map((i,k) => `<span class="worm-key worm-key-dot" style="--wicket-fill:${palette[k%2]}"><i></i>${esc(teamDef(i.bat).short || i.bat)} wicket</span>`).join('');
   const target = '';
   return `<div class="worm-wrap"><div class="worm-legend">${legends}${target}</div><svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative runs by over for ${valid.map(i=>teamDef(i.bat).name).join(' and ')} with wicket markers">${grid}${ticks}${paths}${wickets}</svg><div class="worm-axis">Overs</div></div>`;
 }
@@ -7271,22 +7300,31 @@ function saveHealthText() {
   return `${Store.idbOk ? 'Browser database' : 'Local browser storage'}${Store.lastSaved ? ' · Last saved '+Store.lastSaved.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : ' · No confirmed save this session'}`;
 }
 async function saveAndConfirm() {
-  saveGame(game.meta.slot, true);
-  await _saving;
-  if (ui.page === 'office' && ui.officeTab === 'saves') render();
+  saveStatusUpdate('Saving career…');
+  const slot = game.meta.slot || 1;
+  const ok = await saveGame(slot, false);
+  const raw = await Store.get(slot);
+  const parsed = safeParse(raw);
+  const valid = !!(ok && parsed && parsed.gm && parsed.players && parsed.season && parsed.meta && Number(parsed.meta.slot || slot) === slot);
+  const stamp = parsed?.meta?.saved ? new Date(parsed.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : 'unknown';
+  saveStatusUpdate(valid ? `Saved and verified at ${stamp}.` : 'Could not confirm save. Export a JSON backup now.', !valid);
+  flash(valid ? `Career saved and verified · ${stamp}` : 'Save could not be verified. Export JSON.');
 }
 async function verifyActiveSlot() {
-  const slot=game.meta.slot||1;
-  await _saving;
-  const raw=await Store.get(slot);
-  const g=safeParse(raw);
-  const ok=!!(g&&g.gm&&g.players&&g.season&&g.meta&&g.meta.slot===slot);
-  flash(ok?`Save slot ${slot} verified.`:`Slot ${slot} could not be verified. Export your career JSON.`);
+  const slot = game.meta.slot || 1;
+  saveStatusUpdate('Reading saved slot…');
+  // Verify stored data without blocking on autosaves still in flight.
+  const raw = await Store.get(slot);
+  const g = safeParse(raw);
+  const ok = !!(g && g.gm && g.players && g.season && g.meta && Number(g.meta.slot || slot) === slot);
+  const stamp = ok && g.meta.saved ? new Date(g.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : 'unknown';
+  saveStatusUpdate(ok ? `Slot ${slot} verified. Stored at ${stamp}.` : `Slot ${slot} could not be verified. Export JSON.`, !ok);
+  flash(ok ? `Slot ${slot} verified · ${stamp}` : 'Save verification failed. Export JSON.');
   return ok;
 }
 function renderSaveCentre() {
   const slot=game.meta.slot||1;
-  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="exportSave()">Export JSON backup</button><button class="btn ghost" onclick="verifyActiveSlot()">Verify saved slot</button><button class="btn ghost" onclick="importSave()">Import backup</button></div><p class="xs muted" style="margin-top:12px;line-height:1.55">Browser saves can be removed by Safari storage management. Keep an exported JSON backup for any career you want to protect. Verification checks that the save can be read from browser storage.</p></div></section>`;
+  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="exportSave()">Export JSON backup</button><button class="btn ghost" onclick="verifyActiveSlot()">Verify saved slot</button><button class="btn ghost" onclick="importSave()">Import backup</button></div><p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:12px 0 0;min-height:17px">Select Save career to save and check your progress.</p><p class="xs muted" style="margin-top:10px;line-height:1.5">Keep a separate JSON backup for important careers. Safari can remove browser data.</p></div></section>`;
 }
 function renderOffice() {
   const t = ui.officeTab;
