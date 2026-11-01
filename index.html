@@ -1022,7 +1022,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 090', title: 'Match Engine Diagnostics Export', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 091', title: 'Contract Economy, Coaches and World Cup Identity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -1405,7 +1405,7 @@ function playerValueScore(p) {
 function askingSalary(p) {
   const v = playerValueScore(p);
   const os = p.nat !== 'AUS' ? 1.1 : 1;
-  return clamp(Math.round((MIN_SALARY + v * 250000 * os) / 5000) * 5000, MIN_SALARY, 420000);
+  return clamp(Math.round((MIN_SALARY + v * 155000 * os) / 5000) * 5000, MIN_SALARY, 420000);
 }
 function tradeValue(p) {
   let v = playerValueScore(p) * 100;
@@ -3020,7 +3020,7 @@ const STAFF_ROLES = {
   scout:   { label:'Talent scout',        short:'Scout',      desc:'More accurate potential grades for prospects and free agents.' }
 };
 const STAFF_ORDER = ['head','bat','bowl','analyst','physio','scout'];
-const COACH_STYLES = { aggressive:'Aggressive', balanced:'Balanced', cautious:'Cautious' };
+const COACH_STYLES = { aggressive:'Attacking', balanced:'Balanced', cautious:'Patient' }; // Preserve persisted style keys and their tactical lean.
 const STAFF_BUDGET = 900000;
 
 function makeStaff(role, q, teamId) {
@@ -3054,7 +3054,24 @@ function ensureStaff() {
 }
 function refreshStaffMarket() {
   const pool = staffMarket();
-  STAFF_ORDER.forEach(r => { const have = pool.filter(s => s.role === r).length; for (let i = have; i < 3; i++) makeStaff(r, 50 + STAFF_SHIFT + randInt(-8, 32)); });
+  STAFF_ORDER.forEach(r => {
+    const have = pool.filter(s => s.role === r).length;
+    const target = r === 'head' ? 9 : 3;
+    for (let i = have; i < target; i++) makeStaff(r, 50 + STAFF_SHIFT + randInt(-8, 32));
+    if (r === 'head') {
+      // Ensure at least three candidates for each GM philosophy. Only unsigned coaches change.
+      const available = staffMarket().filter(s => s.role === 'head');
+      const styles = ['cautious','balanced','aggressive'];
+      const counts = Object.fromEntries(styles.map(k => [k, available.filter(s => s.style === k).length]));
+      for (const style of styles) while (counts[style] < 3) {
+        const donor = styles.find(k => counts[k] > 3);
+        if (!donor) break;
+        const candidate = available.find(s => s.style === donor);
+        if (!candidate) break;
+        candidate.style = style; counts[donor]--; counts[style]++;
+      }
+    }
+  });
 }
 function hireStaff(id) {
   const s = game.staff[id];
@@ -5765,7 +5782,7 @@ function downloadMatchEngineDiagnostic(){
   const data=matchEngineDiagnosticReport();
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download=`legacy-cricket-engine-diagnostic-${game.year}-B090.json`;
+  a.download=`legacy-cricket-engine-diagnostic-${game.year}-B091.json`;
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
   flash('Match engine diagnostic exported. Share this JSON for analysis.');
 }
@@ -7414,6 +7431,14 @@ function profileOverview(p, own) {
 // has the same nation code as the venue; never infer home advantage from fx.home.
 function fixtureContextLabel(fx) {
   if (!fx) return '';
+  if (fx.event === 'ODIWC' || (fx.comp === 'ODI' && fx.win === 'WC' && /^(wcsuper|wcgroup|wcsemi|wcfinal)/.test(fx.stage || ''))) {
+    const stage = String(fx.stage || '');
+    if (/final/.test(stage)) return 'ODI World Cup Final';
+    if (/semi/.test(stage)) return 'ODI World Cup Semi-final';
+    if (/super/.test(stage)) return `ODI World Cup · ${fx.round && /super six/i.test(String(fx.round)) ? fx.round : 'Super Six' + (fx.round ? ' · ' + fx.round : '')}`;
+    return 'ODI World Cup · Group Stage';
+  }
+  if (fx.event === 'CT') return 'Champions Trophy' + (/final/.test(fx.stage || '') ? ' Final' : '');
   if (fx.stage === 'wtcfinal') return 'World Test Championship Final';
   if (fx.stage === 'wcfinal') return 'T20 World Cup Final';
   if (fx.stage === 'wcsemi1' || fx.stage === 'wcsemi2') return 'T20 World Cup Semi-final';
@@ -7516,7 +7541,7 @@ function renderMatchday() {
   const scouted = game.scoutedFx[fx.id];
   const wx = pre.cond.days.map((d, i) => chip(d.sky === 'rain' || d.sky === 'showers' ? 'warn' : d.sky === 'overcast' ? 'info' : '', `${fmt === 'FC' ? 'D' + (i + 1) + ' ' : ''}${SKIES[d.sky].label}${d.lost ? ' −' + d.lost : ''}`)).join(' ');
   const hc = staffIn(me, 'head');
-  return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
+  return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.event === 'ODIWC' ? '' : fx.stage === 'league' ? 'Round ' + fx.round + ' · ' : fx.round + ' · '}${dateStr(fx.day)}`)}
   <div class="grid">
     ${panel('', `<div class="hero matchday-hero ${isNationalFixture(fx) ? 'matchday-national' : ''}"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs matchday-name">${esc(teamDef(fx.home).nick)} v ${esc(teamDef(fx.away).nick)}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       ${bilateralSeriesHtml(fx)}
@@ -8330,11 +8355,18 @@ function renderStaff() {
     ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}
     <div class="xs dim" style="margin-top:6px">Staff budget ${money(STAFF_BUDGET)}, separate from the salary cap.</div>`;
 }
+function coachFitLabel(s) {
+  if (!s || s.role !== 'head') return '';
+  const target = {patient:'cautious', balanced:'balanced', attacking:'aggressive'};
+  const prefs = Object.values(game.philosophy || {FC:'balanced',OD:'balanced',T20:'balanced'});
+  const matches = prefs.filter(p => target[p] === s.style).length;
+  return matches >= 2 ? ' · Philosophy fit: Strong' : matches === 1 ? ' · Philosophy fit: Moderate' : ' · Philosophy fit: Different';
+}
 function staffMarketSheet(role) {
   const cur = staffIn(U(), role);
   const c = staffMarket().filter(s => s.role === role).sort((a, b) => b.rating - a.rating);
   sheet(STAFF_ROLES[role].label, cur ? `Current: ${esc(cur.first + ' ' + cur.last)} · ${cur.rating}` : 'Vacant', `<div class="xs muted" style="margin-bottom:8px">${STAFF_ROLES[role].desc} Budget left: ${money(STAFF_BUDGET - staffPayroll(U()) + (cur ? cur.salary : 0))} if you replace the current holder.</div>
-    <div class="panel"><div class="rows">${c.map(s => `<div class="row"><div class="stack"><div class="main-t">${esc(s.first + ' ' + s.last)}${s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t">${s.age} · asks ${money(s.salary)} × ${s.years} yr</div></div><div class="end">${pill(s.rating)}<button class="btn sm pri" onclick="doHire('${s.id}','${role}')">Hire</button></div></div>`).join('') || '<div class="empty">No candidates right now.</div>'}</div></div>`,
+    <div class="panel"><div class="rows">${c.map(s => `<div class="row"><div class="stack"><div class="main-t">${esc(s.first + ' ' + s.last)}${s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t">${s.age} · asks ${money(s.salary)} × ${s.years} yr${coachFitLabel(s)}</div></div><div class="end">${pill(s.rating)}<button class="btn sm pri" onclick="doHire('${s.id}','${role}')">Hire</button></div></div>`).join('') || '<div class="empty">No candidates right now.</div>'}</div></div>`,
     { foot: cur ? `<button class="btn ghost" onclick="releaseStaff('${cur.id}');closeModal();autosave();render()">Release ${esc(cur.last)}</button>` : '' });
 }
 function doHire(id, role) { const r = hireStaff(id); if (!r.ok) { flash(r.reason); return; } closeModal(); autosave(); render(); flash('Hired.'); }
