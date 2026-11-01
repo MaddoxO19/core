@@ -878,6 +878,48 @@ body.live-mode .actbar{display:none}
 .matchday-national>.mid{min-width:0;flex:1 1 auto}
 .matchday-national .matchday-name{font-size:clamp(14px,3.7vw,17px)}
 @media(max-width:390px){.matchday-national{gap:5px}.matchday-national>.matchday-crest{flex-basis:42px;min-width:42px}.matchday-national .matchday-name{font-size:14px}}
+
+/* Build 083: concise series tracker on home and match-day cards. */
+.bilateral-series{padding:9px 12px 10px;margin:7px 0 3px;border:1px solid var(--line2);border-radius:10px;background:var(--s2);text-align:center}
+.bilateral-series-heading{font-size:12px;font-weight:800;letter-spacing:.045em;color:var(--text)}
+.bilateral-series-status{font-size:12px;color:var(--muted);margin-top:3px;font-weight:650}
+.bilateral-series-matches{display:flex;gap:4px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+.series-match-marker{font-size:9px;line-height:1.4;padding:3px 7px;min-width:29px;border:1px solid var(--line2);border-radius:5px;color:var(--muted);text-align:center;font-weight:750;background:var(--s1)}
+.series-match-marker.is-current{border-color:var(--gold);color:var(--gold)}
+
+/* Build 084: balanced career slot cards and two-step New Career flow. */
+.career-slots,.career-load-list{display:grid;gap:10px;padding:4px 0}
+.career-slot,.career-load-card{border:1px solid var(--line);background:var(--s1);border-radius:13px;padding:14px;text-align:left;color:var(--text);min-width:0}
+.career-slot{display:flex;flex-direction:column;gap:5px;width:100%;cursor:pointer;font:inherit}
+.career-slot.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:var(--s2)}
+.career-slot-index{font-size:10px;color:var(--accent);font-weight:850;letter-spacing:.12em}
+.career-slot strong,.career-load-details strong{font-size:15px;line-height:1.35;overflow-wrap:anywhere}
+.career-slot small,.career-load-details small{font-size:11px;color:var(--muted);line-height:1.45}
+.career-slot-warning{color:var(--muted);font-size:10px}
+.career-selected-slot{padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--s2);font-weight:800}
+.career-load-card{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.career-load-details{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.career-load-actions{display:flex;flex-direction:column;gap:6px;flex:none}
+.career-load-actions .btn{min-width:65px}
+
+/* Build 085: Basketball-matched full-page launch and career setup. */
+#launch.career-wizard-open{align-items:flex-start;display:block;padding:0;background:#090d13;min-height:100svh}
+#launch.career-wizard-open .cw-page{max-width:920px;margin:0 auto;padding:30px 22px 70px;color:#f4f6fa;text-align:left}
+.cw-head{display:flex;align-items:center;gap:18px;margin-bottom:24px}.cw-back{flex:none;width:56px;height:56px;background:#111924;border:1px solid #354357;border-radius:18px;color:#f4f6fa;font-size:36px;line-height:1;cursor:pointer}
+.cw-kicker{color:#f5a43e;font-size:12px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.cw-head h2{margin:5px 0 0;font-size:clamp(26px,4vw,38px);line-height:1.1;font-weight:900}
+.cw-progress{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:20px 0 24px}.cw-progress i{height:6px;border-radius:8px;background:#253242}.cw-progress i.on{background:#f5a43e}
+.cw-card,.cw-slot{padding:26px;border:1px solid #344254;border-radius:26px;background:#141b25;margin-bottom:16px;text-align:left}
+.cw-card h3,.cw-slot h3{font-size:clamp(23px,3.6vw,30px);margin:0 0 8px;font-weight:850;line-height:1.2}.cw-slot{text-align:center;padding:26px 22px}.cw-slot h3{margin:12px 0}
+.cw-muted{font-size:15px;line-height:1.6;color:#a2afc0;margin:0 0 22px}.cw-slot .cw-muted{margin-bottom:22px}
+.cw-primary,.cw-secondary{display:block;background:#f5a43e;color:#15120c;border:0;border-radius:18px;min-height:64px;width:100%;font-weight:900;font-size:17px;cursor:pointer;padding:12px 18px}
+.cw-secondary{background:#1b222d;color:#f4f6fa;border:1px solid #344254}.cw-wide{margin-top:14px}.cw-delete{background:none;border:0;color:#a5adba;font-size:13px;margin-top:13px;cursor:pointer}
+.cw-footnote{text-align:center;color:#9da8b8;font-size:12px;margin:12px 0}
+.cw-label{font-size:12px;color:#aab5c5;font-weight:800;display:block;margin:18px 0 10px}.cw-input{display:block;width:100%;font-size:20px;border:1px solid #344254;border-radius:17px;background:#090f17;color:#fff;padding:16px;margin-bottom:20px;min-height:60px}
+.cw-teams{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:19px 0 24px}.cw-team{display:flex;gap:12px;align-items:center;text-align:left;background:#1b222d;border:1px solid #354254;border-radius:16px;color:#f4f6fa;padding:14px;min-height:86px;cursor:pointer;min-width:0}.cw-team.active{border:2px solid #f5a43e}.cw-team-symbol{width:45px;height:48px;border-radius:14px;border:2px solid;display:grid;place-items:center;font-weight:900;flex:none}.cw-team strong{display:block;font-size:14px}.cw-team small{display:block;margin-top:4px;font-size:11px;color:#9da8b8;line-height:1.35}.cw-check{margin-left:auto;color:#f5a43e}
+.cw-setting{display:flex;gap:14px;align-items:center;justify-content:space-between;border-top:1px solid #344254;padding:20px 0}.cw-setting strong{display:block;font-size:16px}.cw-setting small{display:block;color:#9ba8b9;font-size:12px;margin-top:5px;max-width:400px}.cw-setting select{background:#090f17;color:#fff;border:1px solid #344254;border-radius:10px;padding:12px;max-width:45%}
+.cw-summary{border:1px solid #354254;border-radius:21px;padding:20px;margin:15px 0 25px}.cw-summary h3{font-size:24px;margin:7px 0 4px}.cw-summary p{color:#9ba8b9;margin:0 0 18px}.cw-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.cw-summary-grid span{background:#1b222d;border-radius:12px;padding:13px 6px;text-align:center}.cw-summary-grid b,.cw-summary-grid small{display:block}.cw-summary-grid small{color:#9ba8b9;font-size:11px;margin-top:6px}
+#launch:not(.career-wizard-open) .series-launch{max-width:620px}#launch:not(.career-wizard-open) .launch-actions .btn{min-height:67px;font-size:20px}#launch:not(.career-wizard-open) .launch-tagline{font-size:17px;color:#d4d9e2}#launch:not(.career-wizard-open) .launch-world{font-size:14px}
+@media(max-width:550px){#launch.career-wizard-open .cw-page{padding:25px 15px 70px}.cw-card,.cw-slot{padding:20px 16px;border-radius:19px}.cw-teams{grid-template-columns:1fr}.cw-back{width:45px;height:48px;border-radius:13px}.cw-primary,.cw-secondary{min-height:56px}.cw-setting{display:block}.cw-setting select{max-width:100%;width:100%;margin-top:12px}}
 </style>
 </head>
 <body>
@@ -936,7 +978,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 082', title: 'Match Day Navigation Hotfix', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 086', title: 'Contract Lifecycle Integrity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -4635,6 +4677,23 @@ function seedAuthenticWorld() {
       sq.forEach(p => p.contract.salary = Math.max(MIN_SALARY,Math.round((MIN_SALARY+(p.contract.salary-MIN_SALARY)*factor)/5000)*5000));
     }
   });
+  // B086: Authentic domestic contracts have modelled durations, not verified real-world
+  // expiry dates. Distribute years across clubs and player tiers without consuming
+  // simulation RNG. Never rewrite a loaded save; this runs only at new-career creation.
+  // The previous fixed 2-year assignment caused almost entire clubs to expire together.
+  TEAM_DEFS.forEach(t => {
+    const sq = squadOf(t.id).slice().sort((a,b) => String(a.id).localeCompare(String(b.id)));
+    const offset = TEAM_DEFS.findIndex(x => x.id === t.id);
+    sq.forEach((p, i) => {
+      if (!p.contract) return;
+      // One-, two-, three-, four-year modelled deals; each squad is distributed.
+      // Elite players and developing talent get a modest preference for longer deals.
+      const cycle = (i * 7 + offset + Math.floor(i / 4)) % 12;
+      const years = cycle < 3 ? 1 : cycle < 7 ? 2 : cycle < 10 ? 3 : 4;
+      p.contract.years = p.age >= 34 ? Math.min(2, years) : years;
+      p.contract.modelledDuration = true;
+    });
+  });
   // Set one free agent record for international players, excluding people already on Australian domestic teams.
   for (const [nat,entries] of Object.entries(AUTHENTIC_ROSTERS.international)) {
     for (const rec of entries) add(rec,nat,nat==='AUS' ? null : 'X_'+nat,'ICC T20 World Cup 2026');
@@ -4700,7 +4759,7 @@ function balanceStartingSquads() {
         salary=Math.min(salary,capSpace(t.id));
         if(salary<MIN_SALARY)break;
         recruit.teamId=t.id;
-        recruit.contract={salary:Math.floor(salary/5000)*5000,years:2};
+        recruit.contract={salary:Math.floor(salary/5000)*5000,years:1+((squadOf(t.id).length+TEAM_DEFS.findIndex(x=>x.id===t.id))%4)};
         changes.signed.push(recruit.id);
       }
     }
@@ -5825,6 +5884,23 @@ function processContracts() {
   game.offseason.expiring = expiring;
   game.deadMoney = 0;
 }
+// B086: Forecast the renewal budget without counting expiring salaries as permanent
+// commitments. Existing saved careers are read as-is, no contract migration.
+function renewalForecast() {
+  const entries = game.offseason && Array.isArray(game.offseason.expiring) ? game.offseason.expiring : [];
+  const current = payroll(U());
+  const awaiting = entries.filter(e => e.status === 'pending' || e.status === 'released');
+  const releasing = awaiting.reduce((sum,e) => { const p=P(e.id); return sum + (p && p.contract ? p.contract.salary : 0); }, 0);
+  const afterExpiry = Math.max(0, current - releasing);
+  const already = squadOf(U()).length - awaiting.length;
+  const minNeeded = Math.max(0, SQUAD_MIN - already);
+  const reserve = minNeeded * MIN_SALARY;
+  const room = Math.max(0, SALARY_CAP - afterExpiry);
+  const pending = entries.filter(e => e.status === 'pending');
+  const asks = pending.reduce((sum,e) => sum + e.ask, 0);
+  return { current, releasing, afterExpiry, minNeeded, reserve, room,
+    discretionary: Math.max(0,room-reserve), asks, gap: Math.max(0,asks-room), pending:pending.length };
+}
 function resignExpiring(id) {
   const e = game.offseason.expiring.find(x => x.id === id);
   if (!e) return;
@@ -6242,36 +6318,86 @@ function render() {
 function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
+// Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
+const CAREER_STEPS = ['Create Your GM','Choose Your Team','National Team','Career Settings'];
+const careerDraft = { slot:1, name:'', team:'NSW', nation:false, mode:'fictional', cap:true, injuries:true };
+let careerLaunchOriginal = null;
+function ensureCareerLaunchOriginal() { if (careerLaunchOriginal == null) careerLaunchOriginal = $('launch').innerHTML; }
+function careerBackToMenu() {
+  ensureCareerLaunchOriginal();
+  $('launch').innerHTML = careerLaunchOriginal;
+  $('launch').classList.remove('career-wizard-open');
+  refreshLaunchCareers();
+  window.scrollTo(0,0);
+}
+async function refreshLaunchCareers() {
+  const countEl = $('launchSavedCount');
+  if ($('bVer')) $('bVer').textContent = BUILD.version;
+  if ($('bTitle')) $('bTitle').textContent = BUILD.title;
+  if ($('bEng')) $('bEng').textContent = BUILD.engine;
+  if (!countEl) return;
+  const metas = await Store.list();
+  const count = metas.filter(Boolean).length;
+  countEl.textContent = `${count} saved career${count === 1 ? '' : 's'} available.`;
+}
+function careerScreen(title, step, inner, back) {
+  ensureCareerLaunchOriginal();
+  const progress = step >= 0 ? `<div class="cw-progress">${CAREER_STEPS.map((_, i)=>`<i class="${i<=step?'on':''}"></i>`).join('')}</div>` : '';
+  $('launch').classList.add('career-wizard-open');
+  $('launch').innerHTML = `<div class="cw-page"><header class="cw-head"><button class="cw-back" onclick="${back || 'careerBackToMenu()'}" aria-label="Back">‹</button><div><div class="cw-kicker">${step < 0 ? 'CAREERS' : 'NEW CAREER'}</div><h2>${title}</h2></div></header>${progress}${inner}</div>`;
+  window.scrollTo(0,0);
+}
+function careerStepHeader(text, hint='') { return `<h3>${text}</h3>${hint ? `<p class="cw-muted">${hint}</p>` : ''}`; }
 async function openNewCareer() {
   const metas = await Store.list();
-  const slots = metas.map((g, k) => [k + 1, `Slot ${k + 1}${g ? ' · overwrite ' + esc(g.name) : ' · empty'}`]);
-  const empty = (metas.findIndex(m => !m) + 1) || 1;
-  window._pickedTeam = 'NSW'; window._nationGm = false; window._rosterMode = 'fictional';
-  sheet('New career', 'Create your GM', `
-    <div class="grid g2"><div><label class="lbl">GM name</label><input class="input" id="gmName" value="FitzO" maxlength="24"></div><div><label class="lbl">Save slot</label><select id="slotSel" class="full">${slots.map(([v, l]) => `<option value="${v}" ${v === empty ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
-    <label class="lbl" style="margin-top:12px">Starting player database</label>
-    <select class="full" id="rosterModeSel" onchange="window._rosterMode=this.value"><option value="fictional">Fictional world (original)</option><option value="authentic">Authentic world · 2026–27 (modelled ratings)</option></select>
-    <div class="xs muted" style="margin-top:5px">Real names from published 2026–27 domestic and 2026 T20 international squads. Ratings are estimated; some nations retain fictional depth.</div>
-    <label class="lbl" style="margin-top:12px">Choose your state</label>
-    <div class="team-grid">${TEAM_DEFS.map((t, i) => `<button class="team-opt ${i === 0 ? 'on' : ''}" data-team="${t.id}" onclick="pickTeam('${t.id}')"><div class="n"><span class="dot" style="background:${t.color}"></span>${t.name}</div><div class="g">${t.nick} · ${t.ground}</div></button>`).join('')}</div>
-    <div class="flex" style="margin-top:12px"><span class="switch" id="natSw" onclick="window._nationGm=!window._nationGm;this.classList.toggle('on',window._nationGm)"><i></i>Also serve as Australia's national selector</span></div>
-    ${Store.status === 'none' ? '<div class="note bad" style="margin-top:10px">This browser is not keeping saved data. Use Export save from the menu to keep your career.</div>' : ''}`,
-    { foot: `<button class="btn pri" onclick="startCareer()">Start career</button>` });
+  const cards = metas.map((g,k)=>{
+    const i=k+1;
+    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name) + ' · ' + esc(teamName(g.team)) : 'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label,g.build].filter(Boolean).join(' · ')) : 'Start a new GM career here.'}</p><button class="cw-primary" onclick="careerChooseSlot(${i})">${g ? 'Replace Career' : 'Create Career'}</button></section>`;
+  }).join('');
+  careerScreen('Choose a Save Slot',-1,`${cards}<button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button><p class="cw-footnote">Import a .json career backup saved from Legacy Cricket.</p>`,'careerBackToMenu()');
 }
-function pickTeam(id) { window._pickedTeam = id; document.querySelectorAll('.team-opt').forEach(x => x.classList.toggle('on', x.dataset.team === id)); }
-function startCareer() {
-  const name = ($('gmName').value || '').trim() || 'FitzO', slot = +$('slotSel').value || 1;
-  createGame(name, window._pickedTeam || 'NSW', 2026, window._nationGm, window._rosterMode);
-  game.meta.slot = slot; saveGame(slot, false); closeModal(); enterApp();
+async function careerChooseSlot(i) {
+  const metas=await Store.list();
+  if (metas[i-1] && !confirm(`Replace save slot ${i}? This deletes the existing career in that slot.`)) return;
+  careerDraft.slot=i; careerDraft.name='';careerDraft.team='NSW';careerDraft.nation=false;careerDraft.mode='fictional';
+  openCareerSetup();
+}
+function openCareerSetup() {
+  careerScreen('Create Your GM',0,`<section class="cw-card">${careerStepHeader('Who are you?','Your GM name appears throughout your career and in your management record.')}<label class="cw-label" for="cw-gm">GM NAME</label><input class="cw-input" id="cw-gm" maxlength="24" placeholder="Enter GM name" value="${esc(careerDraft.name)}"><button class="cw-primary" onclick="careerDraft.name=($('cw-gm').value||'').trim()||'FitzO';careerChooseTeam()">Choose Team</button></section>`, 'openNewCareer()');
+}
+function careerChooseTeam() {
+  const cards=TEAM_DEFS.map(t=>`<button class="cw-team ${careerDraft.team===t.id?'active':''}" onclick="careerDraft.team='${t.id}';careerChooseTeam()"><span class="cw-team-symbol" style="border-color:${t.color};color:${t.color}">${esc(t.id.slice(0,2))}</span><span><strong>${esc(t.name)}</strong><small>${esc(t.nick)} · ${esc(t.ground)}</small></span><span class="cw-check">${careerDraft.team===t.id?'✓':''}</span></button>`).join('');
+  careerScreen('Choose Your Team',1,`<section class="cw-card">${careerStepHeader('Choose your state','Manage an Australian domestic side across Shield, One-Day and T20 competitions.')}<div class="cw-teams">${cards}</div><button class="cw-primary" onclick="careerChooseNation()">National Team</button></section>`,'openCareerSetup()');
+}
+function careerChooseNation() {
+  careerScreen('National Team',2,`<section class="cw-card"><div class="cw-kicker">NATIONAL TEAM MANAGEMENT</div>${careerStepHeader('Manage Australia?','Manage the Australian national team alongside your state career. Select squads and compete in international series and tournaments.')}<button class="cw-primary" onclick="careerDraft.nation=true;careerSettings()">Manage Australia</button><button class="cw-secondary cw-wide" onclick="careerDraft.nation=false;careerSettings()">Not Now · Available Later in Intl</button></section>`,'careerChooseTeam()');
+}
+function careerSettings() {
+  careerScreen('Career Settings',3,`<section class="cw-card">${careerStepHeader('Career settings','Choose your starting world before beginning the simulation.')}<div class="cw-setting"><div><strong>Player Database</strong><small>Choose between fictional players and authentic names with modelled ratings.</small></div><select id="cw-mode" onchange="careerDraft.mode=this.value;document.getElementById('cw-mode-summary').textContent=this.value==='authentic'?'Authentic':'Fictional'"><option value="fictional" ${careerDraft.mode==='fictional'?'selected':''}>Fictional World</option><option value="authentic" ${careerDraft.mode==='authentic'?'selected':''}>Authentic World</option></select></div><div class="cw-summary"><div class="cw-kicker">CAREER SUMMARY</div><h3>${esc(careerDraft.name || 'FitzO')}</h3><p>${esc(teamName(careerDraft.team))} · ${careerDraft.nation?'Australia National Team GM':'Domestic GM'}</p><div class="cw-summary-grid"><span><b>Slot ${careerDraft.slot}</b><small>Save slot</small></span><span><b id="cw-mode-summary">${careerDraft.mode==='authentic'?'Authentic':'Fictional'}</b><small>World</small></span><span><b>${careerDraft.nation?'Yes':'No'}</b><small>Australia</small></span></div></div><button class="cw-primary" onclick="startCareer()">Start Career</button></section>`,'careerChooseNation()');
+}
+async function startCareer() {
+  const metas=await Store.list();
+  if(metas[careerDraft.slot-1] && !confirm(`Replace the career in slot ${careerDraft.slot}? This cannot be undone.`)) return;
+  createGame(careerDraft.name || 'FitzO',careerDraft.team,2026,careerDraft.nation,careerDraft.mode);
+  game.meta.slot=careerDraft.slot;
+  saveGame(careerDraft.slot,false);
+  ensureCareerLaunchOriginal();
+  $('launch').innerHTML=careerLaunchOriginal;
+  $('launch').classList.remove('career-wizard-open');
+  enterApp();
 }
 async function openLoadCareer() {
-  const metas = await Store.list();
-  const rows = metas.map((g, k) => { const i = k + 1;
-    return `<div class="row"><div class="stack"><div class="main-t">${g ? esc(g.name) + ' · ' + teamName(g.team) : 'Empty slot ' + i}</div><div class="sub-t">${g ? `${g.label} · ${g.phase === 'season' ? dateStr(g.day, null, g.year) : 'off-season'} · ${g.wins}W ${g.losses}L · ${g.build}${g.edited ? ' · edited' : ''}${g.saved ? ' · saved ' + new Date(g.saved).toLocaleString('en-AU', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}` : 'No career saved'}</div></div>
-      ${g ? `<div class="end"><button class="btn sm pri" onclick="loadGame(${i})">Load</button><button class="btn sm ghost" onclick="deleteSlot(${i})">✕</button></div>` : ''}</div>`; }).join('');
-  sheet('Career saves', 'Load a career', `${Store.status === 'none' ? '<div class="pb"><div class="note bad">This browser is not keeping saved data (private browsing or a file preview). Import a save file instead.</div></div>' : ''}<div class="rows">${rows}</div>`, { flush: true, foot: `<button class="btn" onclick="importSave()">Import save file</button>` });
+  const metas=await Store.list();
+  const cards=metas.map((g,k)=>{
+    const i=k+1;
+    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name)+' · '+esc(teamName(g.team)):'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label,g.build].filter(Boolean).join(' · ')):'No career saved'}</p>${g ? `<button class="cw-primary" onclick="loadGame(${i})">Load Career</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete Save</button>`:''}</section>`;
+  }).join('');
+  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage unavailable. Restore from a backup file.</div>':''}${cards}<button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button>`,'careerBackToMenu()');
 }
-async function deleteSlot(i) { if (!confirm('Delete this save permanently?')) return; await Store.del(i); openLoadCareer(); }
+async function deleteSlot(i) {
+  if(!confirm(`Delete save slot ${i} permanently?`))return;
+  await Store.del(i);openLoadCareer();
+}
 function openMenu() {
   const g = game.gm;
   sheet('Career', esc(g.name) + ' · ' + teamName(g.teamId), `<div class="rows">
@@ -6288,7 +6414,7 @@ function openMenu() {
     { flush: true, foot: `<button class="btn pri" onclick="saveGame(game.meta.slot,true)">Save now</button><button class="btn ghost" onclick="returnToLaunch()">Save and exit</button>` });
 }
 function showGMProfile() { openMenu(); }
-function returnToLaunch() { saveGame(game.meta.slot, false); closeModal(); document.body.classList.remove('live-mode'); $('app').classList.add('hidden'); $('launch').classList.remove('hidden'); }
+function returnToLaunch() { saveGame(game.meta.slot, false); closeModal(); document.body.classList.remove('live-mode'); $('app').classList.add('hidden'); $('launch').classList.remove('hidden'); careerBackToMenu(); }
 function showHelp() {
   sheet('Guide', 'How to play', `<div class="help">
     <h4>The loop</h4><p>Continue moves the calendar on and stops whenever you are needed: a match, a trade offer, a national call-up. On match day, play live ball by ball or quick-sim.</p>
@@ -6416,7 +6542,7 @@ function renderHome() {
   } else if (fx) {
     const mine = isUserTeam(fx.home) ? fx.home : fx.away, opp = mine === fx.home ? fx.away : fx.home, days = fx.day - game.day;
     hero = `<div class="hero">${badge(mine, true)}<div class="mid"><div class="comp">${chip(fx.comp, COMPS[fx.comp].short)} ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round}</div>
-      <div class="vs ell">${mine === fx.home ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>`;
+      <div class="vs ell">${mine === fx.home ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>${bilateralSeriesHtml(fx)}`;
     acts = `<button class="btn pri" onclick="continueGame()">${game.pendingFx ? 'Match day ▸' : 'Continue ▸'}</button>${simBtn}`;
   } else {
     hero = `<div class="hero"><div class="mid"><div class="comp">Season</div><div class="vs">No fixtures left for ${me.nick}</div></div></div>`;
@@ -6543,7 +6669,17 @@ function renderOffseason() {
     btn = 'Contract renewals ▸';
   } else if (game.phase === 'contracts') {
     const ex = o.expiring;
-    body = panel(`Expiring contracts · cap space ${money(capSpace(U()))}`, `<div class="rows">${ex.map(e => { const p = P(e.id); return playerRow(p, { sub: `${ROLES[p.role].short} · ${p.age} · asks ${money(e.ask)} × ${e.years}`,
+    const forecast = renewalForecast();
+    const budgetPanel = panel('Offseason salary forecast', `<div class="rows">
+      <div class="kv"><span>Current payroll</span><b>${money(forecast.current)}</b></div>
+      <div class="kv"><span>Expiring salaries released if unsigned</span><b>${money(forecast.releasing)}</b></div>
+      <div class="kv"><span>Payroll after unresolved expiries</span><b>${money(forecast.afterExpiry)}</b></div>
+      <div class="kv"><span>Potential renewal budget</span><b>${money(forecast.room)}</b></div>
+      <div class="kv"><span>Minimum squad reserve (${forecast.minNeeded} places)</span><b>${money(forecast.reserve)}</b></div>
+      <div class="kv"><span>Budget after minimum reserve</span><b>${money(forecast.discretionary)}</b></div>
+      <div class="kv"><span>Pending renewal requests</span><b>${money(forecast.asks)}</b></div>
+      </div><div class="pb xs muted">Forecast assumes unresolved contracts expire. Re-signing a player replaces their existing salary; it does not add the full request to current payroll. The squad reserve is guidance, not a forced signing decision.</div>`,{flush:true});
+    body = budgetPanel + '<div style="height:8px"></div>' + panel(`Expiring contracts · cap space ${money(capSpace(U()))}`, `<div class="rows">${ex.map(e => { const p = P(e.id); return playerRow(p, { sub: `${ROLES[p.role].short} · ${p.age} · asks ${money(e.ask)} × ${e.years} · current ${money(p.contract?.salary||0)}`,
       end: e.status === 'pending' ? `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();negotiate('${e.id}','resign')">Negotiate</button><button class="btn sm ghost" onclick="event.stopPropagation();letGoExpiring('${e.id}');render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving') }); }).join('') || '<div class="empty">No contracts expire this year.</div>'}</div>
       <div class="pb"><div class="note">Settle every pending decision first. Players marked Leaving go to free agency.</div></div>`, { flush: true }) +
       ((o.expiringStaff || []).length ? '<div style="height:8px"></div>' + panel('Expiring staff contracts', `<div class="rows">${o.expiringStaff.map(e => { const st = game.staff[e.id]; return `<div class="row"><div class="stack"><div class="main-t">${esc(st.first + ' ' + st.last)}</div><div class="sub-t">${STAFF_ROLES[st.role].label} · asks ${money(e.ask)} × 2</div></div><div class="end">${pill(st.rating)}${e.status === 'pending' ? `<button class="btn sm pri" onclick="resignStaff('${e.id}');render()">Re-sign</button><button class="btn sm ghost" onclick="(game.offseason.expiringStaff.find(x=>x.id==='${e.id}')||{}).status='released';render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving')}</div></div>`; }).join('')}</div>`, { flush: true }) : '');
@@ -7182,6 +7318,45 @@ function fixtureContextLabel(fx) {
   if (fx.stage === 'globalfinal') return 'International Tournament Final';
   return '';
 }
+// Build 083: concise bilateral series status, derived from scheduled fixtures/results.
+// No new save fields. Australia tours use `win`, other bilateral tours `seriesId`.
+function bilateralSeriesInfo(fx) {
+  if (!fx || !['TEST','ODI','T20I'].includes(fx.comp) || !game || !game.season) return null;
+  const all = game.season.fixtures || [];
+  let series = fx.seriesId ? all.filter(f => f.seriesId === fx.seriesId && f.comp === fx.comp)
+    : fx.stage === 'intl' && fx.win ? all.filter(f => f.stage === 'intl' && f.win === fx.win && f.comp === fx.comp)
+    : [];
+  if (!series.length) return null;
+  series = series.slice().sort((a,b)=>a.day-b.day || String(a.id).localeCompare(String(b.id)));
+  const first = series[0], a = first.home, b = first.away;
+  const aWins = series.filter(f => f.result && f.result.winner === a).length;
+  const bWins = series.filter(f => f.result && f.result.winner === b).length;
+  const drawn = series.filter(f => f.result && !f.result.winner && !f.result.noResult).length;
+  const nr = series.filter(f => f.result && f.result.noResult).length;
+  const played = series.filter(f => f.result).length;
+  const index = Math.max(0,series.findIndex(f=>f.id===fx.id));
+  const total = series.length;
+  const fmt = fx.comp === 'TEST' ? 'Test' : fx.comp === 'ODI' ? 'ODI' : 'T20I';
+  const name = fx.comp === 'TEST' ? `${total}-Test Series` : `Best of ${total} ${fmt} Series`;
+  let status = '';
+  if (played) {
+    if (aWins === bWins) status = `Series tied ${aWins}–${bWins}`;
+    else status = `${teamDef(aWins > bWins ? a : b).name} ${played === total || Math.max(aWins,bWins) > Math.min(aWins,bWins) + (total-played) ? 'win' : 'lead'}${played === total || Math.max(aWins,bWins) > Math.min(aWins,bWins) + (total-played) ? 's series' : ' series'} ${Math.max(aWins,bWins)}–${Math.min(aWins,bWins)}`;
+    if (drawn || nr) status += ` · ${drawn ? `${drawn} draw${drawn===1?'':'s'}` : ''}${drawn && nr ? ' · ' : ''}${nr ? `${nr} no result${nr===1?'':'s'}` : ''}`;
+    if (!fx.result && index === total-1 && aWins === bWins && (total-played) === 1) status = `Series decider · ${aWins}–${bWins}`;
+  }
+  return { name, status, index, total, a, b, aWins, bWins, drawn, nr, series };
+}
+function bilateralSeriesHtml(fx) {
+  const s = bilateralSeriesInfo(fx);
+  if (!s) return '';
+  const marks = s.series.map((f,i) => {
+    const result = f.result;
+    const label = result ? (result.winner === s.a ? teamDef(s.a).short || s.a : result.winner === s.b ? teamDef(s.b).short || s.b : result.noResult ? 'NR' : 'D') : i === s.index ? 'NOW' : '–';
+    return `<span class="series-match-marker${i===s.index?' is-current':''}" title="${esc(f.round || ('Match '+(i+1)))}">${esc(String(label))}</span>`;
+  }).join('');
+  return `<div class="bilateral-series"><div class="bilateral-series-heading">${esc(s.name)} · ${s.index+1} of ${s.total}</div>${s.status ? `<div class="bilateral-series-status">${esc(s.status)}</div>` : ''}<div class="bilateral-series-matches">${marks}</div></div>`;
+}
 function fixtureNeutralLabel(fx) {
   if (!fx) return '';
   return fx.stage === 'wtcfinal' ? 'Neutral venue · Championship Final' : '';
@@ -7241,6 +7416,7 @@ function renderMatchday() {
   return `${pageTitle('Match day', `${fixtureContextLabel(fx) || COMPS[fx.comp].name} · ${fx.stage === 'league' ? 'Round ' + fx.round : fx.round} · ${dateStr(fx.day)}`)}
   <div class="grid">
     ${panel('', `<div class="hero matchday-hero ${isNationalFixture(fx) ? 'matchday-national' : ''}"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs matchday-name">${esc(teamDef(fx.home).nick)} v ${esc(teamDef(fx.away).nick)}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
+      ${bilateralSeriesHtml(fx)}
       ${pitchReport(pre, v, fmt, '')}
       ${fmt === 'FC' ? forecastRow(pre, fmt, fx) : ''}
       ${(() => { const busy = isClash(fx), cl = busy ? [] : clashesWith(fx); if (!busy && !cl.length) return '';
@@ -8500,16 +8676,11 @@ function homeExtras() {
   document.title = `Legacy Cricket ${BUILD.version}`;
   await Store.init();
   if (Store.status === 'none') { const n = document.createElement('div'); n.className = 'note bad'; n.style.marginTop = '12px'; n.innerHTML = 'This browser is not keeping saved data (private browsing or a file preview). Open the game directly in Safari or Chrome, or use Export save in the menu to keep your career.'; document.querySelector('.launch').appendChild(n); }
-  const metas = await Store.list(); const last = metas.map((m, i) => m ? Object.assign({ slot: i + 1 }, m) : null).filter(Boolean).sort((a, b) => (b.saved || '').localeCompare(a.saved || ''))[0];
+  const metas = await Store.list();
   const launchSavedCount = $('launchSavedCount');
-  if (launchSavedCount) launchSavedCount.textContent = metas.filter(Boolean).length ? `${metas.filter(Boolean).length} saved career${metas.filter(Boolean).length === 1 ? '' : 's'} available` : '';
-  if (last) {
-    const card = document.createElement('div'); card.className = 'launch-career';
-    const kicker = document.createElement('div'); kicker.className = 'launch-career-kicker'; kicker.textContent = 'CONTINUE CAREER';
-    const name = document.createElement('div'); name.className = 'launch-career-name'; name.textContent = teamName(last.team);
-    const sub = document.createElement('div'); sub.className = 'launch-career-detail'; sub.textContent = [last.name, last.label].filter(Boolean).join(' · ');
-    const btn = document.createElement('button'); btn.className = 'btn pri block launch-resume'; btn.textContent = 'Continue career ›'; btn.onclick = () => loadGame(last.slot);
-    card.append(kicker,name,sub,btn); document.querySelector('.launch-actions').before(card);
+  if (launchSavedCount) {
+    const count = metas.filter(Boolean).length;
+    launchSavedCount.textContent = count ? `${count} saved career${count === 1 ? '' : 's'}` : 'No saved careers';
   }
 })();
 
