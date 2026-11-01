@@ -978,7 +978,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 086', title: 'Contract Lifecycle Integrity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 087', title: 'Weather Interruptions & Commentary', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -2292,6 +2292,14 @@ function recordDeliveryMap(M, inn, ev, batter, bowler) {
 }
 
 // One delivery. Returns an event object (with .text when the match is live).
+// Build 087: presentation events only. Match capacities and ball outcomes remain unchanged.
+function registerMatchWeather(M, key, message, oversLost, context) {
+  M.weatherEvents = M.weatherEvents || [];
+  if (M.weatherEvents.some(e => e.key === key)) return;
+  const event = { key, message, oversLost, context, seen: false };
+  M.weatherEvents.push(event);
+  if (M.live) M.log.unshift({ cls: 'weather', text: message });
+}
 function simBall(M) {
   if (M.done) return null;
   if (M.abandoned) { finishMatch(M); return null; }
@@ -2300,7 +2308,8 @@ function simBall(M) {
     if (M.dayLogged !== d) {
       M.dayLogged = d;
       const dd = M.cond.days[d];
-      M.log.unshift({ cls:'sys', text: `Day ${d + 1}: ${SKIES[dd.sky].label}.${dd.lost ? ` About ${dd.lost} overs lost to rain.` : ''}` });
+      M.log.unshift({ cls:'sys', text: `Day ${d + 1}: ${SKIES[dd.sky].label}.` });
+      if (dd.lost > 0) registerMatchWeather(M, 'day-' + d, `Day ${d + 1}: Rain delay · ${dd.lost} overs lost. Play resumes.`, dd.lost, `Day ${d + 1} · ${SKIES[dd.sky].label}`);
     }
   }
   let inn = curInn(M);
@@ -7540,6 +7549,25 @@ function quickSimUser() {
   autosave(); go('home');
   if (game.scorecards[fx.id]) showScorecard(fx.id, 0); else flash(M.result.text);
 }
+// Build 087: weather interruptions are acknowledged once; they never change the score.
+function openPendingWeather() {
+  const M = game && game.live;
+  if (!M || !M.live || ui.page !== 'live' || $('modalRoot').innerHTML) return;
+  const pending = (M.weatherEvents || []).find(e => !e.seen);
+  if (!pending) return;
+  pending.seen = true;
+  autosave();
+  const count = pending.oversLost;
+  sheet('MATCH WEATHER', 'Rain delay', `<div class="s muted">${esc(pending.context || '')}</div><div style="margin:15px 0;font-size:21px;font-weight:800">${count} over${count===1?'':'s'} lost</div><p class="s">${esc(pending.message)}</p>`, {foot:'<button class="btn pri" onclick="closeModal();openPendingWeather()">Continue</button>'});
+}
+function initLiveWeather(M) {
+  if (!M || !M.cond) return;
+  if (M.fmt === 'FC') return; // Each multi-day interruption appears on its day of play.
+  const regular = FORMATS[M.fmt].overs;
+  if (M.overs && M.overs < regular) {
+    registerMatchWeather(M, 'limited-overs', `Rain delay · Reduced to ${M.overs} overs per side (${regular - M.overs} overs lost).`, regular-M.overs, `${M.fmt === 'T20' ? 'T20' : 'One-Day'} · Revised overs`);
+  }
+}
 function startLive() {
   const fx = fixtureById(game.pendingFx);
   if (previewConditions(fx).abandoned) { quickSimUser(); return; }
@@ -7548,12 +7576,13 @@ function startLive() {
   const w = doToss(M);
   game.live = M; ui.liveTab = 'comm'; ui.liveInn = null; ui.matchReview = false;
   M.notes.forEach(n => M.log.unshift({ cls:'sys', text: n }));
+  initLiveWeather(M);
   // The captain makes the toss call, guided by conditions.
   const d = tossDecisionAI(M); setTossDecision(M, d);
   M.log.unshift({ cls:'sys', text: `${teamName(w)} won the toss and chose to ${d}.` });
   M.log.unshift({ cls:'sys', text: inningsIntro(M, curInn(M)) });
   const me = liveMyTeam(M); M.log.unshift({ cls:'sys', text: `Coach's plan: ${briefSummary(tacticsFor(M, me))}.` });
-  autosave(); go('live');
+  autosave(); go('live'); setTimeout(openPendingWeather, 0);
 }
 function liveStep(mode) {
   const M = game.live; if (!M || M.done || !M.toss.decision) return;
@@ -7567,6 +7596,7 @@ function liveStep(mode) {
     const inn0 = curInn(M);
     if (inn0.closed && mode !== 'match') break;
     const ev = simBall(M);
+    if ((M.weatherEvents || []).some(e => !e.seen)) break;
     if (!ev) continue;
     if (ev.legal) legal++;
     const inn = curInn(M);
@@ -7582,7 +7612,7 @@ function liveStep(mode) {
   if (endInn && endInn.closed && !M.done && (M.fmt !== 'FC' ? M.innings.length >= 2 : predictNextBat(M) === null)) nextInnings(M);
   // Preserve the active scorecard or wagon-wheel innings and reading position.
   const beforeY = window.scrollY || document.documentElement.scrollTop || 0;
-  autosave(); render(); window.scrollTo(0, beforeY);
+  autosave(); render(); window.scrollTo(0, beforeY); setTimeout(openPendingWeather, 0);
 }
 function liveSkip(v) { if (v) liveStep(v); }
 function resumeLive() { const M = game.live; if (!M) return; M.pause = null; autosave(); render(); window.scrollTo(0, 0); }
@@ -7974,7 +8004,7 @@ function commentaryHtml(M) {
   const all = !!ui.commAll;
   const html = groups.slice(0, 24).map(g => {
     // Result notes are skipped: the result banner above the tabs already shows them.
-    if (g.note) { if (/^End of over/.test(g.note.text) || g.note.cls === 's') return ''; if (!all && g.note.cls === 'sys' && !/won the toss|declare|follow-on|need \d+/i.test(g.note.text)) return ''; return `<div class="cnote ${g.note.cls === 'brk' ? 'brk' : ''}">${esc(g.note.text)}</div>`; }
+    if (g.note) { if (/^End of over/.test(g.note.text) || g.note.cls === 's') return ''; if (!all && g.note.cls === 'sys' && !/won the toss|declare|follow-on|need \d+/i.test(g.note.text)) return ''; return `<div class="cnote ${g.note.cls === 'brk' || g.note.cls === 'weather' ? 'brk' : ''}">${esc(g.note.text)}</div>`; }
     const balls = g.balls.slice().reverse();
     const runs = balls.reduce((a, b) => a + (b.runs || 0), 0);
     const last = g.balls[0];
