@@ -920,6 +920,50 @@ body.live-mode .actbar{display:none}
 .cw-summary{border:1px solid #354254;border-radius:21px;padding:20px;margin:15px 0 25px}.cw-summary h3{font-size:24px;margin:7px 0 4px}.cw-summary p{color:#9ba8b9;margin:0 0 18px}.cw-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.cw-summary-grid span{background:#1b222d;border-radius:12px;padding:13px 6px;text-align:center}.cw-summary-grid b,.cw-summary-grid small{display:block}.cw-summary-grid small{color:#9ba8b9;font-size:11px;margin-top:6px}
 #launch:not(.career-wizard-open) .series-launch{max-width:620px}#launch:not(.career-wizard-open) .launch-actions .btn{min-height:67px;font-size:20px}#launch:not(.career-wizard-open) .launch-tagline{font-size:17px;color:#d4d9e2}#launch:not(.career-wizard-open) .launch-world{font-size:14px}
 @media(max-width:550px){#launch.career-wizard-open .cw-page{padding:25px 15px 70px}.cw-card,.cw-slot{padding:20px 16px;border-radius:19px}.cw-teams{grid-template-columns:1fr}.cw-back{width:45px;height:48px;border-radius:13px}.cw-primary,.cw-secondary{min-height:56px}.cw-setting{display:block}.cw-setting select{max-width:100%;width:100%;margin-top:12px}}
+
+/* Build 088: compact, consistent Basketball-scale launcher and career setup.
+   Overrides the oversized Build 085 full-screen controls without affecting gameplay UI. */
+#launch:not(.career-wizard-open) .series-launch{max-width:420px;width:min(100%,420px);padding:24px 18px}
+#launch:not(.career-wizard-open) .series-launch h1{font-size:clamp(27px,6vw,34px);letter-spacing:.012em;margin-top:8px}
+#launch:not(.career-wizard-open) .launch-kicker{font-size:10px;letter-spacing:.16em}
+#launch:not(.career-wizard-open) .launch-tagline{font-size:12px;line-height:1.4}
+#launch:not(.career-wizard-open) .launch-world{font-size:11px;line-height:1.5;margin:9px auto 19px}
+#launch:not(.career-wizard-open) .launch-rule{margin:13px auto 10px}
+#launch:not(.career-wizard-open) .launch-actions{gap:9px}
+#launch:not(.career-wizard-open) .launch-actions .btn{min-height:47px;font-size:13px;border-radius:10px;padding:10px 14px}
+#launch.career-wizard-open .cw-page{max-width:640px;padding:24px 18px 50px}
+#launch.career-wizard-open .cw-head{gap:11px;margin-bottom:15px}
+#launch.career-wizard-open .cw-back{width:38px;height:38px;border-radius:10px;font-size:26px}
+#launch.career-wizard-open .cw-kicker{font-size:10px;letter-spacing:.11em}
+#launch.career-wizard-open .cw-head h2{font-size:clamp(21px,4vw,26px);margin-top:3px}
+#launch.career-wizard-open .cw-progress{margin:14px 0 17px;gap:5px}
+#launch.career-wizard-open .cw-progress i{height:4px}
+#launch.career-wizard-open .cw-card,#launch.career-wizard-open .cw-slot{padding:17px;border-radius:14px;margin-bottom:10px}
+#launch.career-wizard-open .cw-card h3,#launch.career-wizard-open .cw-slot h3{font-size:17px;margin:0 0 7px}
+#launch.career-wizard-open .cw-slot h3{margin:7px 0}
+#launch.career-wizard-open .cw-muted{font-size:12px;line-height:1.5;margin:0 0 14px}
+#launch.career-wizard-open .cw-primary,#launch.career-wizard-open .cw-secondary{min-height:43px;border-radius:10px;font-size:13px;padding:9px 13px}
+#launch.career-wizard-open .cw-wide{margin-top:10px}
+#launch.career-wizard-open .cw-label{font-size:10px;margin:12px 0 7px}
+#launch.career-wizard-open .cw-input{font-size:15px;min-height:44px;border-radius:10px;padding:10px 12px;margin-bottom:14px}
+#launch.career-wizard-open .cw-teams{gap:8px;margin:14px 0}
+#launch.career-wizard-open .cw-team{min-height:64px;padding:10px;border-radius:11px;gap:9px}
+#launch.career-wizard-open .cw-team-symbol{width:34px;height:36px;border-radius:9px;font-size:12px}
+#launch.career-wizard-open .cw-team strong{font-size:12px}
+#launch.career-wizard-open .cw-team small{font-size:10px;margin-top:2px}
+#launch.career-wizard-open .cw-setting{padding:14px 0;gap:10px}
+#launch.career-wizard-open .cw-setting strong{font-size:13px}
+#launch.career-wizard-open .cw-setting small{font-size:11px;line-height:1.45}
+#launch.career-wizard-open .cw-setting select{font-size:12px;padding:9px;border-radius:9px}
+#launch.career-wizard-open .cw-summary{padding:14px;margin:10px 0 16px;border-radius:13px}
+#launch.career-wizard-open .cw-summary h3{font-size:17px}
+#launch.career-wizard-open .cw-summary p{font-size:11px;margin-bottom:10px}
+#launch.career-wizard-open .cw-summary-grid span{padding:10px 4px;border-radius:8px}
+#launch.career-wizard-open .cw-summary-grid b{font-size:12px}
+#launch.career-wizard-open .cw-summary-grid small{font-size:9px;margin-top:3px}
+#launch.career-wizard-open .cw-toggle{display:flex;gap:7px;align-items:center;white-space:nowrap;font-size:11px;cursor:pointer;color:#f4f6fa}
+#launch.career-wizard-open .cw-toggle input{width:17px;height:17px;accent-color:#f5a43e}
+@media(max-width:550px){#launch.career-wizard-open .cw-page{padding:18px 13px 44px}#launch.career-wizard-open .cw-card,#launch.career-wizard-open .cw-slot{padding:14px}#launch.career-wizard-open .cw-teams{grid-template-columns:1fr}#launch.career-wizard-open .cw-setting{align-items:flex-start}#launch.career-wizard-open .cw-setting select{width:100%;max-width:100%;margin-top:8px}}
 </style>
 </head>
 <body>
@@ -978,7 +1022,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 087', title: 'Weather Interruptions & Commentary', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 090', title: 'Match Engine Diagnostics Export', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -5677,6 +5721,54 @@ function careerDiagnosticReport() {
   });
   return {report:'Legacy Cricket Career Diagnostic',reportVersion:1,build:BUILD,exportedAt:new Date().toISOString(),career:{year:game.year,season:game.season?.label,phase:game.phase,day:game.day,gm:game.gm?.name,team:U(),rosterMode:game.meta?.realRoster?'authentic':game.meta?.rosterMode||'see save settings'},market:{domesticAvailableByRole:market,affordableDomesticByRole:affordableMarketCounts(),roleShortages:domesticRoleShortage(),totalDomestic:freeAgents().filter(p=>p.nat==='AUS').length,totalFreeAgents:freeAgents().length,minimumMarketFloor:FA_MARKET_FLOOR},teams,leagueHistory:game.history||[],warnings:teams.filter(t=>t.underMinimum||t.overCap).map(t=>t.name+': '+(t.underMinimum?'below squad minimum ':'')+(t.overCap?'over cap':''))};
 }
+// B090: Read-only C3.1 diagnostic. Only retained complete scorecards are
+// included; this is a sample, not an invented all-world fixture history.
+function matchEngineDiagnosticReport(){
+  if(!game)return null;
+  const positions=Object.fromEntries(['FC','OD','T20'].map(fmt=>[fmt,Array.from({length:11},(_,i)=>({position:i+1,appearances:0,innings:0,outs:0,runs:0,balls:0,under20:0,fifties:0,hundreds:0,first10BallsDismissals:0,first20BallsDismissals:0}))]));
+  const playerMap=new Map(), matches=[];
+  const cards=Object.entries(game.scorecards||{});
+  const shortName=id=>{let p=P(id);return p?pname(p):String(id)};
+  cards.forEach(([fixtureId,card])=>{
+    if(!card||!Array.isArray(card.innings)||!positions[card.fmt])return;
+    const rec={fixtureId,format:card.fmt,competition:card.comp,home:card.home,away:card.away,innings:[]};
+    card.innings.forEach((inn,ix)=>{
+      const xi=(card.xi&&card.xi[inn.bat])||[];
+      const lookup=new Map((inn.card||[]).map(x=>[String(x.id),x]));
+      const summary={number:ix+1,team:inn.bat,opposition:inn.bowl,total:inn.runs,wickets:inn.wkts,balls:inn.balls,batters:[]};
+      xi.forEach((id,index)=>{
+        const c=lookup.get(String(id));if(!c||!c.in)return;
+        const row=positions[card.fmt][index];if(!row)return;
+        const p=P(id), n=Number(c.r)||0, balls=Number(c.b)||0, dismissed=!!c.out;
+        row.innings++;row.appearances++;row.runs+=n;row.balls+=balls;row.outs+=dismissed?1:0;
+        row.under20+=n<20?1:0;row.fifties+=n>=50?1:0;row.hundreds+=n>=100?1:0;
+        row.first10BallsDismissals+=dismissed&&balls<=10?1:0;row.first20BallsDismissals+=dismissed&&balls<=20?1:0;
+        const key=String(id)+'|'+card.fmt;
+        let pr=playerMap.get(key);
+        if(!pr){pr={playerId:id,name:shortName(id),age:p?.age??null,role:p?.role??null,style:p?.style??null,team:p?.teamId??null,format:card.fmt,overall:p?overall(p,card.fmt):null,battingRating:p?batRating(p,card.fmt):null,innings:0,runs:0,outs:0,balls:0,under20:0,fifties:0,hundreds:0,positions:{}};playerMap.set(key,pr);}
+        pr.innings++;pr.runs+=n;pr.outs+=dismissed?1:0;pr.balls+=balls;pr.under20+=n<20?1:0;pr.fifties+=n>=50?1:0;pr.hundreds+=n>=100?1:0;pr.positions[index+1]=(pr.positions[index+1]||0)+1;
+        summary.batters.push({position:index+1,playerId:id,name:shortName(id),runs:n,balls,dismissed,role:p?.role??null,style:p?.style??null});
+      });
+      rec.innings.push(summary);
+    });
+    matches.push(rec);
+  });
+  const byFormat=Object.fromEntries(Object.entries(positions).map(([fmt,rows])=>{
+    const total=rows.reduce((n,r)=>n+r.runs,0);
+    const summarise=(a,b)=>{const range=rows.slice(a-1,b);const runs=range.reduce((n,r)=>n+r.runs,0);return {positions:`${a}-${b}`,runs,runSharePercent:total?+(100*runs/total).toFixed(1):null};};
+    return [fmt,{scorecardInnings:matches.filter(x=>x.format===fmt).reduce((n,x)=>n+x.innings.length,0),totalBatterRuns:total,runShares:[summarise(1,4),summarise(5,9),summarise(10,11)],positions:rows.map(r=>({...r,battingAverage:r.outs?+(r.runs/r.outs).toFixed(2):null,below20Percent:r.innings?+(100*r.under20/r.innings).toFixed(1):null}))}];
+  }));
+  return {report:'Legacy Cricket Match Engine Diagnostic',reportVersion:2,build:BUILD,exportedAt:new Date().toISOString(),career:{season:game.season?.label,year:game.year,team:U(),rosterMode:game.meta?.rosterMode},sample:{retainedScorecards:cards.length,analysedMatches:matches.length,limitation:'Only saved scorecards are included. Background matches without scorecards and scorecards cleared on season rollover cannot be reconstructed. Ratings are current at export, not necessarily ratings at match time.'},byFormat,players:[...playerMap.values()].sort((a,b)=>b.innings-a.innings),matches};
+}
+function downloadMatchEngineDiagnostic(){
+  if(!game)return;
+  const data=matchEngineDiagnosticReport();
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`legacy-cricket-engine-diagnostic-${game.year}-B090.json`;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  flash('Match engine diagnostic exported. Share this JSON for analysis.');
+}
 function downloadCareerDiagnostic(){
   if(!game)return;
   const data=careerDiagnosticReport();
@@ -6329,7 +6421,7 @@ function enterApp() { $('launch').classList.add('hidden'); $('app').classList.re
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
 const CAREER_STEPS = ['Create Your GM','Choose Your Team','National Team','Career Settings'];
-const careerDraft = { slot:1, name:'', team:'NSW', nation:false, mode:'fictional', cap:true, injuries:true };
+const careerDraft = { slot:1, name:'', team:'NSW', nation:false, mode:'fictional', editor:false, cap:true, injuries:true };
 let careerLaunchOriginal = null;
 function ensureCareerLaunchOriginal() { if (careerLaunchOriginal == null) careerLaunchOriginal = $('launch').innerHTML; }
 function careerBackToMenu() {
@@ -6368,7 +6460,7 @@ async function openNewCareer() {
 async function careerChooseSlot(i) {
   const metas=await Store.list();
   if (metas[i-1] && !confirm(`Replace save slot ${i}? This deletes the existing career in that slot.`)) return;
-  careerDraft.slot=i; careerDraft.name='';careerDraft.team='NSW';careerDraft.nation=false;careerDraft.mode='fictional';
+  careerDraft.slot=i; careerDraft.name='';careerDraft.team='NSW';careerDraft.nation=false;careerDraft.mode='fictional';careerDraft.editor=false;
   openCareerSetup();
 }
 function openCareerSetup() {
@@ -6382,13 +6474,14 @@ function careerChooseNation() {
   careerScreen('National Team',2,`<section class="cw-card"><div class="cw-kicker">NATIONAL TEAM MANAGEMENT</div>${careerStepHeader('Manage Australia?','Manage the Australian national team alongside your state career. Select squads and compete in international series and tournaments.')}<button class="cw-primary" onclick="careerDraft.nation=true;careerSettings()">Manage Australia</button><button class="cw-secondary cw-wide" onclick="careerDraft.nation=false;careerSettings()">Not Now · Available Later in Intl</button></section>`,'careerChooseTeam()');
 }
 function careerSettings() {
-  careerScreen('Career Settings',3,`<section class="cw-card">${careerStepHeader('Career settings','Choose your starting world before beginning the simulation.')}<div class="cw-setting"><div><strong>Player Database</strong><small>Choose between fictional players and authentic names with modelled ratings.</small></div><select id="cw-mode" onchange="careerDraft.mode=this.value;document.getElementById('cw-mode-summary').textContent=this.value==='authentic'?'Authentic':'Fictional'"><option value="fictional" ${careerDraft.mode==='fictional'?'selected':''}>Fictional World</option><option value="authentic" ${careerDraft.mode==='authentic'?'selected':''}>Authentic World</option></select></div><div class="cw-summary"><div class="cw-kicker">CAREER SUMMARY</div><h3>${esc(careerDraft.name || 'FitzO')}</h3><p>${esc(teamName(careerDraft.team))} · ${careerDraft.nation?'Australia National Team GM':'Domestic GM'}</p><div class="cw-summary-grid"><span><b>Slot ${careerDraft.slot}</b><small>Save slot</small></span><span><b id="cw-mode-summary">${careerDraft.mode==='authentic'?'Authentic':'Fictional'}</b><small>World</small></span><span><b>${careerDraft.nation?'Yes':'No'}</b><small>Australia</small></span></div></div><button class="cw-primary" onclick="startCareer()">Start Career</button></section>`,'careerChooseNation()');
+  careerScreen('Career Settings',3,`<section class="cw-card">${careerStepHeader('Set up your career','Choose your player database and optional editing tools.')}<div class="cw-setting"><div><strong>Player Database</strong><small>Authentic names or a fictional cricket world.</small></div><select id="cw-mode" onchange="careerDraft.mode=this.value;document.getElementById('cw-mode-summary').textContent=this.value==='authentic'?'Authentic':'Fictional'"><option value="fictional" ${careerDraft.mode==='fictional'?'selected':''}>Fictional World</option><option value="authentic" ${careerDraft.mode==='authentic'?'selected':''}>Authentic World</option></select></div><div class="cw-setting"><div><strong>Commissioner Tools</strong><small>Allow player editing, player creation and team renaming. Edited careers are marked accordingly. You can also enable these tools later from Career.</small></div><label class="cw-toggle"><input type="checkbox" id="cw-editor" ${careerDraft.editor?'checked':''} onchange="careerDraft.editor=this.checked"><span>Enable editor</span></label></div><div class="cw-summary"><div class="cw-kicker">CAREER SUMMARY</div><h3>${esc(careerDraft.name || 'FitzO')}</h3><p>${esc(teamName(careerDraft.team))} · ${careerDraft.nation?'Australia National Team GM':'Domestic GM'}</p><div class="cw-summary-grid"><span><b>Slot ${careerDraft.slot}</b><small>Save slot</small></span><span><b id="cw-mode-summary">${careerDraft.mode==='authentic'?'Authentic':'Fictional'}</b><small>World</small></span><span><b>${careerDraft.nation?'Yes':'No'}</b><small>Australia</small></span></div></div><button class="cw-primary" onclick="startCareer()">Start Career</button></section>`,'careerChooseNation()');
 }
 async function startCareer() {
   const metas=await Store.list();
   if(metas[careerDraft.slot-1] && !confirm(`Replace the career in slot ${careerDraft.slot}? This cannot be undone.`)) return;
   createGame(careerDraft.name || 'FitzO',careerDraft.team,2026,careerDraft.nation,careerDraft.mode);
   game.meta.slot=careerDraft.slot;
+  if (careerDraft.editor) { game.editor = true; game.edited = true; }
   saveGame(careerDraft.slot,false);
   ensureCareerLaunchOriginal();
   $('launch').innerHTML=careerLaunchOriginal;
@@ -7184,9 +7277,10 @@ function acceptOffer(id) {
 function declineOffer(id) { game.offers=game.offers.filter(x=>x.id!==id);closeModal();autosave();render();flash('Offer declined.'); }
 function renderDiagnostics(){
   const d=careerDiagnosticReport();
+  const e=matchEngineDiagnosticReport();
   const gaps=d.teams.filter(t=>t.underMinimum||t.overCap);
   const rows=d.teams.map(t=>`<div class="kv"><span>${esc(t.name)} · ${t.squad} players · WK ${t.roles.WK} · PACE ${t.roles.PACE} · SPIN ${t.roles.SPIN}</span><span>${money(t.capSpace)} cap ${t.underMinimum||t.overCap?'<b class="loss">CHECK</b>':''}</span></div>`).join('');
-  return `${panel('Career diagnostic',`<p class="s muted">Export a read-only JSON snapshot of this career for engine and long-term recruitment analysis. It includes player ratings, club composition, contracts, cap positions, free agents and league history. It does not change the save.</p><div class="pb"><button class="btn pri" onclick="downloadCareerDiagnostic()">Export diagnostic report (.json)</button></div><p class="s">${gaps.length?gaps.length+' clubs require attention':'All domestic clubs meet the numerical squad and salary checks.'}</p>`,{flush:true})}${panel('Domestic free agents by role',`<div class="rows">${Object.entries(d.market.domesticAvailableByRole).map(([g,n])=>`<div class="kv"><span>${g}</span><b>${n}</b></div>`).join('')}</div>`,{flush:true})}${panel('Domestic squad health',`<div class="rows">${rows}</div>`,{flush:true})}`;
+  return `${panel('Match engine diagnostics',`<p class="s muted">Export retained batting scorecards by position (1–11), early dismissals, run shares and individual player performance. This report is read-only. Earlier seasons and background fixtures without scorecards cannot be reconstructed.</p><div class="pb"><button class="btn pri" onclick="downloadMatchEngineDiagnostic()">Export match engine report (.json)</button> <button class="btn sm" onclick="exportSave()">Export full career save (.json)</button></div><p class="xs muted">${e.sample.analysedMatches} retained matches available · ${e.sample.retainedScorecards} stored scorecards. Share either or both files for analysis.</p>`,{flush:true})}${panel('Career diagnostic',`<p class="s muted">Export a read-only JSON snapshot of this career for engine and long-term recruitment analysis. It includes player ratings, club composition, contracts, cap positions, free agents and league history. It does not change the save.</p><div class="pb"><button class="btn pri" onclick="downloadCareerDiagnostic()">Export diagnostic report (.json)</button></div><p class="s">${gaps.length?gaps.length+' clubs require attention':'All domestic clubs meet the numerical squad and salary checks.'}</p>`,{flush:true})}${panel('Domestic free agents by role',`<div class="rows">${Object.entries(d.market.domesticAvailableByRole).map(([g,n])=>`<div class="kv"><span>${g}</span><b>${n}</b></div>`).join('')}</div>`,{flush:true})}${panel('Domestic squad health',`<div class="rows">${rows}</div>`,{flush:true})}`;
 }
 function renderFA() {
   // Upgrade an existing save already parked at the 2026-27 (or later) market.
@@ -7426,7 +7520,7 @@ function renderMatchday() {
   <div class="grid">
     ${panel('', `<div class="hero matchday-hero ${isNationalFixture(fx) ? 'matchday-national' : ''}"><span class="matchday-crest" onclick="showTeam('${fx.home}')">${badge(fx.home, true)}</span><div class="mid"><div class="comp">${fixtureContextLabel(fx) || matchKind(fx.comp)} · ${fmt === 'FC' ? (fx.comp === 'TEST' ? '5 days' : '4 days') : (pre.overs || FORMATS[fmt].overs) + ' overs'}</div><div class="vs matchday-name">${esc(teamDef(fx.home).nick)} v ${esc(teamDef(fx.away).nick)}</div><div class="meta">${v.ground}${fmt !== 'FC' ? ` · <span class="pitch-wx" style="margin:0"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[pre.cond.days[0].sky]}</svg>${SKY_SHORT[pre.cond.days[0].sky]}${pre.cond.days[0].lost ? ' · ' + pre.cond.days[0].lost + ' ov lost' : ''}</span>` : ''}</div>${fixtureNeutralLabel(fx) ? `<div class="neutral-venue">${esc(fixtureNeutralLabel(fx))}</div>` : ''}</div><span class="matchday-crest" onclick="showTeam('${fx.away}')">${badge(fx.away, true)}</span></div>
       ${bilateralSeriesHtml(fx)}
-      ${pitchReport(pre, v, fmt, '')}
+      ${pitchReport(pre, v, fmt, '', fx)}
       ${fmt === 'FC' ? forecastRow(pre, fmt, fx) : ''}
       ${(() => { const busy = isClash(fx), cl = busy ? [] : clashesWith(fx); if (!busy && !cl.length) return '';
         const txt = busy ? `You are still at ${esc(busyLabel())}.` : `${cl.map(f => esc(fxLabel(f))).join(', ')} falls during this match.`;
@@ -7478,10 +7572,13 @@ function pitchSvg(key) {
     <path d="M4 24 H40 M4 116 H40" stroke="#f3f0e6" stroke-width="1.4"/><path d="M10 14 V30 M34 14 V30 M10 110 V126 M34 110 V126" stroke="#f3f0e6" stroke-width="1"/>
     <g fill="#f3f0e6"><rect x="19" y="18" width="1.6" height="5"/><rect x="21.2" y="18" width="1.6" height="5"/><rect x="23.4" y="18" width="1.6" height="5"/><rect x="19" y="117" width="1.6" height="5"/><rect x="21.2" y="117" width="1.6" height="5"/><rect x="23.4" y="117" width="1.6" height="5"/></g></svg>`;
 }
-function pitchReport(pre, v, fmt, wx) {
+function pitchReport(pre, v, fmt, wx, fx) {
   const key = pre.cond.pitch, pt = PITCHES[key];
   const g = pitchDayGrades(key, v, 0, fmt);
-  const grades = fmt === 'FC' ? [0,1,2,3].map(d => pitchDayGrades(key, v, d, fmt)) : [g];
+  // Match-specific duration: Tests are five days, Shield matches four.
+  // Use the generated forecast's length as the source of truth when available.
+  const matchDays = fmt === 'FC' ? (pre.cond.days && pre.cond.days.length) || (fx && fx.comp === 'TEST' ? 5 : 4) : 1;
+  const grades = Array.from({length:matchDays}, (_,d) => pitchDayGrades(key, v, d, fmt));
   const top = Math.max(g.pace, g.spin);
   const verdict = top >= 8 ? (g.spin > g.pace ? 'Helps the spinners' : 'Helps the seamers') : g.bat >= 8 ? 'Batting surface' : top <= 6 && g.bat <= 6 ? 'Slow and low' : 'Even contest';
   // Day-one bars retain their existing appearance. A darker gold band highlights
@@ -7502,7 +7599,7 @@ function pitchReport(pre, v, fmt, wx) {
   return `<div class="pitch-rep">${pitchSvg(key)}<div class="grow">
     <div class="flex" style="gap:6px;align-items:baseline;flex-wrap:wrap"><b>${pt.label}</b><span class="xs muted">· ${verdict}</span>${wx ? `<span class="pitch-wx"><svg viewBox="0 0 24 24" aria-hidden="true">${SKY_ICON[wx.sky]}</svg>${SKY_SHORT[wx.sky]}${wx.lost ? ' · ' + wx.lost + ' ov lost' : ''}</span>` : ''}</div>
     ${bar('Pace', 'pace')}${bar('Spin', 'spin')}${bar('Batting', 'bat')}
-    <div class="xs muted" style="margin-top:5px">${pitchSummary(g, fmt)}${fmt === 'FC' ? ' Gold band: days 1–4.' : ''}</div>
+    <div class="xs muted" style="margin-top:5px">${pitchSummary(g, fmt)}${fmt === 'FC' ? ` Gold band: days 1–${matchDays}.` : ''}</div>
   </div></div>`;
 }
 const SKY_ICON = {
