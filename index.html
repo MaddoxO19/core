@@ -364,6 +364,8 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .worm-legend{display:flex;flex-wrap:wrap;gap:7px 14px;align-items:center;margin-bottom:3px;font-size:11px;color:var(--text)}
 .worm-key{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;font-weight:700}
 .worm-key i{width:14px;height:3px;border-radius:4px;display:inline-block}
+.worm-key-dot i{width:9px;height:9px;border-radius:999px;background:#de5a5a;box-shadow:0 0 0 1px #0d1f2d inset}
+.worm-wicket{pointer-events:none}
 .worm-target{font-size:10px;color:var(--muted);margin-left:auto}
 .worm-axis{text-align:center;color:var(--muted);font-size:10px;margin-top:-3px}
 .recap-more{margin-top:8px;color:var(--muted);font-size:11px}
@@ -925,7 +927,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.16 Build 078', title: 'Player Expectations & Match Awards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.16 Build 079', title: 'Worm Wicket Markers', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
 // ratings STAFF_SHIFT higher. Formulas that depend on absolute levels subtract the shift, so
@@ -6724,11 +6726,36 @@ function wormSvg(innings, fmt) {
   const grid = [0,.25,.5,.75,1].map(f => { const r = Math.round(maxR*f); return `<line x1="${L}" y1="${y(r)}" x2="${W-R}" y2="${y(r)}" stroke="#294150" stroke-width=".7"/><text x="${L-5}" y="${y(r)+3}" fill="#8fa5b4" font-size="11" text-anchor="end">${r}</text>`; }).join('');
   const ticks = [0,.25,.5,.75,1].map(f => `<text x="${x(maxO*f)}" y="${H-5}" fill="#8fa5b4" font-size="11" text-anchor="middle">${Math.round(maxO*f)}</text>`).join('');
   const paths = runs.map((r,k) => `<polyline fill="none" stroke="${palette[k%2]}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="${r.map((v,o)=>x(o)+','+y(v)).join(' ')}"/>`).join('');
-  const legends = valid.map((i,k) => `<span class="worm-key"><i style="background:${palette[k%2]}"></i>${esc(teamDef(i.bat).short || i.bat)} ${i.runs}/${i.wkts}</span>`).join('');
-  const chase = valid[1];
-  const activeChase = chase && chase.target && !chase.closed && !chase.allOut && chase.runs < chase.target && chase.balls < maxO * 6;
+  const overFloat = ov => {
+    const txt = String(ov == null ? '' : ov);
+    const parts = txt.split('.');
+    const whole = parseInt(parts[0] || '0', 10);
+    const balls = parseInt(parts[1] || '0', 10);
+    const safeWhole = Number.isFinite(whole) ? whole : 0;
+    const safeBalls = Number.isFinite(balls) ? Math.max(0, Math.min(5, balls)) : 0;
+    return safeWhole + safeBalls / 6;
+  };
+  const wickets = valid.map((inn, k) => {
+    const groups = Object.create(null);
+    (Array.isArray(inn.fow) ? inn.fow : []).forEach(f => {
+      const ov = overFloat(f.ov);
+      const whole = Math.max(0, Math.floor(ov));
+      const key = String(whole);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push({ ov, r: Number(f.r) || 0, w: Number(f.w) || 0, rawOv: f.ov });
+    });
+    return Object.values(groups).flatMap(group => group.map((f, idx) => {
+      const stack = group.length > 1 ? (idx - (group.length - 1) / 2) * 8 : 0;
+      const cx = x(f.ov);
+      const cy = y(f.r) - stack;
+      const label = `Wicket ${f.w} at ${f.r}/${f.w} (${f.rawOv} ov)`;
+      return `<g class="worm-wicket" aria-label="${label}"><circle cx="${cx}" cy="${cy}" r="5.25" fill="#de5a5a" stroke="#0d1f2d" stroke-width="1.6" vector-effect="non-scaling-stroke"/><title>${label}</title></g>`;
+    }));
+  }).flat().join('');
+  const legends = valid.map((i,k) => `<span class="worm-key"><i style="background:${palette[k%2]}"></i>${esc(teamDef(i.bat).short || i.bat)} ${i.runs}/${i.wkts}</span>`).join('')
+    + `<span class="worm-key worm-key-dot"><i></i>Wicket</span>`;
   const target = '';
-  return `<div class="worm-wrap"><div class="worm-legend">${legends}${target}</div><svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative runs by over for ${valid.map(i=>teamDef(i.bat).name).join(' and ')}">${grid}${ticks}${paths}</svg><div class="worm-axis">Overs</div></div>`;
+  return `<div class="worm-wrap"><div class="worm-legend">${legends}${target}</div><svg class="worm" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cumulative runs by over for ${valid.map(i=>teamDef(i.bat).name).join(' and ')} with wicket markers">${grid}${ticks}${paths}${wickets}</svg><div class="worm-axis">Overs</div></div>`;
 }
 function innLabel(S, k) {
   const inn = S.innings[k];
