@@ -1039,6 +1039,9 @@ body.live-mode .actbar{display:none}
 
 /* Build 104: mobile-first squad rows */
 .roster-compact{min-width:0;align-items:center;gap:8px}.roster-compact>.stack{min-width:0;flex:1}.roster-compact .sub-t{white-space:normal;overflow-wrap:anywhere}.roster-compact .end{flex:none;min-width:42px;text-align:right}.roster-compact .main-t{white-space:normal}.roster-compact .cricket-role-icon{vertical-align:middle}.roster-compact .xs{line-height:1.5}
+
+/* Build 106 trophy cabinet */
+.career-switch{margin-bottom:10px}.trophy-cabinet{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;padding:10px 8px 15px;border-radius:14px;background:linear-gradient(180deg,#091724,#0b1b28);border:1px solid #284154}.career-trophy{min-width:0;background:linear-gradient(145deg,#183042,#10202e 75%);border:1px solid #344c5e;border-radius:11px;overflow:hidden}.career-trophy summary{cursor:pointer;list-style:none;display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 6px 12px;min-height:185px;position:relative}.career-trophy summary::-webkit-details-marker{display:none}.trophy-art{height:120px;width:110px;max-width:100%;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 4px 5px #0009)}.trophy-art svg{height:116px;width:auto;max-width:100%}.trophy-label{font-size:13px;font-weight:800;line-height:1.3;min-height:33px}.trophy-count{font-size:12px;color:#e8c56d;font-weight:800;margin-top:4px}.trophy-last{font-size:11px;color:#9badbb;margin-top:3px}.career-trophy:before{content:"";display:block;position:relative;top:126px;height:5px;background:linear-gradient(#916834,#382c27);border-top:1px solid #d5a857;pointer-events:none}.career-trophy.unearned .trophy-art{filter:grayscale(1) brightness(.45)}.career-trophy.unearned .trophy-count{color:#8095a5}.trophy-years{font-size:12px;color:#afc2d1;padding:9px;border-top:1px solid #34495c;line-height:1.6}@media(min-width:640px){.trophy-cabinet{grid-template-columns:repeat(3,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -1097,7 +1100,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.28 Build 105', title: 'Management Systems and International Hub', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.29 Build 106', title: 'Club and Nation Trophy Cabinets', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -7451,14 +7454,61 @@ function renderLegacy() {
   const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : t === 'records' ? renderLegacyRecords() : t === 'international' ? renderIntlLegacyRecords() : renderGMCareer();
   return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honours'],['records','Records'],['international','International']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
 }
+// Build 106: distinct, self-contained vector trophies; no image assets or save migration.
+function careerTrophyArt(kind) {
+  const common = '<defs><linearGradient id="metal" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#fff0ad"/><stop offset=".27" stop-color="#d2a852"/><stop offset=".52" stop-color="#fff3c4"/><stop offset=".75" stop-color="#a66e24"/><stop offset="1" stop-color="#f2c85e"/></linearGradient><linearGradient id="silver" x1="0" x2="1"><stop stop-color="#e8f5ff"/><stop offset=".5" stop-color="#859daf"/><stop offset="1" stop-color="#f5fbff"/></linearGradient></defs>';
+  const base = '<path d="M39 109H81L87 118H33Z" fill="#9a6b32" stroke="#f6d67e" stroke-width="2"/><rect x="31" y="119" width="58" height="10" rx="3" fill="#21364b" stroke="#e6bc69" stroke-width="2"/>';
+  const arts = {
+    SHIELD: '<path d="M60 9 94 20 90 66Q86 91 60 108Q34 91 30 66L26 20Z" fill="url(#silver)" stroke="#f0d17e" stroke-width="4"/><path d="M60 22 81 29 78 66Q74 82 60 93Q46 82 42 66L39 29Z" fill="#16374c" stroke="#9bc6df" stroke-width="2"/><path d="M60 37l6 13 15 2-11 10 3 15-13-7-13 7 3-15-11-10 15-2Z" fill="url(#metal)"/>',
+    ODC: '<path d="M41 20H79V63Q77 83 60 88Q43 83 41 63Z" fill="url(#metal)" stroke="#fbe5a0" stroke-width="3"/><path d="M41 30Q18 20 20 44Q22 61 43 61M79 30Q102 20 100 44Q98 61 77 61" fill="none" stroke="url(#metal)" stroke-width="6"/><path d="M60 88V110" stroke="#e4bd63" stroke-width="9"/><circle cx="60" cy="51" r="10" fill="#16374c" stroke="#fff0ac" stroke-width="2"/>',
+    T20C: '<path d="M42 16 60 5 78 16 89 32 77 75 60 96 43 75 31 32Z" fill="#17495b" stroke="url(#metal)" stroke-width="4"/><path d="M60 18 72 40 64 51 79 56 60 84 57 59 43 54 54 41Z" fill="url(#metal)"/><path d="M60 96V110" stroke="#e8b94d" stroke-width="7"/>',
+    ODIWC: '<circle cx="60" cy="42" r="28" fill="url(#metal)" stroke="#fff1c2" stroke-width="3"/><ellipse cx="60" cy="42" rx="13" ry="28" fill="none" stroke="#926c2d" stroke-width="2"/><path d="M33 42H87M60 14V70" stroke="#926c2d" stroke-width="2"/><path d="M46 72 51 92H69L74 72M60 92V109" fill="url(#silver)" stroke="#f0c96f" stroke-width="3"/>',
+    T20WC: '<path d="M60 7 83 23 91 49 76 84 60 99 44 84 29 49 37 23Z" fill="url(#silver)" stroke="#f3c866" stroke-width="4"/><path d="M60 20 76 40 64 56 75 68 60 86 47 69 56 52 43 41Z" fill="#3a7fa1" stroke="#fff1b1" stroke-width="2"/><path d="M60 99V110" stroke="#b6cad3" stroke-width="8"/>',
+    CHAMP: '<path d="M30 28H90L84 66Q79 86 60 92Q41 86 36 66Z" fill="url(#silver)" stroke="#ebc77c" stroke-width="3"/><path d="M30 33Q16 27 17 48Q20 64 38 65M90 33Q104 27 103 48Q100 64 82 65" fill="none" stroke="#d7e7f2" stroke-width="5"/><circle cx="60" cy="49" r="14" fill="#132f49" stroke="#e7c878" stroke-width="2"/><path d="m60 38 3 8 9 0-7 6 3 9-8-5-8 5 3-9-7-6 9 0Z" fill="#f9d86e"/><path d="M60 92V109" stroke="#cddce6" stroke-width="7"/>',
+    WTC: '<path d="M60 8V108" stroke="url(#silver)" stroke-width="11" stroke-linecap="round"/><circle cx="60" cy="23" r="17" fill="url(#metal)" stroke="#fff2c4" stroke-width="3"/><path d="M36 45Q60 24 84 45L79 59Q60 46 41 59Z" fill="url(#metal)" stroke="#e7c778" stroke-width="2"/><path d="M43 91H77L84 106H36Z" fill="url(#metal)"/><circle cx="60" cy="23" r="6" fill="#1b4055"/>'
+  };
+  return `<svg viewBox="0 0 120 136" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" role="img">${common}${arts[kind]||arts.ODC}${base}</svg>`;
+}
+function careerTrophySeason(year, international) {
+  return international ? String(year) : `${year}–${String(Number(year)+1).slice(-2)}`;
+}
+function careerTrophyCabinet(national) {
+  const specs = national ? [
+    ['ODIWC','ODI World Cup',/odi world cup|50.over world cup/i],
+    ['T20WC','T20 World Cup',/t20 world cup/i],
+    ['CHAMP','Champions Trophy',/champions trophy/i],
+    ['WTC','World Test Championship',/world test championship|test championship/i]
+  ] : [
+    ['SHIELD','Sheffield Shield','SHIELD'],['ODC','One-Day Cup','ODC'],['T20C','T20 Championship','T20C']
+  ];
+  const rows=specs.map(([kind,label,match])=>{
+    const won = national ? (game.worldHistory||[]).filter(h => match.test(h.event||'') && (h.winner === 'AUS' || h.winner === 'Australia')).map(h=>h.year)
+      : (game.gm.titles||[]).filter(t=>t.comp===match).map(t=>t.year);
+    const years=[...new Set(won)].sort((a,b)=>b-a);
+    return `<details class="career-trophy ${years.length?'earned':'unearned'}"><summary><div class="trophy-art">${careerTrophyArt(kind)}</div><div class="trophy-label">${label}</div><div class="trophy-count">${years.length ? '×'+years.length : 'Not yet won'}</div><div class="trophy-last">${years.length?'Latest: '+careerTrophySeason(years[0],national):'Awaiting first title'}</div></summary><div class="trophy-years">${years.length?'Winning seasons: '+years.map(y=>careerTrophySeason(y,national)).join(', '):'No titles recorded in this career.'}</div></details>`;
+  }).join('');
+  return `<div class="trophy-cabinet">${rows}</div><div class="xs muted" style="margin-top:10px">Tap a trophy to view winning seasons. Only recorded titles are counted.</div>`;
+}
 function renderGMCareer() {
-  const g = game.gm, N = game.nation, pct = g.wins + g.losses ? Math.round(g.wins / (g.wins + g.losses) * 100) : 0;
-  const kpis = `<div class="kpis"><div class="kpi"><div class="v">${g.seasons}</div><div class="l">Seasons</div></div><div class="kpi"><div class="v">${g.wins}-${g.losses}</div><div class="l">W-L</div></div><div class="kpi"><div class="v">${pct}%</div><div class="l">Win rate</div></div><div class="kpi"><div class="v">${g.titles.length}</div><div class="l">Trophies</div></div><div class="kpi"><div class="v">${g.rep}</div><div class="l">Reputation</div></div></div>`;
-  const jobs = (g.jobs || []).map(j => `<div class="kv"><span>${tdot(j.teamId)} ${teamName(j.teamId)}</span><span class="dim">from ${j.from}</span></div>`).join('');
-  return `${kpis}<div style="height:8px"></div><div class="grid g2">
-    ${panel('Trophy cabinet', `<div class="rows">${g.titles.map(t => `<div class="kv"><span>${COMPS[t.comp].name}</span><span>${t.year}–${String(t.year + 1).slice(2)}</span></div>`).join('') || '<div class="empty">Empty for now.</div>'}</div>`, { flush: true })}
-    ${panel('Clubs', `<div class="rows">${jobs || '<div class="empty">—</div>'}<div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div></div>`, { flush: true })}
-    ${panel('Australia', `<div class="rows"><div class="kv"><span>National selector</span><span>${N.gm ? '<span class="win">Yes</span>' : 'No'}</span></div>${(N.history || []).slice(0, 8).map(h => `<div class="kv"><span>${h.year} ${esc(h.label)} v ${NATIONS[h.opp] || h.opp}</span><span>${h.finish ? esc(h.finish) : `${h.wins}-${h.losses}${h.draws ? '-' + h.draws : ''}`}</span></div>`).join('') || '<div class="empty">No series yet.</div>'}</div>`, { flush: true })}</div>`;
+  const g=game.gm,N=game.nation,side=ui.careerSide||'club',view=ui.careerView||'overview',isNation=side==='nation';
+  const sideTabs=seg([['club','Club'],['nation','Nation']],side,'(v=>{ui.careerSide=v;render();})');
+  const viewTabs=seg([['overview','Overview'],['records','Records'],['cabinet','Trophy cabinet']],view,'(v=>{ui.careerView=v;render();})');
+  let content='';
+  if(view==='cabinet') content=careerTrophyCabinet(isNation);
+  else if(isNation) {
+    const h=(N.history||[]),series=h.filter(x=>x.opp && !/world cup/i.test(x.label||''));
+    const wins=series.filter(x=>x.wins>x.losses).length,losses=series.filter(x=>x.wins<x.losses).length,draws=series.length-wins-losses;
+    const trophies=(game.worldHistory||[]).filter(x=>x.winner==='AUS'||x.winner==='Australia').length;
+    content=view==='overview'?`<div class="kpis"><div class="kpi"><div class="v">${series.length}</div><div class="l">Series recorded</div></div><div class="kpi"><div class="v">${wins}-${draws}-${losses}</div><div class="l">Series W-D-L</div></div><div class="kpi"><div class="v">${trophies}</div><div class="l">Global titles</div></div><div class="kpi"><div class="v">${N.conf||0}</div><div class="l">Board confidence</div></div></div>${panel('Australia',`<div class="rows"><div class="kv"><span>National selector</span><b>${N.gm?'Yes':'No'}</b></div><div class="kv"><span>Series tracked</span><b>${series.length}</b></div></div>`,{flush:true})}`
+      :panel('Series history',`<div class="rows">${series.map(x=>`<div class="kv"><span>${esc(x.year+' · '+(NATIONS[x.opp]||x.opp))}</span><span>${x.wins}-${x.draws||0}-${x.losses}</span></div>`).join('')||'<div class="empty">No completed series recorded.</div>'}</div>`,{flush:true});
+  } else {
+    const pct=g.wins+g.losses?Math.round(g.wins/(g.wins+g.losses)*100):0;
+    const kpis=`<div class="kpis"><div class="kpi"><div class="v">${g.seasons}</div><div class="l">Seasons</div></div><div class="kpi"><div class="v">${g.wins}-${g.losses}</div><div class="l">W-L</div></div><div class="kpi"><div class="v">${pct}%</div><div class="l">Win rate</div></div><div class="kpi"><div class="v">${g.titles.length}</div><div class="l">Titles</div></div><div class="kpi"><div class="v">${g.rep}</div><div class="l">Reputation</div></div></div>`;
+    const jobs=(g.jobs||[]).map(j=>`<div class="kv"><span>${tdot(j.teamId)} ${esc(teamName(j.teamId))}</span><span class="dim">from ${j.from}</span></div>`).join('');
+    content=view==='overview'?`${kpis}${panel('Clubs managed',`<div class="rows">${jobs}<div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div></div>`,{flush:true})}`
+      :panel('Career records',`<div class="rows"><div class="kv"><span>Matches won</span><b>${g.wins}</b></div><div class="kv"><span>Matches lost</span><b>${g.losses}</b></div><div class="kv"><span>Career win rate</span><b>${pct}%</b></div><div class="kv"><span>Domestic championships</span><b>${g.titles.length}</b></div>${COMP_ORDER.map(c=>`<div class="kv"><span>${COMPS[c].name}</span><b>${g.titles.filter(t=>t.comp===c).length}</b></div>`).join('')}</div>`,{flush:true});
+  }
+  return `<div class="career-switch">${sideTabs}</div><div class="career-switch">${viewTabs}</div>${content}`;
 }
 function renderGMSeasons() {
   const h = game.history;
