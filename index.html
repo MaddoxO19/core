@@ -1097,7 +1097,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.27 Build 104', title: 'Management Systems and International Hub', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.28 Build 105', title: 'Management Systems and International Hub', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -7101,7 +7101,7 @@ function renderDepth(toggle) {
   }).join('');
   const groups = [['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
   const res = groups.map(([g, l]) => { const list = ch.reserves.filter(r => group(r.p) === g).sort((a, b) => overall(b.p, f) - overall(a.p, f)); if (!list.length) return '';
-    return `<div class="lbl" style="padding:10px 14px 2px">${l}</div>${list.map(r => playerRow(r.p, { fmt: f, sub: `${identityLine(r.p)} ${cricketRoleIcon(r.p)}${r.covers.length ? ` · covers ${r.covers.join(', ').toLowerCase()}` : ''}`, end: `${statusChip(r.p)}${pill(overall(r.p, f))}` })).join('')}`; }).join('');
+    return `<div class="lbl" style="padding:10px 14px 2px">${l}</div>${list.map(r => playerRow(r.p, { fmt: f, sub: `${identityLine(r.p)}${r.covers.length ? ` · covers ${r.covers.join(', ').toLowerCase()}` : ''}`, end: `${statusChip(r.p)}${pill(overall(r.p, f))}` })).join('')}`; }).join('');
   return `${tools}<div style="height:8px"></div>${sum}
     <div class="grid g2" style="margin-top:8px">${panel(`${compName(f)} XI`, `<div class="rows">${rows}</div>`, { flush: true })}${panel(`Reserves · ${ch.reserves.length}`, `<div class="rows">${res || '<div class="empty">No reserves.</div>'}</div>`, { flush: true })}</div>
     <div class="xs dim" style="margin-top:6px">Dimmed players are unavailable. A gold dot marks a thin area.</div>`;
@@ -7591,25 +7591,40 @@ function renderFA() {
   return `<div class="flex wrap"><span class="s muted">Cap space <b>${money(capSpace(U()))}</b> · squad ${squadOf(U()).length}/${SQUAD_MAX}</span><span class="grow"></span>${sel(GROUP_OPTS, ui.faGroup, "ui.faGroup=this.value;render()")}${sel([['value','Best'],['ask','Cheapest'],['age','Youngest']], key, "ui.faSort=this.value;render()")}</div><div style="height:8px"></div>
     ${panel(`${fas.length} free agents`, `<div class="rows">${fas.map(p => playerRow(p, { all: true, sub: `${fitTag(p)}${ROLES[p.role].short} · ${p.age} · pot ${potGrade(p)} · asks ${money(askingSalary(p))}`, end: `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(peakOvr(p))}</span><button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','sign')">Offer</button>` })).join('') || '<div class="empty">No free agents.</div>'}</div>`, { flush: true })}`;
 }
-function renderNational() {
-  const N = game.nation;
-  const rk = Object.keys(N.rankings).sort((x, y) => N.rankings[y] - N.rankings[x]);
-  const capped = squadOf(U()).filter(p => p.caps.FC + p.caps.OD + p.caps.T20 > 0);
-  const selw = game.season.windows.find(w => w.selecting);
-  const role = N.gm
-    ? `<div class="kv"><span>Your role</span><span class="win">National selector</span></div><div class="kv"><span>National board confidence</span><span class="b">${N.conf}</span></div>
-       ${selw ? `<div class="pb"><button class="btn pri block" onclick="go('natsel')">Pick the ${esc(selw.label)} squad ▸</button></div>` : ''}
-       <div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`
-    : `<div class="pb"><div class="s muted" style="margin-bottom:8px">Take on the national selector role alongside your state job. You pick every Australia squad, can call up your own players (and lose them for state matches), and answer to a national board.</div><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render();flash('You are now national selector.')">Become national selector</button></div>`;
-  return `<div class="grid g2">${panel('Australia', `<div class="rows">${role}</div>`, { flush: true })}
-    ${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px"><span class="n">${i + 1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><span class="b s">${N.rankings[n]}</span></div>`).join('')}</div>`, { flush: true })}
-    ${game.season.windows.filter(w => w.wc && w.groups).map(w => panel('T20 World Cup', Object.keys(w.groups).map(g => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Group ${g}</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${wcTable(w, g).map(r => `<tr class="${r.t === 'AUS' ? 'me' : ''}"><td>${tdot(r.t)} ${teamDef(r.t).name}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>`).join('') + (w.champion ? `<div class="kv"><span>Champions</span><span class="b">${teamDef(w.champion).name}</span></div>` : ''), { flush: true })).join('')}
-    ${game.season.windows.map(w => panel(`${w.label}${w.wc ? '' : ' v ' + NATIONS[w.opp]}`, `<div class="kv"><span>${dateStr(w.start)} – ${dateStr(w.end)}</span><span>${w.result ? `<span class="${w.result.wins > w.result.losses ? 'win' : w.result.wins < w.result.losses ? 'loss' : 'draw'} b">${w.result.wins}–${w.result.losses}${w.result.draws ? ' (' + w.result.draws + 'D)' : ''}</span>` : w.size + ' players'}</span></div>
-      <div class="rows">${(w.fx || []).map(id => fixtureById(id)).filter(Boolean).map(f => fixtureRow(f, false)).join('')}</div>
-      ${w.squad.length ? `<div class="kv"><span>Squad</span><span class="xs" style="text-align:right">${w.squad.map(id => P(id) ? esc(P(id).last) : '').join(', ')}</span></div>` : w.locked ? `<div class="kv"><span>Squad</span><span class="xs">Confirmed (${w.locked.length})</span></div>` : '<div class="kv"><span>Squad</span><span class="xs dim">Not named yet</span></div>'}`, { flush: true })).join('')}
-    ${panel('Your internationals', `<div class="rows">${capped.map(p => playerRow(p, { end: `<span class="xs">T ${p.caps.FC} · ODI ${p.caps.OD} · T20I ${p.caps.T20}</span>` })).join('') || '<div class="empty">No capped players yet.</div>'}</div>`, { flush: true })}
-    ${N.history.length ? panel('Your series record', `<div class="rows">${N.history.map(h => `<div class="kv"><span>${h.year} ${esc(h.label)} v ${NATIONS[h.opp]}</span><span class="${h.wins > h.losses ? 'win' : 'loss'}">${h.wins}–${h.losses}${h.draws ? ' (' + h.draws + 'D)' : ''}</span></div>`).join('')}</div>`, { flush: true }) : ''}</div>`;
+function intlYearSelect(field, years) {
+  const opts=[['ALL','All years'],...years.map(y=>[String(y),String(y)])];
+  return sel(opts,ui[field]||'ALL',`ui.${field}=this.value;render()`);
 }
+function intlResultFixtures(onlyAus) {
+  return game.season.fixtures.filter(f=>f.result && (f.stage==='intl'||f.stage==='world'||f.comp==='WC'||f.comp==='CWC'||f.stage==='wtcfinal') && (!onlyAus||f.home==='AUS'||f.away==='AUS'));
+}
+function intlResultsPanel(onlyAus) {
+  const all=intlResultFixtures(onlyAus),years=[...new Set(all.map(f=>String(f.year||game.year)))].sort((a,b)=>b-a);
+  const yr=ui[onlyAus?'ausResultYear':'worldResultYear']||'ALL';
+  const filtered=all.filter(f=>yr==='ALL'||String(f.year||game.year)===yr).slice().reverse();
+  return `${intlYearSelect(onlyAus?'ausResultYear':'worldResultYear',years)}<div style="height:9px"></div>${panel(onlyAus?'Australia results':'International results',`<div class="rows">${filtered.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No recorded results for this year. Previous-season results may not be retained as fixtures.</div>'}</div>`,{flush:true})}`;
+}
+function australiaSeriesRecords() {
+ const all=(game.worldSeriesHistory||[]).filter(x=>x && (x.home==='AUS'||x.away==='AUS'));
+ const table={};
+ for(const s of all){const opp=s.home==='AUS'?s.away:s.home;const key=opp.startsWith('X_')?opp.slice(2):opp;const r=table[key]||(table[key]={won:0,drawn:0,lost:0});
+   if(!s.winner)r.drawn++;else if(s.winner==='AUS')r.won++;else r.lost++;
+ }
+ const rows=Object.keys(table).sort((a,b)=>(NATIONS[a]||a).localeCompare(NATIONS[b]||b));
+ return `${panel('Completed series by opponent',`<div class="rows">${rows.map(n=>`<div class="kv"><span>${nationTag(n)} ${esc(NATIONS[n]||n)}</span><span class="s">${table[n].won} W · ${table[n].drawn} D · ${table[n].lost} L</span></div>`).join('')||'<div class="empty">No completed Australia series found in the retained series history.</div>'}</div><div class="pb xs muted">Counts completed series, not individual matches. Only series retained in this save are included.</div>`,{flush:true})}`;
+}
+function renderNational(){
+ const n=game.nation,t=ui.ausView||'team';
+ const tabs=seg([['team','Team'],['results','Results'],['series','Series']],t,'(v=>{ui.ausView=v;render();})');
+ if(t==='results')return `${tabs}<div style="height:10px"></div>${intlResultsPanel(true)}`;
+ if(t==='series')return `${tabs}<div style="height:10px"></div>${australiaSeriesRecords()}`;
+ const selw=game.season.windows.find(w=>w.selecting);
+ const role=n.gm?`<div class="kv"><span>Your role</span><span class="win">National selector</span></div><div class="kv"><span>National board confidence</span><b>${n.conf}</b></div>${selw?`<div class="pb"><button class="btn pri block" onclick="go('natsel')">Pick the ${esc(selw.label)} squad ▸</button></div>`:''}<div class="pb"><button class="btn sm ghost" onclick="confirmSheet('Step down','Step down as national selector? Selectors will pick squads from now on.','Step down','game.nation.gm=false;autosave();render()')">Step down</button></div>`:`<div class="pb"><p class="s muted">Manage national selection alongside your state club.</p><button class="btn pri" onclick="game.nation.gm=true;game.nation.conf=60;autosave();render()">Become national selector</button></div>`;
+ const tours=game.season.windows.filter(w=>!w.wc).map(w=>panel(`${esc(w.label)} v ${esc(NATIONS[w.opp]||w.opp)}`,`<div class="kv"><span>${dateStr(w.start)} – ${dateStr(w.end)}</span><span>${w.result?`${w.result.wins}–${w.result.losses}${w.result.draws?' ('+w.result.draws+'D)':''}`:w.size+' players'}</span></div><div class="rows">${(w.fx||[]).map(id=>fixtureById(id)).filter(Boolean).map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})).join('');
+ const capped=squadOf(U()).filter(p=>p.caps && (p.caps.FC+p.caps.OD+p.caps.T20)>0);
+ return `${tabs}<div style="height:10px"></div>${panel('Australia',`<div class="rows">${role}</div>`,{flush:true})}<div style="height:9px"></div>${tours||panel('Tours','<div class="empty">No current tour fixtures.</div>')}<div style="height:9px"></div>${panel('Your international players',`<div class="rows">${capped.map(p=>playerRow(p,{end:`<span class="xs">T ${p.caps.FC} · ODI ${p.caps.OD} · T20I ${p.caps.T20}</span>`})).join('')||'<div class="empty">No capped club players.</div>'}</div>`,{flush:true})}`;
+}
+
 function renderLog() { return panel('Transactions', `<div class="rows">${game.transactions.map(t => `<div class="kv"><span style="color:var(--text)">${esc(t.text)}</span><span>${t.year}</span></div>`).join('') || '<div class="empty">No transactions yet.</div>'}</div>`, { flush: true }); }
 
 function openContract(id, mode) { return negotiate(id, mode); }
@@ -8813,34 +8828,17 @@ function globalTournamentPanel() {
  }
  return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(teamDef(h.winner).name)}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
 }
-function renderWorld() {
-  const R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]);
-  const intl = game.season.fixtures.filter(f => f.result && !f.result.noResult && (f.stage === 'intl' || f.stage === 'world' || f.comp === 'WC')).slice(-14).reverse();
-  const nat = ui.worldNat || rk.find(n => n !== 'AUS');
-  const sq = nat === 'AUS' ? [] : Object.values(game.players).filter(p => p.teamId === 'X_' + nat && !p.retired).sort((a, b) => peakOvr(b) - peakOvr(a));
-  const qualEvents=[['CWCQ','ODI qualification'],['T20Q','T20I qualification']];
-  const qualificationPanel=panel('Associate qualification',qualEvents.map(([key,label])=>{
-    const rows=associateQualificationTable(key),complete=game.season.fixtures.filter(f=>f.stage==='associatequal'&&f.event===key).every(f=>f.result);
-    return `<div class="lbl" style="padding:8px 12px">${label}${complete?' · Completed':''}</div><div class="rows">${rows.slice(0,5).map((r,i)=>`<div class="row" style="padding:5px 12px"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('')}</div>`;
-  }).join(''),{flush:true});
-  const intlNat = ui.intlRecNat || 'AUS';
-  const intlFmt = ui.intlRecFmt || 'FC';
-  const recordsPanel = `<div class="tool-row">${sel(Object.keys(NATIONS).map(n=>[n,NATIONS[n]]),intlNat,"ui.intlRecNat=this.value;render()")}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],intlFmt,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(intlNat,intlFmt)}`;
-  const series = worldSeriesStandings();
-  const wtc=wtcRows(), currentWtc=ensureWtc();
-  const wtcFinal=game.season.fixtures.find(f=>f.stage==='wtcfinal');
-  const wtcPanel=panel('World Test Championship', `<div class="xs dim" style="padding:8px 12px">${currentWtc.start}–${currentWtc.start+1} cycle · Percentage of points earned</div>
-    <div class="rows">${wtc.map((r,i)=>`<div class="row" style="padding:7px 12px"><span class="n">${i+1}</span><div class="grow s">${esc(NATIONS[r.nat])}</div><span class="xs dim">${r.p} Tests</span><span class="b s" style="min-width:52px;text-align:right">${r.pct.toFixed(1)}%</span></div>`).join('')}</div>
-    ${wtcFinal ? `<div class="xs dim" style="padding:10px 12px">${wtcFinal.home ? `Final: ${esc(teamDef(wtcFinal.home).name)} v ${esc(teamDef(wtcFinal.away).name)}` : 'Finalists determined after the league phase'}${wtcFinal.result&&wtcFinal.result.winner?' · Champions: '+esc(teamDef(wtcFinal.result.winner).name):''}</div>` : ''}
-    ${(game.wtcHistory||[]).slice(0,3).map(h=>`<div class="xs dim" style="padding:6px 12px">${h.start}–${h.end}: ${h.winner?esc(teamDef(h.winner).name):'Drawn'} · ${esc(teamDef(h.home).name)} v ${esc(teamDef(h.away).name)}</div>`).join('')}`,{flush:true});
-  const formatLine = x => `${COMPS[x.comp].short}: ${x.winsHome}–${x.winsAway}${x.draws ? ` (${x.draws} drawn)` : ''}`;
-  const ongoing = series.filter(x=>x.played>0&&x.played<x.total).slice(0,7);
-  const history = (game.worldSeriesHistory || []).slice(0,12);
-  const seriesPanel = panel('International series', `<div class="rows">${ongoing.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)}</span><span>${esc(formatLine(x))}</span></div>`).join('') || '<div class="empty">No series in progress.</div>'}${history.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)} · ${esc(COMPS[x.comp].short)}</span><span>${x.winner ? esc(teamDef(x.winner).name) : 'Drawn'} · ${x.winsHome}–${x.winsAway}${x.honours ? `<div class="xs dim">${x.honours.basis==='performance'?'Series standout':'Match awards'}: ${esc(x.honours.playerName)}${x.honours.basis==='performance'?' · '+x.honours.runs+' runs, '+x.honours.wickets+' wickets':''}</div>` : ''}</span></div>`).join('')}</div>`, {flush:true});
-  return `${qualificationPanel}<div class="grid g2">${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
-    ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
-    ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
-    </div>`;
+function renderWorld(){
+ const mode=ui.worldView||'rankings';
+ const tabs=seg([['rankings','Rankings'],['results','Results'],['qualification','Qualification']],mode,'(v=>{ui.worldView=v;render();})');
+ if(mode==='results')return `${tabs}<div style="height:10px"></div>${intlResultsPanel(false)}`;
+ if(mode==='qualification'){
+  const events=[['CWCQ','ODI qualification'],['T20Q','T20I qualification']];
+  const panels=events.map(([key,label])=>{const rows=associateQualificationTable(key);return panel(label,`<div class="rows">${rows.map((r,i)=>`<div class="row"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} P</span><b>${r.Pts} pts</b></div>`).join('')||'<div class="empty">No qualifying standings available.</div>'}</div>`,{flush:true});}).join('<div style="height:8px"></div>');
+  return `${tabs}<div style="height:10px"></div>${panels}`;
+ }
+ const R=game.nation.rankings,rk=Object.keys(R).sort((a,b)=>R[b]-R[a]);
+ return `${tabs}<div style="height:10px"></div>${panel('World rankings',`<div class="rows">${rk.map((n,i)=>`<div class="row tap ${n==='AUS'?'me':''}" onclick="showTeam('${n==='AUS'?'AUS':'X_'+n}')"><span class="n">${i+1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><b>${R[n]}</b></div>`).join('')}</div><div class="pb xs muted">Select a nation to view its team profile.</div>`,{flush:true})}`;
 }
 
 // Editor: four sections with one grid each, skills grouped as on the profile, and a pinned preview
@@ -9030,6 +9028,10 @@ function showTeam(id) {
   } else {
     const n = teamNat(id), R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]).indexOf(n) + 1;
     body += `<div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-top:10px"><div class="kpi"><div class="v">${ordinal(rk)}</div><div class="l">World ranking</div></div>${FMT_LIST.map(f => `<div class="kpi"><div class="v">${fmtR(f)}</div><div class="l">${{ FC:'Test', OD:'ODI', T20:'T20I' }[f]} XI</div></div>`).join('')}</div>`;
+  }
+  if (intl) {
+    const recent=game.season.fixtures.filter(f=>f.result&&(f.home===id||f.away===id)).slice(-6).reverse();
+    body+=`<div class="panel" style="margin-top:8px"><div class="ph"><h3>Recent results</h3></div><div class="rows">${recent.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No recent fixtures in retained season.</div>'}</div></div>`;
   }
   body += `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Squad</h3></div><div class="rows">${sq.sort((a, b) => peakOvr(b) - peakOvr(a)).map(p => playerRow(p, { all: true, noStatus: intl, sub: `${ROLES[p.role].short} · ${p.age}${intl ? ` · ${p.caps.FC} Tests` : ''}` })).join('')}</div></div>`;
   sheet(intl ? 'Nation' : 'Team profile', esc(t.name), body, { wide: true, tall: true });
