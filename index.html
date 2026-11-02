@@ -1117,7 +1117,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.30 Build 107', title: 'Opponent Records and Career Dashboards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.31 Build 108', title: 'Opponent Records and Career Dashboards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -7558,7 +7558,7 @@ function careerOpponentRecord(rows,fmt,national) {
 }
 function renderGMCareer() {
   const g=game.gm,N=game.nation,side=ui.careerSide||'club',view=ui.careerView||'overview',isNation=side==='nation';
-  const sideTabs=seg([['club','Club'],['nation','Nation']],side,'(v=>{ui.careerSide=v;ui.careerRecordFmt="ALL";render();})');
+  const sideTabs=seg([['club','Club'],['nation','Nation']],side,'(v=>{ui.careerSide=v;ui.careerRecordFmt=null;render();})');
   const viewTabs=seg([['overview','Overview'],['records','Records'],['cabinet','Trophy cabinet']],view,'(v=>{ui.careerView=v;render();})');
   const fmt=ui.careerRecordFmt||'ALL';
   let content='';
