@@ -1042,6 +1042,23 @@ body.live-mode .actbar{display:none}
 
 /* Build 106 trophy cabinet */
 .career-switch{margin-bottom:10px}.trophy-cabinet{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;padding:10px 8px 15px;border-radius:14px;background:linear-gradient(180deg,#091724,#0b1b28);border:1px solid #284154}.career-trophy{min-width:0;background:linear-gradient(145deg,#183042,#10202e 75%);border:1px solid #344c5e;border-radius:11px;overflow:hidden}.career-trophy summary{cursor:pointer;list-style:none;display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 6px 12px;min-height:185px;position:relative}.career-trophy summary::-webkit-details-marker{display:none}.trophy-art{height:120px;width:110px;max-width:100%;display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 4px 5px #0009)}.trophy-art svg{height:116px;width:auto;max-width:100%}.trophy-label{font-size:13px;font-weight:800;line-height:1.3;min-height:33px}.trophy-count{font-size:12px;color:#e8c56d;font-weight:800;margin-top:4px}.trophy-last{font-size:11px;color:#9badbb;margin-top:3px}.career-trophy:before{content:"";display:block;position:relative;top:126px;height:5px;background:linear-gradient(#916834,#382c27);border-top:1px solid #d5a857;pointer-events:none}.career-trophy.unearned .trophy-art{filter:grayscale(1) brightness(.45)}.career-trophy.unearned .trophy-count{color:#8095a5}.trophy-years{font-size:12px;color:#afc2d1;padding:9px;border-top:1px solid #34495c;line-height:1.6}@media(min-width:640px){.trophy-cabinet{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* B107: compact, readable career dashboards and opponent tables. */
+.career-summary-head{font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.career-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:11px}
+.career-stat{min-width:0;border:1px solid var(--line2);border-radius:11px;padding:12px 10px;background:var(--s2)}
+.career-stat-name{font-size:11px;color:var(--muted);line-height:1.3}
+.career-stat-value{font-size:25px;font-weight:900;margin:5px 0;color:var(--text);font-variant-numeric:tabular-nums}
+.career-stat-sub{font-size:11px;color:var(--dim);line-height:1.3}
+.career-opponent-header,.career-opponent summary{display:grid;grid-template-columns:minmax(0,1fr) 105px;align-items:center;gap:8px;padding:11px 10px}
+.career-opponent-header{color:var(--dim);text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.05em}
+.career-opponent-header>span:last-child,.career-opp-record{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;gap:0;font-variant-numeric:tabular-nums}
+.career-opp-name{min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.career-opponent{border-top:1px solid var(--line2)}
+.career-opponent summary{list-style:none;cursor:pointer;min-height:51px}
+.career-opponent summary::-webkit-details-marker{display:none}
+.career-opp-detail{padding:8px 12px 12px 16px;color:var(--muted);font-size:12px;line-height:1.9;background:rgba(10,20,30,.3)}
+@media(min-width:650px){.career-stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -1100,7 +1117,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.29 Build 106', title: 'Club and Nation Trophy Cabinets', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.30 Build 107', title: 'Opponent Records and Career Dashboards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -6023,6 +6040,7 @@ function endSeason() {
   game.intlSeasonHonours = game.intlSeasonHonours.slice(0, 30);
   const board = evaluateBoard();
   const finish = {}, outcome = {}; COMP_ORDER.forEach(c => { finish[c] = ladderPos(c, U()); outcome[c] = compOutcome(c, U()); });
+  archiveClubOpponentResults();
   game.history.unshift({ year: game.year, label: game.season.label, champions: Object.assign({}, game.season.champions), awards, team: U(), finish, outcome, record: [game.season.userWins, game.season.userLosses] });
   game.gm.seasons++;
   Object.values(game.players).forEach(p => {
@@ -7489,27 +7507,81 @@ function careerTrophyCabinet(national) {
   }).join('');
   return `<div class="trophy-cabinet">${rows}</div><div class="xs muted" style="margin-top:10px">Tap a trophy to view winning seasons. Only recorded titles are counted.</div>`;
 }
+// Build 107: opponent-ledger snapshots are retained independently of pruned fixture history.
+// Existing saves require no migration. Historical seasons without fixtures are intentionally not guessed.
+function archiveClubOpponentResults() {
+  if (!game.gm) return;
+  game.gm.opponentLedger = game.gm.opponentLedger || [];
+  const year=game.year;
+  if (game.gm.opponentLedger.some(x=>x.year===year)) return;
+  const fixtures=(game.season?.fixtures||[]).filter(f=>f.result && (f.home===U() || f.away===U()) && COMP_ORDER.includes(f.comp));
+  game.gm.opponentLedger.push({year,club:U(),matches:fixtures.map(f=>({
+    id:f.id,comp:f.comp,opp:f.home===U()?f.away:f.home,
+    outcome:f.result.winner===U()?'W':f.result.winner?'L':f.result.tie?'T':f.result.noResult?'NR':'D',
+    day:f.day,stage:f.stage||'league'
+  }))});
+}
+function careerClubMatches() {
+  const ledger=(game.gm.opponentLedger||[]).flatMap(x=>(x.matches||[]).map(m=>({...m,year:x.year,club:x.club})));
+  const seen=new Set(ledger.map(m=>m.id));
+  const current=(game.season?.fixtures||[]).filter(f=>f.result && COMP_ORDER.includes(f.comp) && (f.home===U()||f.away===U()) && !seen.has(f.id)).map(f=>({
+    id:f.id,comp:f.comp,opp:f.home===U()?f.away:f.home,club:U(),year:game.year,day:f.day,stage:f.stage||'league',
+    outcome:f.result.winner===U()?'W':f.result.winner?'L':f.result.tie?'T':f.result.noResult?'NR':'D'
+  }));
+  return ledger.concat(current);
+}
+function careerNationSeries() {
+  return (game.nation?.history||[]).filter(x=>x.opp && !/world cup/i.test(x.label||'') && Number.isFinite(+x.wins) && Number.isFinite(+x.losses)).map(x=>({
+    year:x.year,opp:x.opp,label:x.label||'Series',wins:+x.wins,losses:+x.losses,draws:+x.draws||0,
+    fmt:/t20/i.test(x.label||'')?'T20':/odi|one.day/i.test(x.label||'')?'OD':'FC'
+  }));
+}
+function careerWdl(rows) {return {w:rows.filter(x=>x.outcome==='W').length,d:rows.filter(x=>x.outcome==='D'||x.outcome==='T').length,l:rows.filter(x=>x.outcome==='L').length,nr:rows.filter(x=>x.outcome==='NR').length};}
+function careerBoard(label,record,total,titles,confidence,note) {
+  const denom=record.w+record.d+record.l;
+  const pct=denom?Math.round(record.w/denom*100):0;
+  const stat=(k,v,sub)=>`<div class="career-stat"><div class="career-stat-name">${esc(k)}</div><div class="career-stat-value">${esc(String(v))}</div><div class="career-stat-sub">${esc(sub||'')}</div></div>`;
+  return `<div class="career-summary-head">${esc(label)}</div><div class="career-stat-grid">${stat('Won · Drawn · Lost',`${record.w}–${record.d}–${record.l}`,record.nr?`${record.nr} no results`:'Career record')}${stat('Win rate',`${pct}%`,`${denom} decided/drawn`)}${stat('Championships',titles,'Recorded titles')}${stat('Board confidence',confidence,'Current rating')}</div>${note?`<div class="xs muted" style="margin:5px 0 13px">${esc(note)}</div>`:''}`;
+}
+function careerOpponentRecord(rows,fmt,national) {
+  const formats=national?[['ALL','All'],['FC','Test'],['OD','ODI'],['T20','T20I']]:[['ALL','All'],['FC','Shield'],['OD','One-Day'],['T20','T20']];
+  const filtered=fmt==='ALL'?rows:rows.filter(r=>r.fmt===fmt||r.comp===(fmt==='FC'?'SHIELD':fmt==='OD'?'ODC':'T20C'));
+  const by={};filtered.forEach(r=>{const k=r.opp||'UNKNOWN';(by[k]||(by[k]=[])).push(r);});
+  const body=Object.keys(by).sort((a,b)=> (NATIONS[a]||teamName(a)).localeCompare(NATIONS[b]||teamName(b))).map(opp=>{
+    const m=by[opp];const wdl=national?{w:m.filter(x=>x.wins>x.losses).length,d:m.filter(x=>x.wins===x.losses).length,l:m.filter(x=>x.wins<x.losses).length}:careerWdl(m);
+    const name=national?(NATIONS[opp]||opp):teamName(opp);
+    const detail=m.slice().sort((a,b)=>b.year-a.year).map(x=>national?`${x.year} · ${x.label} · ${x.wins}-${x.draws}-${x.losses}`:`${x.year}–${String(Number(x.year)+1).slice(-2)} · ${COMPS[x.comp]?.short||x.comp} · ${x.outcome==='W'?'Won':x.outcome==='L'?'Lost':x.outcome==='D'?'Draw':x.outcome==='T'?'Tie':'No result'}`).map(esc).join('<br>');
+    return `<details class="career-opponent"><summary><span class="career-opp-name">${national?nationTag(opp):tdot(opp)} ${esc(name)}</span><span class="career-opp-record"><b>${wdl.w}</b><b>${wdl.d}</b><b>${wdl.l}</b></span></summary><div class="career-opp-detail">${detail}</div></details>`;
+  }).join('');
+  const filter=seg(formats,fmt,`(v=>{ui.careerRecordFmt=v;render();})`);
+  return `${filter}<div class="career-opponent-header"><span>Opponent</span><span><b>W</b><b>D</b><b>L</b></span></div><div class="career-opponent-list">${body||'<div class="empty">No opponent results retained for this format.</div>'}</div><div class="xs muted" style="margin-top:10px">${national?'Series are counted once using their final series outcome. Tap a country for individual series.':'Match results are counted by opponent. Older seasons without retained opponent fixtures cannot be reconstructed; future seasons are archived automatically. Tap a club for match history.'}</div>`;
+}
 function renderGMCareer() {
   const g=game.gm,N=game.nation,side=ui.careerSide||'club',view=ui.careerView||'overview',isNation=side==='nation';
-  const sideTabs=seg([['club','Club'],['nation','Nation']],side,'(v=>{ui.careerSide=v;render();})');
+  const sideTabs=seg([['club','Club'],['nation','Nation']],side,'(v=>{ui.careerSide=v;ui.careerRecordFmt="ALL";render();})');
   const viewTabs=seg([['overview','Overview'],['records','Records'],['cabinet','Trophy cabinet']],view,'(v=>{ui.careerView=v;render();})');
+  const fmt=ui.careerRecordFmt||'ALL';
   let content='';
-  if(view==='cabinet') content=careerTrophyCabinet(isNation);
+  if (view==='cabinet') content=careerTrophyCabinet(isNation);
   else if(isNation) {
-    const h=(N.history||[]),series=h.filter(x=>x.opp && !/world cup/i.test(x.label||''));
-    const wins=series.filter(x=>x.wins>x.losses).length,losses=series.filter(x=>x.wins<x.losses).length,draws=series.length-wins-losses;
-    const trophies=(game.worldHistory||[]).filter(x=>x.winner==='AUS'||x.winner==='Australia').length;
-    content=view==='overview'?`<div class="kpis"><div class="kpi"><div class="v">${series.length}</div><div class="l">Series recorded</div></div><div class="kpi"><div class="v">${wins}-${draws}-${losses}</div><div class="l">Series W-D-L</div></div><div class="kpi"><div class="v">${trophies}</div><div class="l">Global titles</div></div><div class="kpi"><div class="v">${N.conf||0}</div><div class="l">Board confidence</div></div></div>${panel('Australia',`<div class="rows"><div class="kv"><span>National selector</span><b>${N.gm?'Yes':'No'}</b></div><div class="kv"><span>Series tracked</span><b>${series.length}</b></div></div>`,{flush:true})}`
-      :panel('Series history',`<div class="rows">${series.map(x=>`<div class="kv"><span>${esc(x.year+' · '+(NATIONS[x.opp]||x.opp))}</span><span>${x.wins}-${x.draws||0}-${x.losses}</span></div>`).join('')||'<div class="empty">No completed series recorded.</div>'}</div>`,{flush:true});
+    const series=careerNationSeries();
+    const record={w:series.filter(x=>x.wins>x.losses).length,d:series.filter(x=>x.wins===x.losses).length,l:series.filter(x=>x.wins<x.losses).length};
+    const trophyCount=(game.worldHistory||[]).filter(x=>(x.winner==='AUS'||x.winner==='Australia') && /world cup|champions trophy|test championship/i.test(x.event||'')).length;
+    content=view==='overview'?`${careerBoard('Australia · National career',record,series.length,trophyCount,N.conf||0,`${series.length} completed bilateral series recorded`)}${panel('National career',`<div class="rows"><div class="kv"><span>National selector</span><b>${N.gm?'Yes':'No'}</b></div><div class="kv"><span>Series recorded</span><b>${series.length}</b></div><div class="kv"><span>International titles</span><b>${trophyCount}</b></div></div>`,{flush:true})}`
+      :panel('Series records by nation',careerOpponentRecord(series,fmt,true));
   } else {
-    const pct=g.wins+g.losses?Math.round(g.wins/(g.wins+g.losses)*100):0;
-    const kpis=`<div class="kpis"><div class="kpi"><div class="v">${g.seasons}</div><div class="l">Seasons</div></div><div class="kpi"><div class="v">${g.wins}-${g.losses}</div><div class="l">W-L</div></div><div class="kpi"><div class="v">${pct}%</div><div class="l">Win rate</div></div><div class="kpi"><div class="v">${g.titles.length}</div><div class="l">Titles</div></div><div class="kpi"><div class="v">${g.rep}</div><div class="l">Reputation</div></div></div>`;
+    const matches=careerClubMatches();const available=careerWdl(matches);
+    // Total historical GM wins/losses are preserved, but historical draws cannot be inferred from missing fixtures.
+    const totalRecord={w:g.wins||0,d:Math.max(0,g.draws||0),l:g.losses||0,nr:0};
+    const missing=Math.max(0,totalRecord.w+totalRecord.d+totalRecord.l-(available.w+available.d+available.l));
+    const note=missing?`${missing} historical matches have no retained opponent detail; club opponent tables include only available and newly archived fixtures.`:'';
     const jobs=(g.jobs||[]).map(j=>`<div class="kv"><span>${tdot(j.teamId)} ${esc(teamName(j.teamId))}</span><span class="dim">from ${j.from}</span></div>`).join('');
-    content=view==='overview'?`${kpis}${panel('Clubs managed',`<div class="rows">${jobs}<div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div></div>`,{flush:true})}`
-      :panel('Career records',`<div class="rows"><div class="kv"><span>Matches won</span><b>${g.wins}</b></div><div class="kv"><span>Matches lost</span><b>${g.losses}</b></div><div class="kv"><span>Career win rate</span><b>${pct}%</b></div><div class="kv"><span>Domestic championships</span><b>${g.titles.length}</b></div>${COMP_ORDER.map(c=>`<div class="kv"><span>${COMPS[c].name}</span><b>${g.titles.filter(t=>t.comp===c).length}</b></div>`).join('')}</div>`,{flush:true});
+    content=view==='overview'?`${careerBoard(`${teamName(U())} · Club career`,totalRecord,g.seasons,g.titles.length,game.board.confidence,note)}${panel('Clubs managed',`<div class="rows">${jobs||'<div class="empty">No club appointments recorded.</div>'}<div class="kv"><span>Seasons managed</span><b>${g.seasons}</b></div></div>`,{flush:true})}`
+      :panel('Match records by club',careerOpponentRecord(matches,fmt,false));
   }
   return `<div class="career-switch">${sideTabs}</div><div class="career-switch">${viewTabs}</div>${content}`;
 }
+
 function renderGMSeasons() {
   const h = game.history;
   if (!h.length) return '<div class="empty">Complete a season to start your history.</div>';
