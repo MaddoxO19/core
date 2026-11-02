@@ -1036,6 +1036,9 @@ body.live-mode .actbar{display:none}
 .matchday-hero>.matchday-crest .domestic-crest{object-fit:contain!important}
 .legacy-flag{object-fit:contain!important;object-position:center!important;image-rendering:auto!important}
 
+
+/* Build 104: mobile-first squad rows */
+.roster-compact{min-width:0;align-items:center;gap:8px}.roster-compact>.stack{min-width:0;flex:1}.roster-compact .sub-t{white-space:normal;overflow-wrap:anywhere}.roster-compact .end{flex:none;min-width:42px;text-align:right}.roster-compact .main-t{white-space:normal}.roster-compact .cricket-role-icon{vertical-align:middle}.roster-compact .xs{line-height:1.5}
 </style>
 </head>
 <body>
@@ -1094,7 +1097,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.26 Build 103', title: 'Crest Padding and National Flags', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.27 Build 104', title: 'Management Systems and International Hub', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -3172,7 +3175,11 @@ function ensureNationCoach() {
 function staffOffseason() {
   Object.values(game.staff).forEach(s => {
     s.age++;
-    s.rating = clamp(s.rating + (s.age < 50 ? randInt(-1, 3) : randInt(-3, 1)), 40, 97);
+    const prev=(game.history||[])[0],finish=prev&&prev.finish||{};
+    const strong=s.teamId===U() && s.role==='head' && (game.board?.confidence||50)>72;
+    const poor=s.teamId===U() && s.role==='head' && (game.board?.confidence||50)<38;
+    const delta=strong?randInt(1,3):poor?randInt(-3,-1):(s.age<50?randInt(-1,2):randInt(-2,1));
+    s.rating=clamp(s.rating+delta,40,97);s.lastRatingChange=delta;
     if (!s.teamId) return;
     s.years--;
     if (s.years > 0) return;
@@ -4289,10 +4296,15 @@ function payMonth() {
   finBook('wages', payroll(U()) / 6);
   finBook('staff', staffPayroll(U()) / 6);
 }
+const FAC_POLICIES={essential:{name:'Essential',factor:.55,delta:-9},standard:{name:'Standard',factor:1,delta:0},premium:{name:'Premium',factor:1.65,delta:7}};
+function facilityPolicy(k,policy){if(!FAC_POLICIES[policy]||!game.fin||!Object.hasOwn(FACILITIES,k))return;game.fin.facPolicy=game.fin.facPolicy||{};game.fin.facPolicy[k]=policy;autosave();render();}
+function facilityCondition(k){const f=game.fin;return Math.round((f.facCondition||{})[k]??100)}
+function facilitySeasonUpkeep(){const f=game.fin;f.facCondition=f.facCondition||{};let cost=0;
+ Object.keys(FACILITIES).forEach(k=>{let lvl=f.fac[k],pol=FAC_POLICIES[(f.facPolicy||{})[k]]||FAC_POLICIES.standard;cost+=lvl*FIN.upkeep*pol.factor;f.facCondition[k]=clamp(facilityCondition(k)+pol.delta,40,100);});return Math.round(cost);}
 function settleSeasonFinances() {
   const f = game.fin; if (!f) return;
   while (f.ledger.months < 6) payMonth();
-  finBook('upkeep', Object.values(f.fac).reduce((a, l) => a + l * FIN.upkeep, 0));
+  finBook('upkeep', facilitySeasonUpkeep());
   const L = f.ledger;
   f.history.unshift({ year: game.year, income: Math.round(income(L)), spend: Math.round(spend(L)), profit: Math.round(income(L) - spend(L)), cash: Math.round(f.cash), fans: f.fans });
 }
@@ -7079,7 +7091,7 @@ function renderDepth(toggle) {
   const rows = ch.slots.map(s => {
     const p = s.p, o = overall(p, f);
     const spec = specialistOf(p), st = styleLabel(p);
-    const info = `<span class="dslot-l">${SLOT_NAMES[s.slot]}</span>${st ? ' · ' + esc(st) : ''} · ${p.age}${spec.label ? ` · <span class="spec ${spec.best}">${spec.best === 'FC' ? 'Red-ball' : compName(spec.best)}</span>` : ''}`;
+    const info = `<span class="dslot-l">${SLOT_NAMES[s.slot]}</span>${st ? ' · ' + esc(st) : ''} · ${p.age} ${cricketRoleIcon(p)}${spec.label ? ` · <span class="spec ${spec.best}">${spec.best === 'FC' ? 'Red-ball' : compName(spec.best)}</span>` : ''}`;
     const away = p.injury ? 'Injured' : p.natDuty ? 'With Australia' : p.rest ? 'Rested' : 'Unavailable';
     const note = !s.avail ? ` · ${away} · ${s.inFor ? esc(pshort(s.inFor)) + ' in' : 'no cover'}` : !s.backup ? ' · no backup' : '';
     return `<div class="row tap dslot ${s.avail ? '' : 'out'}" onclick="showPlayer('${p.id}')"><span class="n">${s.i + 1}</span>
@@ -7089,7 +7101,7 @@ function renderDepth(toggle) {
   }).join('');
   const groups = [['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
   const res = groups.map(([g, l]) => { const list = ch.reserves.filter(r => group(r.p) === g).sort((a, b) => overall(b.p, f) - overall(a.p, f)); if (!list.length) return '';
-    return `<div class="lbl" style="padding:10px 14px 2px">${l}</div>${list.map(r => playerRow(r.p, { fmt: f, sub: `${identityLine(r.p)}${r.covers.length ? ` · covers ${r.covers.join(', ').toLowerCase()}` : ''}`, end: `${statusChip(r.p)}${pill(overall(r.p, f))}` })).join('')}`; }).join('');
+    return `<div class="lbl" style="padding:10px 14px 2px">${l}</div>${list.map(r => playerRow(r.p, { fmt: f, sub: `${identityLine(r.p)} ${cricketRoleIcon(r.p)}${r.covers.length ? ` · covers ${r.covers.join(', ').toLowerCase()}` : ''}`, end: `${statusChip(r.p)}${pill(overall(r.p, f))}` })).join('')}`; }).join('');
   return `${tools}<div style="height:8px"></div>${sum}
     <div class="grid g2" style="margin-top:8px">${panel(`${compName(f)} XI`, `<div class="rows">${rows}</div>`, { flush: true })}${panel(`Reserves · ${ch.reserves.length}`, `<div class="rows">${res || '<div class="empty">No reserves.</div>'}</div>`, { flush: true })}</div>
     <div class="xs dim" style="margin-top:6px">Dimmed players are unavailable. A gold dot marks a thin area.</div>`;
@@ -7100,9 +7112,7 @@ function renderPlayerList() {
   sq = sortPlayers(sq, ui.squadSort, ui.listFmt);
   const tools = `<div class="flex wrap">${fmtSeg(ui.listFmt, 'setListFmt')}<span class="grow"></span>${sel(GROUP_OPTS, ui.squadGroup, "ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']], ui.squadSort, "ui.squadSort=this.value;render()")}</div>`;
   const f = ui.listFmt;
-  return `${tools}<div style="height:8px"></div><div class="panel"><div class="tbl-wrap"><table class="tbl clean"><thead><tr><th>Player</th><th>Age</th><th class="hide-m">Shield</th><th class="hide-m">1-Day</th><th class="hide-m">T20</th><th class="hide-d">${compName(f)}</th><th>Form</th><th>Fit</th></tr></thead><tbody>
-    ${sq.map(p => `<tr class="tap" onclick="showPlayer('${p.id}')"><td class="l"><div class="b ell" style="max-width:170px">${natTag(p)} ${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}</div><div class="xs dim">${identityLine(p)}${p.morale < 45 ? ' · <span class="loss">' + (p.wantsOut ? 'wants out' : 'unhappy') + '</span>' : ''}${p.focus && p.focus !== 'none' ? ' · ' + DEV_FOCUS[p.focus].label.toLowerCase() : ''}</div></td><td>${p.age}</td><td class="hide-m">${pill(overall(p, 'FC'))}</td><td class="hide-m">${pill(overall(p, 'OD'))}</td><td class="hide-m">${pill(overall(p, 'T20'))}</td><td class="hide-d">${pill(overall(p, f))}</td><td>${formArrow(p.form)}</td><td>${fitText(p)}</td></tr>`).join('')}</tbody></table></div></div>
-    `;
+  return `${tools}<div style="height:8px"></div>${panel(`Players · ${sq.length}`, `<div class="rows">${sq.map(p => `<div class="row tap roster-compact" onclick="showPlayer('${p.id}')"><div class="stack"><div class="main-t">${esc(pname(p))}${p.id===game.captain?' <span class="dim xs">(c)</span>':''}</div><div class="sub-t">${identityLine(p)} ${cricketRoleIcon(p)}</div><div class="xs muted">Form ${formArrow(p.form)} · Fitness ${fitText(p)}${p.natDuty?' · National duty':''}</div></div><div class="end">${pill(overall(p,f))}</div></div>`).join('')}</div>`,{flush:true})}`;
 }
 function setListFmt(f) { ui.listFmt = f; render(); }
 function fitTag(p) { const w = whereFits(p); return w ? `<span class="fit ${w.start ? 'start' : ''}">${esc(w.text)}</span> · ` : ''; }
@@ -7433,13 +7443,13 @@ function renderClubPage() {
 }
 function renderIntl() {
   const t = ui.intlTab || 'aus';
-  const body = t === 'wc' ? renderWorldCup() : t === 'world' ? renderWorld() : renderNational();
-  return `${pageTitle('International', 'Australia and world cricket')}${seg([['aus','Australia'],['wc','World Cup'],['world','World']], t, '(v=>{ui.intlTab=v;render();})')}<div style="height:10px"></div>${body}`;
+  const body = t === 'wc' ? renderTournaments() : t === 'world' ? renderWorld() : renderNational();
+  return `${pageTitle('International', 'Australia and world cricket')}${seg([['aus','Australia'],['wc','Tournaments'],['world','World']], t, '(v=>{ui.intlTab=v;render();})')}<div style="height:10px"></div>${body}`;
 }
 function renderLegacy() {
   const t = ui.legacyTab || 'career';
-  const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : t === 'records' ? renderLegacyRecords() : renderGMCareer();
-  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honours'],['records','Records']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
+  const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : t === 'records' ? renderLegacyRecords() : t === 'international' ? renderIntlLegacyRecords() : renderGMCareer();
+  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honours'],['records','Records'],['international','International']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
 }
 function renderGMCareer() {
   const g = game.gm, N = game.nation, pct = g.wins + g.losses ? Math.round(g.wins / (g.wins + g.losses) * 100) : 0;
@@ -8630,7 +8640,7 @@ function natConfirm() { const w = natWin(); w.locked = w.pick.slice(); w.selecti
 function renderStaff() {
   const pay = staffPayroll(U());
   const rows = STAFF_ORDER.map(r => { const s = staffIn(U(), r);
-    return `<div class="row tap" onclick="staffMarketSheet('${r}')"><div class="stack"><div class="main-t">${STAFF_ROLES[r].label}${s && s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t ell">${s ? `${esc(s.first + ' ' + s.last)} · ${s.age} · ${money(s.salary)} × ${s.years} yr` : '<span class="loss">Vacant</span>'} · ${STAFF_ROLES[r].desc}</div></div><div class="end">${s ? pill(s.rating) : chip('bad', 'Hire')}</div></div>`; }).join('');
+    return `<div class="row tap" onclick="staffMarketSheet('${r}')"><div class="stack"><div class="main-t">${STAFF_ROLES[r].label}${s && s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t ell">${s ? `${esc(s.first + ' ' + s.last)} · ${s.age} · ${money(s.salary)} × ${s.years} yr` : '<span class="loss">Vacant</span>'} · ${STAFF_ROLES[r].desc}</div></div><div class="end">${s ? pill(s.rating)+(s.lastRatingChange?`<span class="xs ${s.lastRatingChange>0?'win':'loss'}">${s.lastRatingChange>0?'+':''}${s.lastRatingChange}</span>`:'') : chip('bad', 'Hire')}</div></div>`; }).join('');
   return `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="v">${money(pay)}</div><div class="l">Staff spend</div></div><div class="kpi"><div class="v">${money(STAFF_BUDGET - pay)}</div><div class="l">Budget left</div></div><div class="kpi"><div class="v">${Math.round(mean(STAFF_ORDER.map(r => staffRating(U(), r))))}</div><div class="l">Avg rating</div></div></div><div style="height:8px"></div>
     ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}
     <div class="xs dim" style="margin-top:6px">Staff budget ${money(STAFF_BUDGET)}, separate from the salary cap.</div>`;
@@ -8674,6 +8684,23 @@ function focusSheet(id) {
   const opt = (k, label) => `<div class="row tap ${cur === k ? 'me' : ''}" onclick="closeModal();uiSetFocus('${id}','${k}')"><div class="stack"><div class="main-t">${label}</div></div>${cur === k ? '<div class="end">' + chip('good', 'Current') + '</div>' : ''}</div>`;
   sheet('Override programme', esc(pname(p)), `<div class="rows">${opt('coach', 'Let the coach decide')}${Object.keys(DEV_FOCUS).filter(k => k !== 'none').map(k => opt(k, DEV_FOCUS[k].label)).join('')}${opt('none', 'No programme')}</div>`, { flush: true });
 }
+const MORALE_INITIATIVES = {
+ dinner:{label:'Squad social evening',cost:10000,boost:3,days:55,desc:'An informal gathering to build relationships.'},
+ equipment:{label:'Training equipment refresh',cost:25000,boost:5,days:110,desc:'New equipment and support for the playing group.'},
+ retreat:{label:'Team development retreat',cost:40000,boost:7,days:165,desc:'A focused off-field team-building programme.'},
+ bonuses:{label:'Performance recognition bonuses',cost:60000,boost:8,days:165,desc:'Acknowledges the squad’s collective contributions.'}
+};
+function doMoraleInitiative(key) {
+ const a=MORALE_INITIATIVES[key], f=game.fin; if(!a||!f)return;
+ const now=game.year*400+game.day, last=(f.moraleEvents||{})[key]||-99999;
+ if(now-last<a.days){flash('That initiative is still on cooldown.');return;}
+ if(f.cash<a.cost+100000){flash('Insufficient funds after keeping a $100k operating reserve.');return;}
+ finBook('events',a.cost);f.moraleEvents=f.moraleEvents||{};f.moraleEvents[key]=now;
+ squadOf(U()).forEach(p=>{p.morale=clamp(p.morale+Math.max(1,Math.round(a.boost*(1-p.morale/125))),0,100);});
+ logTx(`${a.label}: ${money(a.cost)}.`);addNews('Club',a.label,`The club invested ${money(a.cost)} in squad morale.`);
+ autosave();render();flash(`${a.label} completed.`);
+}
+function moraleInitiativesHtml(){const f=game.fin,now=game.year*400+game.day;return panel('GM team initiatives',`<div class="pb xs muted">Optional club-funded morale activities. Benefits diminish for already content players and each option has a cooldown. Spending affects club profit, not the salary cap.</div><div class="rows">${Object.entries(MORALE_INITIATIVES).map(([k,a])=>{const remain=Math.max(0,a.days-(now-((f.moraleEvents||{})[k]||-99999)));return `<div class="row"><div class="stack"><div class="main-t">${a.label}</div><div class="sub-t">${a.desc} · ${money(a.cost)}${remain?' · '+remain+' days until available':''}</div></div><div class="end"><button class="btn sm" ${remain||f.cash<a.cost+100000?'disabled':''} onclick="event.stopPropagation();doMoraleInitiative('${k}')">Fund</button></div></div>`}).join('')}</div>`,{flush:true})}
 function renderDressingRoom() {
   const sq = squadOf(U()).sort((a, b) => a.morale - b.morale);
   const tm = teamMorale(U()), cap = P(game.captain), h = staffIn(U(), 'head');
@@ -8684,7 +8711,7 @@ function renderDressingRoom() {
   return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${tm < 50 ? 'loss' : tm >= 65 ? 'win' : ''}">${tm}</div><div class="l">Morale</div></div><div class="kpi"><div class="v ${needs.length ? 'loss' : ''}">${needs.length}</div><div class="l">Need you</div></div><div class="kpi"><div class="v">${sq.filter(p => p.wantsOut).length}</div><div class="l">Trade asks</div></div><div class="kpi"><div class="v">${h ? h.mm : '–'}</div><div class="l">Coach care</div></div></div>
     <div style="height:8px"></div><div class="xs muted" style="margin-bottom:8px">${care.length} players with coaching staff · ${needs.length} need GM attention</div>
     ${panel(`Needs the GM · ${needs.length}`, needs.length ? `<div class="rows">${needRows}</div>` : '<div class="empty">Nobody needs you right now. Your coach is handling the squad.</div>', { flush: true })}
-    <details class="panel locker-more"><summary>Other players · ${sq.length-needs.length}</summary><div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${selectionProgress(p).opportunities ? Math.round(selectionProgress(p).fraction * 100) + '% relevant games' : 'new'}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div></details>
+    ${moraleInitiativesHtml()}<div style="height:8px"></div><details class="panel locker-more"><summary>Other players · ${sq.length-needs.length}</summary><div class="rows">${sq.filter(p => !gmIssue(p)).map(p => playerRow(p, { sub: `${PERSONAS[ensurePersona(p)].label} · ${selectionProgress(p).opportunities ? Math.round(selectionProgress(p).fraction * 100) + '% relevant games' : 'new'}`, end: chip(moodClass(p.morale), moodLabel(p.morale)) })).join('')}</div></details>
     `;
 }
 function talkSheet(id) {
@@ -8721,6 +8748,16 @@ function bracketBox(round, home, away, res, fxId) {
   const side = t => `<div class="bk-t ${win && win === t ? 'won' : win && t ? 'lost' : ''}">${t ? `${tdot(t)} ${wcName(t)}` : '<span class="dim">TBC</span>'}</div>`;
   return `<div class="bk ${fxId && game.scorecards[fxId] ? 'tap' : ''}" ${fxId && game.scorecards[fxId] ? `onclick="showScorecard('${fxId}',0)"` : ''}><div class="bk-r">${esc(round)}</div>${side(home)}${side(away)}${res ? `<div class="bk-x">${esc(displayInternationalSummary(res.text || ''))}</div>` : ''}</div>`;
 }
+function renderTournaments(){
+ const mode=ui.tournamentFormat||'T20';
+ const tabs=seg([['OD','ODI World Cup'],['T20','T20 World Cup'],['FC','Test Championship']],mode,'(v=>{ui.tournamentFormat=v;render();})');
+ if(mode==='T20')return `${tabs}<div style="height:10px"></div>${renderWorldCup()}`;
+ if(mode==='FC'){const w=ensureWtc(),rows=wtcRows(),fin=game.season.fixtures.find(f=>f.stage==='wtcfinal');return `${tabs}<div style="height:10px"></div>${panel('World Test Championship',`<div class="pb xs muted">${w.start}–${w.start+1} cycle · percentage of points earned</div><div class="rows">${rows.map((r,i)=>`<div class="kv"><span>${i+1}. ${esc(NATIONS[r.nat])} · ${r.p} Tests</span><b>${r.pct.toFixed(1)}%</b></div>`).join('')}</div>${fin?`<div class="pb">${fixtureRow(fin,false)}</div>`:''}`,{flush:true})}`;}
+ const matches=game.season.fixtures.filter(f=>f.comp==='CWC'||f.event==='CWC'||String(f.stage||'').toLowerCase().includes('odiwc'));
+ const history=(game.worldHistory||[]).filter(h=>/odi|50.over/i.test(h.event||''));
+ return `${tabs}<div style="height:10px"></div>${panel('ODI World Cup',`<div class="pb xs muted">Current competition fixtures and historical winners, where available in this career.</div><div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No ODI World Cup fixtures scheduled this season.</div>'}${history.map(h=>`<div class="kv"><span>${h.year} · ODI World Cup</span><b>${esc(NATIONS[h.winner]||h.winner||'Pending')}</b></div>`).join('')}</div>`,{flush:true})}`;
+}
+function renderIntlLegacyRecords(){const n=ui.intlRecNat||'AUS',f=ui.intlRecFmt||'FC';return `<div class="tool-row">${sel(Object.keys(NATIONS).map(k=>[k,NATIONS[k]]),n,'ui.intlRecNat=this.value;render()')}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],f,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(n,f)}`;}
 function renderWorldCup() {
   const w=game.season.windows.find(x=>x.wc&&x.groups),arch=game.wcArchive||[];
   if(!w){const next=game.year%2===1?game.year+2:game.year+1;
@@ -8800,10 +8837,10 @@ function renderWorld() {
   const ongoing = series.filter(x=>x.played>0&&x.played<x.total).slice(0,7);
   const history = (game.worldSeriesHistory || []).slice(0,12);
   const seriesPanel = panel('International series', `<div class="rows">${ongoing.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)}</span><span>${esc(formatLine(x))}</span></div>`).join('') || '<div class="empty">No series in progress.</div>'}${history.map(x=>`<div class="kv"><span>${esc(teamDef(x.home).name)} v ${esc(teamDef(x.away).name)} · ${esc(COMPS[x.comp].short)}</span><span>${x.winner ? esc(teamDef(x.winner).name) : 'Drawn'} · ${x.winsHome}–${x.winsAway}${x.honours ? `<div class="xs dim">${x.honours.basis==='performance'?'Series standout':'Match awards'}: ${esc(x.honours.playerName)}${x.honours.basis==='performance'?' · '+x.honours.runs+' runs, '+x.honours.wickets+' wickets':''}</div>` : ''}</span></div>`).join('')}</div>`, {flush:true});
-  return `${globalTournamentPanel()}${recordsPanel}${qualificationPanel}<div class="grid g2">${wtcPanel}${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
+  return `${qualificationPanel}<div class="grid g2">${seriesPanel}${panel('World rankings', `<div class="rows">${rk.map((n, i) => `<div class="row tap ${n === 'AUS' ? 'me' : ''}" style="padding:6px 12px" onclick="${n === 'AUS' ? "setWorldNat('AUS')" : `showTeam('X_${n}')`}"><span class="n">${i + 1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><span class="b s">${R[n]}</span></div>`).join('')}</div>`, { flush: true })}
     ${panel('International results', `<div class="rows">${intl.map(f => fixtureRow(f, false)).join('') || '<div class="empty">No international matches yet this season.</div>'}</div>`, { flush: true })}
     ${panel(`${NATIONS[nat]} squad`, nat === 'AUS' ? '<div class="empty">Australia is picked from the domestic game. See Office · Australia.</div>' : `<div class="rows">${sq.map(p => playerRow(p, { all: true, noStatus: true, sub: `${ROLES[p.role].short} · ${p.age} · Tests ${p.caps.FC} · ODIs ${p.caps.OD}` })).join('') || '<div class="empty">This squad has not been assembled yet.</div>'}</div>`, { flush: true, end: sel(Object.keys(NATION_STRENGTH).map(n => [n, NATIONS[n]]), nat, "setWorldNat(this.value)") })}
-    ${panel('World Cup history', `<div class="rows">${(game.worldHistory || []).map(h => `<div class="kv"><span>${h.year} ${h.event}</span><span><b>${NATIONS[h.winner]}</b> <span class="dim">beat ${NATIONS[h.runnerUp]}</span></span></div>`).join('') || '<div class="empty">The T20 World Cup is played in odd-year seasons.</div>'}</div>`, { flush: true })}</div>`;
+    </div>`;
 }
 
 // Editor: four sections with one grid each, skills grouped as on the profile, and a pinned preview
@@ -8921,8 +8958,8 @@ function renderFacilities() {
   const rows = Object.keys(FACILITIES).map(k => { const lv = f.fac[k], F = FACILITIES[k], max = lv >= 5, cost = upgradeCost(k);
     return `<div class="fac-row ${can.includes(k) ? 'can' : ''}"><div class="fac-top"><div><div class="main-t">${F.label}</div><div class="sub-t">${F.desc}</div></div><div class="fac-lv">${lv}<span>/5</span></div></div>
       <div class="fac-pips">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('')}</div>
-      <div class="fac-now"><span>Now: ${F.eff(lv)}</span>${max ? '<span class="muted">Maximum level</span>' : `<span class="muted">Next: ${F.eff(lv + 1)}</span>`}</div>
-      ${max ? '' : `<button class="btn block" onclick="doUpgrade('${k}')" ${f.cash < cost ? 'disabled' : ''}>Upgrade to level ${lv + 1} · ${money(cost)}</button>`}</div>`; }).join('');
+      <div class="fac-now"><span>Now: ${F.eff(lv)}</span>${max ? `<span class="muted">Condition ${facilityCondition(k)}% · Level 5</span>` : `<span class="muted">Next: ${F.eff(lv + 1)}</span>`}</div>
+      ${max ? `<div class="xs muted" style="margin:8px 0 4px">Annual maintenance policy</div>${sel(Object.entries(FAC_POLICIES).map(([id,v])=>[id,v.name]),(f.facPolicy||{})[k]||'standard',`facilityPolicy('${k}',this.value)`,'full')}` : `<button class="btn block" onclick="doUpgrade('${k}')" ${f.cash < cost ? 'disabled' : ''}>Upgrade to level ${lv + 1} · ${money(cost)}</button>`}</div>`; }).join('');
   return `<div class="note" style="margin-bottom:8px">Bank <b>${money(f.cash)}</b>${can.length ? ` · enough for ${can.length === 1 ? 'one upgrade' : `any one of ${can.length} upgrades`} with a buffer left` : ''}.</div><div class="fac-grid">${rows}</div>`;
 }
 function renderClub() {
