@@ -1073,6 +1073,10 @@ body.live-mode .actbar{display:none}
 .sheet-bg.centered>.sheet{width:100%;max-width:510px;max-height:calc(100dvh - 28px);height:auto;min-height:0;border-radius:15px;padding-bottom:0;animation:fade .15s ease-out;box-shadow:0 16px 50px rgba(0,0,0,.45)}
 .sheet-bg.centered .sheet-b{flex:0 1 auto;overflow-y:auto}
 .sheet-bg.centered .sheet-f{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
+/* B110 contract sheet and international awards on phones */
+.intl-award-recipient{display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;text-align:right}
+.neglog{max-height:175px;overflow:auto;overscroll-behavior:contain}
+@media(max-width:480px){.intl-award-recipient{max-width:57%;line-height:1.3}.kv:has(.intl-award-recipient){gap:8px}.kv:has(.intl-award-recipient)>span:first-child{max-width:43%}}
 </style>
 </head>
 <body>
@@ -1131,7 +1135,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.32 Build 109', title: 'International Series Review', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.33 Build 110', title: 'Career Longevity, Ages and Contract Integrity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4560,13 +4564,15 @@ function startNegotiation(id, mode) {
   let ask = askingSalary(p) * AGENT_STYLES[ag.style].mult * (per === 'ambitious' ? 1.08 : 1) * (per === 'loyal' && own ? 0.9 : 1) * (own && p.morale < 45 ? 1.12 : 1) * (1 - (game.gm.rep - 40) / 500);
   if (mode === 'resign' && game.offseason) { const e = game.offseason.expiring.find(x => x.id === id); if (e) ask = Math.max(ask, e.ask * 0.95); }
   ask = Math.max(MIN_SALARY, Math.round(ask / 5000) * 5000);
-  game.neg = { id, mode, ask, years: prefYears(p), patience: AGENT_STYLES[ag.style].patience, log: [`${ag.name} (${AGENT_STYLES[ag.style].label.toLowerCase()}): "We are looking for ${money(ask)} a season over ${prefYears(p)} year${prefYears(p) > 1 ? 's' : ''}."`], done: false };
+  game.neg = { id, mode, ask, years: prefYears(p), offerSalary: Math.round(ask*0.9/5000)*5000, offerYears: prefYears(p), patience: AGENT_STYLES[ag.style].patience, log: [`${ag.name} (${AGENT_STYLES[ag.style].label.toLowerCase()}): "We are looking for ${money(ask)} a season over ${prefYears(p)} year${prefYears(p) > 1 ? 's' : ''}."`], done: false };
   return { ok: true };
 }
 function negotiationOffer(salary, years) {
   const n = game.neg; if (!n || n.done) return;
   const p = P(n.id), ag = agentOf(p);
   salary = Math.round(salary / 5000) * 5000;
+  years = Math.max(1, Math.min(5, Math.round(+years||n.years)));
+  n.offerSalary=salary; n.offerYears=years;
   const yAdj = years === n.years ? 1 : 1 + Math.abs(years - n.years) * 0.05;
   const target = n.ask * yAdj;
   const capRoom = n.mode === 'sign' ? capSpace(U()) : capSpace(U()) + (p.contract ? p.contract.salary : 0);
@@ -4576,15 +4582,16 @@ function negotiationOffer(salary, years) {
   if (salary >= target * 0.85) {
     n.patience--;
     const give = ag.style === 'tough' ? 0.3 : ag.style === 'fair' ? 0.5 : 0.6;
-    n.ask = Math.round((target - (target - salary) * give) / yAdj / 5000) * 5000;
+    n.ask = Math.round((target - (target - salary) * give) / 5000) * 5000;
+    n.years = years; // A salary counter retains the user's proposed duration.
     if (n.patience <= 0) { n.done = 'walked'; n.log.push(`${ag.name}: "We are too far apart. We will look elsewhere."`); }
-    else n.log.push(`${ag.name}: "Closer. ${money(n.ask)} and we can sign today."`);
+    else n.log.push(`${ag.name}: "Closer. ${money(n.ask)} a season for ${n.years} year${n.years===1?"":"s"} and we can sign today."`);
     return;
   }
   n.patience -= 2;
   if (p.teamId === U()) p.morale = clamp(p.morale - 3, 5, 100);
   if (n.patience <= 0) { n.done = 'walked'; n.log.push(`${ag.name}: "That is insulting. We are done here."`); }
-  else n.log.push(`${ag.name}: "That is well short. ${money(n.ask)} is the number."`);
+  else { n.years=years; n.log.push(`${ag.name}: "That is well short. ${money(n.ask)} a season for ${n.years} year${n.years===1?"":"s"} is the number."`); }
 }
 function closeNegotiation() {
   const n = game.neg; if (!n) return null;
@@ -4596,7 +4603,7 @@ function closeNegotiation() {
       if (squadOf(U()).length >= SQUAD_MAX) msg = `Squad is full (${SQUAD_MAX}).`;
       else if (p.nat !== 'AUS' && overseasCount(U()) >= OVERSEAS_MAX) msg = `You already have ${OVERSEAS_MAX} overseas players.`;
       else { p.teamId = U(); p.contract = { salary, years }; logTx(`Signed ${pname(p)} (${money(salary)} × ${years}).`); addNews('Signing', `${pname(p)} signs with ${teamName(U())}`, `${ROLES[p.role].label}, ${p.age}. ${money(salary)} a season for ${years} year${years > 1 ? 's' : ''}.`); msg = 'Signed.'; }
-    } else if (n.mode === 'extend') { p.contract = { salary, years: p.contract.years + years }; p.morale = clamp(p.morale + 6, 5, 100); logTx(`Extended ${pname(p)} (${money(salary)}).`); msg = 'Extension agreed.'; }
+    } else if (n.mode === 'extend') { p.contract = { salary, years: Math.max(p.contract.years, years) }; /* displayed term is the resulting duration */ p.morale = clamp(p.morale + 6, 5, 100); logTx(`Extended ${pname(p)} (${money(salary)}).`); msg = 'Extension agreed.'; }
     else if (n.mode === 'resign') { const e = game.offseason.expiring.find(x => x.id === n.id); p.contract = { salary, years }; if (e) e.status = 'signed'; logTx(`Re-signed ${pname(p)} (${money(salary)} × ${years}).`); msg = 'Re-signed.'; }
   } else if (n.done === 'walked') {
     p.noTalksUntil = game.day + 30;
@@ -4977,13 +4984,40 @@ function authenticBowlingAudit() {
   return report;
 }
 // Authentic roster mode is opt-in and creates its own isolated career. Existing saves never receive imported players.
+// B110: Age estimates for authentic roster entries whose date of birth has not
+// been verified. These are deliberately marked as estimates, never as real ages.
+// Stable across new starts (name keyed), with mixed career stages rather than
+// the old identical 29/25 fallback. Verified REAL_AGES_2026 always takes priority.
+function estimatedAuthenticAge(name, quality, role) {
+  const slug = realSlug(name);
+  const bucket = hash01('authentic-age-b110:' + slug);
+  const offset = hash01('authentic-age-offset-b110:' + slug);
+  // Established players are likelier to be older, but young stars remain possible.
+  const ranges = quality >= 80
+    ? [[20,24,0.16],[25,28,0.31],[29,32,0.34],[33,36,0.16],[37,39,0.03]]
+    : [[18,21,0.16],[22,25,0.29],[26,29,0.30],[30,33,0.20],[34,37,0.05]];
+  let rem = bucket;
+  for (const [lo,hi,weight] of ranges) {
+    if (rem < weight) return lo + Math.min(hi-lo, Math.floor(offset*(hi-lo+1)));
+    rem -= weight;
+  }
+  return 30;
+}
+function generatedStartingAge() {
+  const r=rand();
+  const bins=[[17,20,.10],[21,24,.23],[25,28,.32],[29,32,.23],[33,36,.10],[37,39,.02]];
+  let at=0;
+  for(const [lo,hi,weight] of bins){at+=weight;if(r<at)return randInt(lo,hi);}
+  return 30;
+}
 function seedAuthenticWorld() {
   const created = new Map();
   const add = (rec, nat, tid, source) => {
     const key = nat + ':' + rec.name.trim().toLocaleLowerCase('en');
     if (created.has(key)) return game.players[created.get(key)];
     const parts = rec.name.trim().split(/\s+/);
-    const age = realAgeFor(realSlug(rec.name), game.year) || (rec.q >= 80 ? 29 : 25);
+    const verifiedAge = realAgeFor(realSlug(rec.name), game.year);
+    const age = verifiedAge || estimatedAuthenticAge(rec.name, rec.q, rec.role);
     const p = makePlayer({role:correctedAuthenticRole(rec), q:rec.q + RATING_SHIFT, age, nat, teamId:tid});
     p.first = parts.slice(0,-1).join(' '); p.last = parts[parts.length - 1];
     p.realPlayerId = 'real-' + key.replace(/[^a-z0-9]+/g,'-');
@@ -4991,7 +5025,8 @@ function seedAuthenticWorld() {
     p.authenticModelled = true; // ratings, role assumptions and age are provisional estimates
     // Real players carry their real international record only; never a fictional history.
     addRealCareer(p);
-    if (REAL_AGES_2026[realSlug(rec.name)]) p.realAge = true;
+    if (verifiedAge) p.realAge = true;
+    else { p.realAge = false; p.estimatedAge = true; }
     if (tid && TEAM_DEFS.some(t=>t.id===tid)) p.contract = {salary:askingSalary(p),years:2};
     else p.contract = null;
     created.set(key,p.id);
@@ -5153,9 +5188,9 @@ function createGame(gmName, teamId, year, nationGm, rosterMode) {
     if (pay > SALARY_CAP * 0.9) { const f = SALARY_CAP * 0.9 / pay; sq.forEach(p => p.contract.salary = Math.max(MIN_SALARY, Math.round(p.contract.salary * f / 5000) * 5000)); }
   });
   // Free agents: local depth plus a handful of overseas professionals.
-  if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 14; i++) { const p = makePlayer({ role: pick(Object.keys(ROLES)), q: randInt(54, 68) + RATING_SHIFT, age: randInt(20, 35) }); seedCareer(p); }
+  if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 14; i++) { const p = makePlayer({ role: pick(Object.keys(ROLES)), q: randInt(54, 68) + RATING_SHIFT, age: generatedStartingAge() }); seedCareer(p); }
   const osNats = Object.keys(NATIONS).filter(n => n !== 'AUS');
-  if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 82) + RATING_SHIFT, age: randInt(24, 33), nat: pick(osNats) }); seedCareer(p); }
+  if (game.meta.rosterMode !== 'authentic') for (let i = 0; i < 10; i++) { const p = makePlayer({ role: pick(['OPEN','TOP','MID','BAR','PACE','PACE','LEG','OFF','BWAR']), q: randInt(66, 82) + RATING_SHIFT, age: generatedStartingAge(), nat: pick(osNats) }); seedCareer(p); }
   balanceStartingSquads();
   replenishFreeAgentMarket(); // initial new-career market must contain specialists
   game.captain = squadOf(teamId).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0].id;
@@ -6186,14 +6221,25 @@ function balanceLeague() {
 }
 function developPlayer(p) {
   const cur = peakOvr(p), head = p.pot - cur;
+  // B110: Players stay in their prime through their early thirties. Age
+  // affects the odds of decline rather than imposing a fixed annual loss.
+  const age=p.age, role=group(p);
+  const spin=role==='SPIN', fast=role==='PACE', batter=role==='BAT';
+  const late=spin?2:batter?1:fast?-1:0;
+  const fadeStart=34+late;
   let g;
-  if (p.age <= 20) g = 2 + rand() * 4;
-  else if (p.age <= 23) g = 1 + rand() * 3.5;
-  else if (p.age <= 26) g = rand() * 2.5 - 0.3;
-  else if (p.age <= 29) g = rand() * 1.6 - 0.8;
-  else if (p.age <= 31) g = -0.8 - rand() * 1.6;
-  else if (p.age <= 33) g = -1.5 - rand() * 2;
-  else g = -2.5 - rand() * 2.5;
+  if(age<=20) g=2+rand()*4;
+  else if(age<=23) g=1+rand()*3.5;
+  else if(age<=26) g=rand()*2.5-0.3;
+  else if(age<=32) g=rand()*1.5-0.65;
+  else if(age<fadeStart) g=rand()*1.7-1.0;
+  else if(age<=36) g=rand()*2.3-1.75;
+  else if(age<=39) g=rand()*3.4-2.7;
+  else g=rand()*4.5-3.8;
+  // An individual longevity offset (deterministic, no save migration) prevents
+  // synchronized declines among same-age teammates.
+  g+=(hash01('longevity-b110:'+p.id)-0.5)*1.25;
+  if(p.injury && age>=33)g-=0.65;
   const s = p.stats.season, played = s.FC.m + s.OD.m + s.T20.m;
   if (g > 0 && played >= 12) g += 0.6;
   if (p.age <= 22 && rand() < 0.06) g += 4;
@@ -6221,7 +6267,7 @@ function developPlayer(p) {
   if (grp === 'BAT' || grp === 'WK') bat.forEach(k => bump(k, g > 0 ? batM : 1));
   if (grp === 'WK') bump('keep', 1);
   if (grp === 'AR') { bat.forEach(k => bump(k, g > 0 ? batM : 1)); if (canBowl(p)) bowl.forEach(k => bump(k, g > 0 ? bowlM : 1)); }
-  if (grp === 'PACE' || grp === 'SPIN') { bowl.forEach(k => bump(k, g > 0 ? bowlM : 1)); if (isPace(p) && p.age >= 31) p.sk.bowl = clamp(p.sk.bowl - 1, 15, 99); }
+  if (grp === 'PACE' || grp === 'SPIN') { bowl.forEach(k => bump(k, g > 0 ? bowlM : 1)); if (isPace(p) && p.age >= 36 && g < -1.4) p.sk.bowl = clamp(p.sk.bowl - 1, 15, 99); }
   bump('field', 0.6);
   if (g < 0) p.sk.stamina = clamp(p.sk.stamina - randInt(0, 2), 15, 99);
   if (p.age >= 27) p.pot = Math.max(peakOvr(p), p.pot - 1);
@@ -6229,13 +6275,20 @@ function developPlayer(p) {
   return peakOvr(p) - cur;
 }
 function retires(p) {
-  const o = peakOvr(p);
-  let ch = 0;
-  if (p.age >= 33) ch = 0.12 + (p.age - 33) * 0.16;
-  if (p.age >= 31 && o < 62 + RATING_SHIFT) ch += 0.25;
-  if (!p.teamId && p.age >= 30) ch += 0.3;
-  if (p.age >= 38) ch = 1;
-  return rand() < ch;
+  // B110: Never retire a player merely for turning 30 or being unsigned.
+  // Late-career attrition responds to age, condition and performance.
+  const age=p.age, o=peakOvr(p), h=hash01('retire-b110:'+p.id);
+  let ch=0;
+  if(age>=34)ch=0.018+(age-34)*0.025;
+  if(age>=38)ch+=0.075+(age-38)*0.045;
+  if(age>=42)ch+=0.12+(age-42)*0.09;
+  if(age>=47)ch=Math.max(ch,.88);
+  if(!p.teamId && age>=35)ch+=0.035;
+  if(o<65+RATING_SHIFT && age>=35)ch+=0.055;
+  if(o>=83)ch*=0.55;
+  if(age<=32)ch=0;
+  ch*=0.8+h*0.4;
+  return rand()<Math.min(.96,ch);
 }
 function runDevelopment() {
   const rep = { up: [], down: [], retired: [] };
@@ -7110,20 +7163,17 @@ function playerRow(p, o) {
     <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? `<span class="tag bad">${p.wantsOut ? 'Wants out' : 'Unhappy'}</span>` : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
 }
 
-function intlSeasonAwardsHtml(a) {
-  if (!a || !a.sampled) return '<div class="empty">No complete international match scorecards available for this season.</div>';
-  const labels = [['overall','International player of the year'],['FC','Test player of the year'],['OD','ODI player of the year'],['T20','T20I player of the year'],['young','Young international player'],['bat','International batter'],['bowl','International bowler']];
-  const rows = labels.map(([key,title]) => {
-    const item = a.winners[key];
-    return `<div class="kv"><span>${title}</span><span>${item && P(item.id) ? `${plink(P(item.id), pname(P(item.id)))}` : '<span class="dim">Insufficient data</span>'}</span></div>`;
-  });
-  for (const fmt of ['FC','OD','T20']) {
-    for (const [k,label] of [['runs','runs'],['wickets','wickets']]) {
-      const item = a.leaders[fmt] && a.leaders[fmt][k];
-      rows.push(`<div class="kv"><span>${fmt === 'FC' ? 'Test' : fmt === 'OD' ? 'ODI' : 'T20I'} ${label}</span><span>${item && P(item.id) ? `${plink(P(item.id), pname(P(item.id)))} · ${item.value}` : '<span class="dim">—</span>'}</span></div>`);
-    }
-  }
-  return `<div class="rows">${rows.join('')}</div><div class="xs muted pb">Based on ${a.sampled} completed international scorecards retained this season. Awards require at least two recorded appearances.</div>`;
+function intlSeasonAwardSections(a) {
+  if (!a || !a.sampled) return [panel('International awards', '<div class="empty">No retained international match scorecards this season.</div>', {flush:true})];
+  const recipient=item=>item&&P(item.id)?`${nationTag(P(item.id).nat)} ${plink(P(item.id),pname(P(item.id)))}`:'<span class="dim">Insufficient data</span>';
+  const awardLabels=[['overall','International player of the year'],['FC','Test player of the year'],['OD','ODI player of the year'],['T20','T20I player of the year'],['young','Young international player'],['bat','International batter'],['bowl','International bowler']];
+  const awards=awardLabels.map(([k,label])=>`<div class="kv"><span>${label}</span><span class="intl-award-recipient">${recipient(a.winners[k])}</span></div>`).join('');
+  const leaders=['FC','OD','T20'].map(fmt=>[['runs','runs'],['wickets','wickets']].map(([k,label])=>{
+    const item=a.leaders[fmt]&&a.leaders[fmt][k];
+    return `<div class="kv"><span>${fmt==='FC'?'Test':fmt==='OD'?'ODI':'T20I'} ${label}</span><span class="intl-award-recipient">${recipient(item)}${item?' · '+item.value:''}</span></div>`;
+  }).join('')).join('');
+  const note=`<div class="xs muted pb">Based on ${a.sampled} completed international scorecards retained this season. Awards require at least two recorded appearances; these are not necessarily world-wide season totals.</div>`;
+  return [panel('International awards',`<div class="rows">${awards}</div>${note}`,{flush:true}),panel('International stat leaders',`<div class="rows">${leaders}</div>${note}`,{flush:true})];
 }
 // §18 OFF-SEASON ------------------------------------------------------------------
 function renderOffseason() {
@@ -7142,16 +7192,16 @@ function renderOffseason() {
       ${panel('Board review', `<div class="rows">${b.lines.map(l => `<div class="kv"><span>${l.text}</span><span class="${l.ok ? 'win' : 'loss'}">${l.ok ? 'Met' : 'Missed'}</span></div>`).join('')}
         <div class="kv"><span>Confidence</span><span class="b">${b.confidence} (${b.delta >= 0 ? '+' : ''}${b.delta})</span></div></div>
         ${game.gm.fired ? `<div class="pb"><div class="note bad">The board has terminated your contract. Choose your next job.</div><div class="flex wrap" style="margin-top:8px">${o.jobOffers.map(t => `<button class="btn pri sm" onclick="acceptJob('${t}');autosave();render()">Take the ${teamName(t)} job</button>`).join('')}</div></div>` : ''}`, { flush: true })}
-      ${panel('Awards', `<div class="rows">${aw('Player of the Year', a.poy)}${aw('Young Player of the Year', a.young)}${FMT_LIST.map(f => aw(compName(f) + ' player of the tournament', a.best[f])).join('')}</div>`, { flush: true })}
-      ${panel('Stat leaders', `<div class="rows">${FMT_LIST.map(f => aw(compName(f) + ' runs', a.runs[f], 'runs') + aw(compName(f) + ' wickets', a.wkts[f], 'wkts')).join('')}</div>`, { flush: true })}
-      ${panel('International awards', intlSeasonAwardsHtml(o.intlAwards), {flush:true})}</div>`;
+      ${panel('Domestic awards', `<div class="rows">${aw('Player of the Year', a.poy)}${aw('Young Player of the Year', a.young)}${FMT_LIST.map(f => aw(compName(f) + ' player of the tournament', a.best[f])).join('')}</div>`, { flush: true })}
+      ${panel('Domestic stat leaders', `<div class="rows">${FMT_LIST.map(f => aw(compName(f) + ' runs', a.runs[f], 'runs') + aw(compName(f) + ' wickets', a.wkts[f], 'wkts')).join('')}</div>`, { flush: true })}
+      ${intlSeasonAwardSections(o.intlAwards).join('')}</div>`;
     btn = 'Player development ▸';
   } else if (game.phase === 'development') {
     const d = o.dev;
     const r = ([id, v]) => playerRow(P(id), { end: `<span class="${v > 0 ? 'win' : 'loss'} b">${v > 0 ? '+' : ''}${v}</span>${pill(peakOvr(P(id)))}`, sub: `${ROLES[P(id).role].label} · ${P(id).age}` });
     body = `<div class="grid g2">${panel('Your improvers', `<div class="rows">${d.up.slice(0, 10).map(r).join('') || '<div class="empty">No big jumps this year.</div>'}</div>`, { flush: true })}
       ${panel('Your decliners', `<div class="rows">${d.down.slice(0, 10).map(r).join('') || '<div class="empty">Nobody dropped off sharply.</div>'}</div>`, { flush: true })}
-      ${panel(`Retirements (${d.retired.length})`, `<div class="rows">${d.retired.map(x => playerRow(P(x.id), { sub: `${x.team ? teamDef(x.team).nick + ' · ' : ''}${P(x.id).age} · ${ROLES[P(x.id).role].label}`, end: '' })).join('') || '<div class="empty">No retirements.</div>'}</div>`, { flush: true, cls: 'span2' })}</div>`;
+      ${panel(`Retirements (${d.retired.length})`, `<div class="rows">${d.retired.map(x => playerRow(P(x.id), { sub: `${x.team && teamDef(x.team) ? teamDef(x.team).nick + ' · ' : 'Free agent · '}${P(x.id).age} · ${ROLES[P(x.id).role].label}`, end: '' })).join('') || '<div class="empty">No retirements.</div>'}</div>`, { flush: true, cls: 'span2' })}</div>`;
     btn = 'Contract renewals ▸';
   } else if (game.phase === 'contracts') {
     const ex = o.expiring;
@@ -9214,11 +9264,12 @@ function negSheet() {
     <div class="kv" style="padding:6px 0"><span>Agent</span><span>${esc(ag.name)} · ${AGENT_STYLES[ag.style].label}</span></div>
     <div class="kv" style="padding:6px 0"><span>Market value</span><span>${money(askingSalary(p))}</span></div>
     <div class="kv" style="padding:6px 0"><span>Cap space</span><span>${money(capSpace(U()) + (n.mode !== 'sign' && p.contract ? p.contract.salary : 0))}</span></div>
+    ${!n.done ? `<div class="note" style="margin:9px 0 0">Agent terms: <b>${money(n.ask)} / season × ${n.years} yr${n.years===1?'':'s'}</b> · ${money(n.ask*n.years)} total</div>` : ''}
     <div class="neglog">${n.log.map(l => `<div class="${l.startsWith('You:') ? 'me' : ''}">${esc(l)}</div>`).join('')}</div>
-    ${n.done ? `<div class="note ${n.done === 'agreed' ? 'good' : 'bad'}" style="margin-top:10px">${n.done === 'agreed' ? 'Agreement reached.' : 'Talks have broken down.'}</div>` : `<div class="grid" style="grid-template-columns:2fr 1fr;gap:8px;margin-top:10px"><div><label class="lbl">Your offer per season</label><input class="input" id="nSal" type="number" step="5000" value="${Math.round(n.ask * 0.9 / 5000) * 5000}"></div><div><label class="lbl">Years</label><select id="nYrs" class="full">${[1,2,3,4].map(y => `<option ${y === n.years ? 'selected' : ''}>${y}</option>`).join('')}</select></div></div>
+    ${n.done ? `<div class="note ${n.done === 'agreed' ? 'good' : 'bad'}" style="margin-top:10px">${n.done === 'agreed' ? 'Agreement reached.' : 'Talks have broken down.'}</div>` : `<div class="grid" style="grid-template-columns:2fr 1fr;gap:8px;margin-top:10px"><div><label class="lbl">Your offer per season</label><input class="input" id="nSal" type="number" step="5000" value="${n.offerSalary || Math.round(n.ask * 0.9 / 5000) * 5000}"></div><div><label class="lbl">Years</label><select id="nYrs" class="full">${[1,2,3,4,5].map(y => `<option ${y === (n.offerYears||n.years) ? 'selected' : ''}>${y}</option>`).join('')}</select></div></div>
       <div class="xs dim" style="margin-top:6px">Patience: ${'●'.repeat(Math.max(0, n.patience))}${'○'.repeat(Math.max(0, 4 - n.patience))}. Lowball offers use up patience twice as fast.</div>`}`;
   sheet(n.mode === 'sign' ? 'Contract talks' : n.mode === 'resign' ? 'Re-signing talks' : 'Extension talks', esc(pname(p)), body,
-    { foot: n.done ? `<button class="btn pri" onclick="finishNeg()">${n.done === 'agreed' ? 'Sign the deal' : 'Close'}</button>` : `<button class="btn ghost" onclick="game.neg=null;closeModal()">Walk away</button><button class="btn" onclick="negOffer(true)">Accept ${money(n.ask)}</button><button class="btn pri" onclick="negOffer(false)">Make offer</button>` });
+    { foot: n.done ? `<button class="btn pri" onclick="finishNeg()">${n.done === 'agreed' ? 'Sign the deal' : 'Close'}</button>` : `<button class="btn ghost" onclick="game.neg=null;closeModal()">Walk away</button><button class="btn" onclick="negOffer(true)">Accept ${money(n.ask)} × ${n.years} yr${n.years===1?'':'s'}</button><button class="btn pri" onclick="negOffer(false)">Make offer</button>` });
 }
 function negOffer(acceptAsk) {
   const n = game.neg; if (!n) return;
