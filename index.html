@@ -1178,7 +1178,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.40 Build 117', title: 'Seven-Match One-Day Cup', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.41 Build 118', title: 'Club Investment and Crowd Realism', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4710,6 +4710,37 @@ function payMonth() {
   finBook('staff', staffPayroll(U()) / 6);
 }
 const FAC_POLICIES={essential:{name:'Essential',factor:.55,delta:-9},standard:{name:'Standard',factor:1,delta:0},premium:{name:'Premium',factor:1.65,delta:7}};
+// B118: one-season investment programmes. Not player-rating purchases or permanent upgrades.
+const CLUB_INVESTMENTS = {
+  community: { label:'Community cricket and membership', cost:350000, desc:'School visits, local cricket and member engagement.', effect:'Up to 12% more matchday demand; +3 fan support.' },
+  hospitality: { label:'Matchday hospitality programme', cost:600000, desc:'Corporate packages and improved matchday services.', effect:'Up to 15% more gate revenue per spectator.' },
+  pathways: { label:'Regional talent pathways', cost:450000, desc:'Fund scouting days and regional junior programmes.', effect:'One additional academy prospect at the next off-season intake.' }
+};
+const CLUB_OPERATING_RESERVE = 2000000;
+function investmentActive(key) { return !!(game.fin && game.fin.investments && game.fin.investments[key]===game.year); }
+function buyClubInvestment(key){
+  const f=game.fin, x=CLUB_INVESTMENTS[key];
+  if(!f||!x)return {ok:false,reason:'Unknown investment.'};
+  if(game.phase!=='season')return {ok:false,reason:'Annual programmes can be funded during the season.'};
+  if(investmentActive(key))return {ok:false,reason:'Already funded for this season.'};
+  if(f.cash-x.cost<CLUB_OPERATING_RESERVE)return {ok:false,reason:`Keep at least ${money(CLUB_OPERATING_RESERVE)} in operating reserves.`};
+  f.investments=f.investments||{};
+  finBook('events',x.cost); f.investments[key]=game.year;
+  if(key==='community')f.fans=clamp(f.fans+3,5,100);
+  logTx(`Funded ${x.label.toLowerCase()} (${money(x.cost)}) for ${game.season.label}.`);
+  addNews('Club',`${x.label} funded`,`${money(x.cost)} committed for this season.`);
+  return {ok:true};
+}
+function confirmClubInvestment(key){
+  const x=CLUB_INVESTMENTS[key];if(!x)return;
+  confirmSheet('Annual club investment',`Fund ${x.label.toLowerCase()} for ${money(x.cost)}? ${x.effect} The programme expires at season end and cannot be purchased twice in the same season.`, 'Fund programme',`const r=buyClubInvestment('${key}');flash(r.ok?'Investment funded.':r.reason);autosave();render()`);
+}
+function renderClubInvestments(){
+  const f=game.fin;
+  return `<div class="note" style="margin-bottom:10px">Bank <b>${money(f.cash)}</b> · protected operating reserve <b>${money(CLUB_OPERATING_RESERVE)}</b>. These are annual investments, not further facility levels or guaranteed returns.</div>
+    <div class="fac-grid">${Object.entries(CLUB_INVESTMENTS).map(([key,x])=>`<div class="fac-row"><div class="main-t">${x.label}</div><div class="sub-t" style="margin-top:4px">${x.desc}</div><div class="sub-t" style="margin:9px 0">${x.effect}</div><div class="kv"><span>Annual cost</span><b>${money(x.cost)}</b></div><button class="btn block" ${investmentActive(key)||f.cash-x.cost<CLUB_OPERATING_RESERVE||game.phase!=='season'?'disabled':''} onclick="confirmClubInvestment('${key}')">${investmentActive(key)?'Funded this season': 'Fund programme'}</button></div>`).join('')}</div>
+    <div class="xs muted" style="margin-top:8px">Programmes apply only during their funded season. Academy intake is assessed during the following off-season review.</div>`;
+}
 function facilityPolicy(k,policy){if(!FAC_POLICIES[policy]||!game.fin||!Object.hasOwn(FACILITIES,k))return;game.fin.facPolicy=game.fin.facPolicy||{};game.fin.facPolicy[k]=policy;autosave();render();}
 function facilityCondition(k){const f=game.fin;return Math.round((f.facCondition||{})[k]??100)}
 function facilitySeasonUpkeep(){const f=game.fin;f.facCondition=f.facCondition||{};let cost=0;
@@ -4725,16 +4756,23 @@ function settleSeasonFinances() {
 function gateTakings(M) {
   const f = game.fin; if (!f || M.home !== U() || COMPS[M.comp].intl) return 0;
   const cap = (12 + (facLevel('stadium') - 1) * 6) * 1000;
-  const base = { T20: 0.45, OD: 0.2, FC: 0.08 }[M.fmt];
+  // Crowd is average attendance per day, never the sum of spectators over five days.
+  // Shield ordinarily attracts hundreds or low thousands, One-Day several thousand,
+  // and T20 the biggest crowds. All three remain sensitive to opponent and demand.
+  const base = { T20: 0.45, OD: 0.17, FC: 0.026 }[M.fmt];
   const price = { T20: 32, OD: 24, FC: 14 }[M.fmt] * TICKET[f.ticket].price;
-  const days = M.fmt === 'FC' ? Math.max(1, Math.ceil(M.balls / (dayOpd(M) * 6))) : 1;
+  const days = M.fmt === 'FC' ? Math.max(1, Math.min(5,Math.ceil((M.balls||0) / (dayOpd(M) * 6)))) : 1;
   const opp = 0.9 + (teamStrength(M.away) - 65 - RATING_SHIFT) / 60;
   const rain = M.abandoned ? 0.1 : M.cond && M.cond.days.some(d => d.sky === 'rain') ? 0.7 : 1;
   const big = M.stage !== 'league' ? 1.5 : 1;
-  const crowd = Math.round(Math.min(cap, cap * base * TICKET[f.ticket].demand * (0.5 + f.fans / 100) * opp * rain * big) * days);
-  const take = Math.round(crowd * price);
+  const community = investmentActive('community') ? 1.12 : 1;
+  const hospitality = investmentActive('hospitality') ? 1.15 : 1;
+  const crowd = Math.round(Math.min(cap, cap * base * TICKET[f.ticket].demand * (0.5 + f.fans / 100) * opp * rain * big * community));
+  const take = Math.round(crowd * price * days * hospitality);
   finBook('gate', take);
-  M.crowd = crowd;
+  M.crowd = crowd; // daily attendance, including FC; older scorecards keep their original historical values
+  M.crowdDays = days;
+  M.crowdBasis = 'daily';
   return take;
 }
 function weeklyFans() {
@@ -4929,7 +4967,7 @@ function closeNegotiation() {
 
 // ---- Youth academy ----
 function academyIntake() {
-  const lvl = facLevel('academy'), n = 1 + Math.floor(lvl / 2);
+  const lvl = facLevel('academy'), n = 1 + Math.floor(lvl / 2) + (investmentActive('pathways') ? 1 : 0);
   const ids = [];
   for (let i = 0; i < n; i++) {
     const needs=groupNeeds(U());
@@ -5524,7 +5562,7 @@ function fixtureById(id) { return game.season.fixtures.find(f => f.id === id); }
 
 function compactScorecard(M) {
   return {
-    condText: condSummary(M), overs: M.overs || null, crowd: M.crowd || null, crowd: M.crowd || null,
+    condText: condSummary(M), overs: M.overs || null, crowd: M.crowd || null, crowdDays: M.crowdDays || null, crowdBasis: M.crowdBasis || null,
     comp: M.comp, fmt: M.fmt, home: M.home, away: M.away, venue: M.venue, stage: M.stage, toss: M.toss, result: M.result, potm: M.potm, xi: M.xi, milestones: (M.milestones || []).slice(),
     innings: M.innings.map(i => ({ maxOvers: M.overs || null, bat: i.bat, bowl: i.bowl, runs: i.runs, wkts: i.wkts, balls: i.balls, ext: i.ext, declared: i.declared, allOut: i.allOut, followOn: i.followOn, target: i.target,
       card: i.card.map(c => ({ id: c.id, r: c.r, b: c.b, f4: c.f4, f6: c.f6, out: c.out, in: c.in, shots: c.shots })),
@@ -9689,13 +9727,14 @@ function renderFacilities() {
 }
 function renderClub() {
   const f = game.fin, L = f.ledger, prof = income(L) - spend(L);
-  const homeGames = game.season.fixtures.filter(x => x.result && x.home === U() && game.scorecards[x.id] && game.scorecards[x.id].crowd);
+  const homeGames = game.season.fixtures.filter(x => x.result && x.home === U() && game.scorecards[x.id] && game.scorecards[x.id].crowd && game.scorecards[x.id].crowdBasis==='daily');
   const avgCrowd = homeGames.length ? Math.round(mean(homeGames.map(x => game.scorecards[x.id].crowd)) ) : 0;
   const row = (l, v, neg) => Math.round(v) ? `<div class="kv"><span>${l}</span><span class="${neg ? 'loss' : ''}">${neg ? '−' : ''}${money(Math.round(v))}</span></div>` : '';
-  return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${f.cash < 0 ? 'loss' : ''}">${money(f.cash)}</div><div class="l">Bank</div></div><div class="kpi"><div class="v ${prof < 0 ? 'loss' : 'win'}">${prof >= 0 ? '+' : ''}${money(Math.round(prof))}</div><div class="l">Season to date</div></div><div class="kpi"><div class="v">${f.fans}</div><div class="l">Fan support</div></div><div class="kpi"><div class="v">${avgCrowd ? (avgCrowd / 1000).toFixed(1) + 'k' : '–'}</div><div class="l">Avg crowd</div></div></div><div style="height:8px"></div>
+  return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${f.cash < 0 ? 'loss' : ''}">${money(f.cash)}</div><div class="l">Bank</div></div><div class="kpi"><div class="v ${prof < 0 ? 'loss' : 'win'}">${prof >= 0 ? '+' : ''}${money(Math.round(prof))}</div><div class="l">Season to date</div></div><div class="kpi"><div class="v">${f.fans}</div><div class="l">Fan support</div></div><div class="kpi"><div class="v">${avgCrowd ? (avgCrowd / 1000).toFixed(1) + 'k' : '–'}</div><div class="l">Avg crowd / day</div></div></div><div style="height:8px"></div>
     <div class="grid g2">${panel('Income', `<div class="rows">${row('Gate takings', L.gate)}${row('Sponsorship', L.sponsor)}${row('Broadcast share', L.tv)}${row('Prize money', L.prize)}${row('Other', L.other)}<div class="kv b"><span>Total</span><span>${money(Math.round(income(L)))}</span></div></div>`, { flush: true })}
       ${panel('Spending', `<div class="rows">${row('Player wages', L.wages, 1)}${row('Staff wages', L.staff, 1)}${row('Facility upkeep', L.upkeep, 1)}${row('Upgrades', L.upgrades, 1)}${row('Other', L.events, 1)}<div class="kv b"><span>Total</span><span class="loss">${spend(L) ? '−' : ''}${money(Math.round(spend(L)))}</span></div></div><div class="pb xs dim">Wages are paid monthly. Upkeep is charged at season end.</div>`, { flush: true })}
       ${panel('Ticketing', `<div class="rows">${Object.keys(TICKET).map(k => `<div class="row tap ${f.ticket === k ? 'me' : ''}" onclick="game.fin.ticket='${k}';autosave();render()"><div class="stack"><div class="main-t">${TICKET[k].label}</div><div class="sub-t">${k === 'low' ? 'Bigger crowds, lower takings per head, fans warm to the club' : k === 'premium' ? 'Higher takings per head, smaller crowds, fans cool off' : 'Middle of the road'}</div></div><div class="end">${f.ticket === k ? '<span class="tag good">Active</span>' : ''}</div></div>`).join('')}</div>`, { flush: true })}
+      ${panel('Annual investments', renderClubInvestments(), {cls:'span2'})}
       ${f.history.length ? panel('Past seasons', `<table class="tbl clean"><thead><tr><th>Season</th><th>Income</th><th>Spend</th><th>Profit</th><th>Bank</th></tr></thead><tbody>${f.history.map(h => `<tr><td>${h.year}</td><td>${money(h.income)}</td><td>${money(h.spend)}</td><td class="${h.profit < 0 ? 'loss' : 'win'}">${money(h.profit)}</td><td>${money(h.cash)}</td></tr>`).join('')}</tbody></table>`, { flush: true, cls: 'span2' }) : ''}</div>
     <div class="xs dim" style="margin-top:6px">The board judges profit, debt and results.</div>`;
 }
