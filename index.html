@@ -1135,7 +1135,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.34 Build 111', title: 'World Cup Previews and Negotiation Reconciliation', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.36 Build 113', title: 'World Cup Integrity and Review', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -2409,7 +2409,7 @@ function endOver(M, inn) {
 function checkInningsEnd(M, inn) {
   if (inn.closed) return;
   const F = FORMATS[M.fmt];
-  if (inn.wkts >= inn.card.length - 1) { inn.closed = true; inn.allOut = true; }
+  if (inn.wkts >= (M.superOver ? 2 : inn.card.length - 1)) { inn.closed = true; inn.allOut = true; }
   else if (inn.target && inn.runs >= inn.target) inn.closed = true;
   else if (F.overs && inn.balls >= mOvers(M) * 6) inn.closed = true;
   else if (M.fmt === 'FC' && M.balls >= mMaxBalls(M)) { inn.closed = true; M.timeUp = true; }
@@ -2597,6 +2597,7 @@ function finishMatch(M) {
     else { winner = last.bowl; text = `${nm(winner)} won by ${diff} run${diff === 1 ? '' : 's'}`; }
   } else { draw = true; text = 'Match drawn'; }
   M.result = { winner, draw, tie, text };
+  if(tie && !M.superOver && isWorldCupKnockout({stage:M.stage,comp:M.comp,event:fixtureById(M.fxId)?.event}))playKnockoutSuperOvers(M);
   M.potm = playerOfMatch(M);
 }
 
@@ -3110,6 +3111,7 @@ function migrateGame(g) {
   }
   g.season.windows.forEach(w => { if (!w.fx) w.fx = []; });
   if (g.season && g.season.fixtures && g.season.fixtures.some(f=>f.comp==='WC')) repairWorldCupSchedule(g);
+  if (g.season && g.season.fixtures && g.season.fixtures.some(f=>f.event==='ODIWC')) repairODIWorldCupSchedule(g);
   game = prev;
   g.plans = g.plans || {};
   g.defaultPlan = g.defaultPlan || { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) };
@@ -3972,13 +3974,13 @@ function createWorldCupPreview(info){
   const champ=previous?(previous.winner||null):null;
   const australia=fx.filter(f=>f.home==='AUS'||f.away==='AUS').sort((a,b)=>a.day-b.day)[0]||null;
   const opening=fx.slice().sort((a,b)=>a.day-b.day)[0];
-  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':'ODI World Cup',teams:teams.length,first,ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
+  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':'ODI World Cup',teams:teams.length,first,host:tournamentHost(event,game.year),ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
   worldCupPreviewStore().push(result);return result;
 }
 function worldCupPreviewHtml(r){
   const nationLine=x=>x?`${flagFor(x.nat)} ${esc(NATIONS[x.nat]||x.nat)}`:'–';
   const starLine=(label,p)=>p?`<div class="kv"><span>${label}</span><span><span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> ${flagFor(p.nat)}</span></div>`:'';
-  return `<div class="series-review-head"><div class="xs muted">PRE-TOURNAMENT PREVIEW · ${r.year}</div><div class="series-review-nations">${esc(r.title)}</div><div class="s">${r.teams} competing nations · Opening ${dateStr(r.first)}</div></div>
+  return `<div class="series-review-head"><div class="xs muted">PRE-TOURNAMENT PREVIEW · ${r.year}</div><div class="series-review-nations">${esc(r.title)}</div><div class="s">${r.teams} competing nations · Host ${r.host?`${flagFor(r.host)} ${esc(NATIONS[r.host])}`:'TBC'} · Opening ${dateStr(r.first)}</div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Pre-tournament favourites</h3></div><div class="rows">${r.ranked.map((t,i)=>`<div class="kv"><span>${i+1}. ${nationLine(t)}</span><b>${Math.round(t.rating)} rating</b></div>`).join('')}</div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Players to watch</h3></div><div class="rows">${starLine('Leading batter',r.stars.batter)}${starLine('Leading bowler',r.stars.bowler)}${starLine('All-rounder',r.stars.allrounder)}${starLine('Rising star',r.stars.rising)}</div></div>
     <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${r.champion?`<div class="kv"><span>Defending champions</span><span>${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>
@@ -4028,6 +4030,65 @@ function archiveAssociateQualification(){
   }
   game.associateQualificationHistory=history.slice(0,16);
 }
+// B113: hosts are fictional, stable by tournament year; no effect on match probabilities.
+const WC_HOST_ROTATION=['IND','AUS','ENG','SA','NZ','PAK','SL','WI','BAN'];
+function tournamentHost(event,year){
+  const offset=event==='T20WC'?3:event==='ODIWC'?0:5;
+  return WC_HOST_ROTATION[(Math.floor(year/2)+offset)%WC_HOST_ROTATION.length];
+}
+function tournamentHostLabel(event,year){const h=tournamentHost(event,year);return `${flagFor(h)} ${esc(NATIONS[h]||h)}`;}
+// Round-robin rounds with byes for uneven numbers of participating countries.
+function wcRoundRobin(teams){
+  const ring=teams.slice();if(ring.length%2)ring.push(null);
+  const rounds=[];
+  for(let r=0;r<ring.length-1;r++){
+    const pairs=[];for(let j=0;j<ring.length/2;j++){
+      const a=ring[j],b=ring[ring.length-j-1];if(a&&b)pairs.push([a,b]);
+    }
+    rounds.push(pairs);ring.splice(1,0,ring.pop());
+  }
+  return rounds;
+}
+function tournamentFixtureRestAudit(fx,minDays){
+  const last={};const violations=[];
+  for(const f of fx.filter(f=>f.home&&f.away).slice().sort((a,b)=>a.day-b.day)){
+    for(const t of [f.home,f.away]){
+      if(last[t]!=null&&f.day-last[t]<minDays)violations.push({team:t,day:f.day,previous:last[t],id:f.id});
+      last[t]=f.day;
+    }
+  }
+  return violations;
+}
+function repairODIWorldCupSchedule(g){
+  if(!g?.season?.fixtures)return;
+  const fx=g.season.fixtures.filter(f=>f.event==='ODIWC');if(!fx.length)return;
+  const groups=fx.filter(f=>f.stage==='globalgroup');if(!groups.length)return;
+  // Only move fixtures that have not begun. Never rewrite a completed match or its date.
+  const past=fx.filter(f=>f.result||f.id===g.live?.fxId);
+  const last={};for(const f of past)for(const t of [f.home,f.away])if(t)last[t]=Math.max(last[t]??-1,f.day);
+  const plan={};for(const group of ['A','B']){
+    const fixtures=groups.filter(f=>f.group===group),teams=[...new Set(fixtures.flatMap(f=>[f.home,f.away]))];
+    for(const [r,pairs] of wcRoundRobin(teams).entries())for(const [a,b] of pairs)
+      plan[[a,b].sort().join('|')]=225+r*4;
+  }
+  for(const f of groups.filter(f=>!f.result&&f.id!==g.live?.fxId).sort((a,b)=>(plan[[a.home,a.away].sort().join('|')]??a.day)-(plan[[b.home,b.away].sort().join('|')]??b.day))){
+    let day=Math.max(g.day,plan[[f.home,f.away].sort().join('|')]??f.day);
+    while([f.home,f.away].some(t=>last[t]!=null&&day-last[t]<3))day++;
+    f.day=day;for(const t of [f.home,f.away])last[t]=day;
+  }
+  const order=['globalsuper','globalsemi','globalfinal'];
+  const lastGroup=Math.max(...groups.map(f=>f.day));
+  const firstSuper=Math.max(257,lastGroup+5);
+  const stageBase={globalsuper:firstSuper,globalsemi:firstSuper+18,globalfinal:firstSuper+23};
+  for(const st of order){const remaining=fx.filter(f=>f.stage===st&&!f.result&&f.id!==g.live?.fxId);
+    for(const f of remaining){
+      const idx=Number(f.id.match(/-(\d+)$/)?.[1]||0);
+      const round=st==='globalsuper'?(idx%3):0;
+      f.day=Math.max(g.day,stageBase[st]+round*4);
+    }
+  }
+  g.season.fixtures.sort((a,b)=>a.day-b.day);
+}
 function globalTournamentDef(year) {
   if (year % 4 === 3) return {key:'ODIWC',title:'ODI World Cup',size:14,day:225};
   if (year % 4 === 1) return {key:'CT',title:'Champions Trophy',size:8,day:225};
@@ -4045,23 +4106,23 @@ function globalTournamentField(year,size) {
 }
 function globalStageMatches(year,key,stage,round,day,count,fixtures) {
   for(let i=0;i<count;i++)fixtures.push({id:`${year}-${key}-${stage}-${i}`,comp:'ODI',round:round+(count>1?' '+(i+1):''),day,
-    home:null,away:null,venue:'X_ENG',stage,event:key,result:null});
+    home:null,away:null,venue:'X_'+tournamentHost(key,year),stage,event:key,result:null});
 }
 function addGlobalTournamentFixtures(year,fixtures) {
   const d=globalTournamentDef(year);if(!d)return;
   const field=globalTournamentField(year,d.size),groups={A:[],B:[]};
   field.forEach((n,i)=>groups[i%2?'B':'A'].push(n));
   let k=0;
-  for(const group of ['A','B'])for(let a=0;a<groups[group].length;a++)for(let b=a+1;b<groups[group].length;b++){
-    fixtures.push({id:`${year}-${d.key}-g${k}`,comp:'ODI',round:'Group '+group,day:d.day+Math.floor(k/4),
-      home:groups[group][a],away:groups[group][b],venue:groups[group][a],stage:'globalgroup',event:d.key,group,result:null});k++;
+  for(const group of ['A','B'])for(const [round,pairs] of wcRoundRobin(groups[group]).entries())for(const [home,away] of pairs){
+    fixtures.push({id:`${year}-${d.key}-g${k++}`,comp:'ODI',round:'Group '+group,day:d.day+round*4,
+      home,away,venue:'X_'+tournamentHost(d.key,year),stage:'globalgroup',event:d.key,group,result:null});
   }
   if(d.key==='ODIWC'){
     // Six qualifiers: top three from each group, carry across head-to-head group results.
     // Three cross-group matches per team, followed by semi-finals and final.
-    globalStageMatches(year,d.key,'globalsuper','Super Six',d.day+14,9,fixtures);
-    globalStageMatches(year,d.key,'globalsemi','Semi-final',d.day+24,2,fixtures);
-    globalStageMatches(year,d.key,'globalfinal','Final',d.day+28,1,fixtures);
+    globalStageMatches(year,d.key,'globalsuper','Super Six',d.day+32,9,fixtures);
+    globalStageMatches(year,d.key,'globalsemi','Semi-final',d.day+50,2,fixtures);
+    globalStageMatches(year,d.key,'globalfinal','Final',d.day+55,1,fixtures);
   }else{
     globalStageMatches(year,d.key,'globalsemi','Semi-final',d.day+15,2,fixtures);
     globalStageMatches(year,d.key,'globalfinal','Final',d.day+19,1,fixtures);
@@ -4090,11 +4151,15 @@ function updateGlobalTournament(){
   const A=globalTournamentTable(event,'A'),B=globalTournamentTable(event,'B');
   if(event==='ODIWC'){
     const superFx=fxs.filter(f=>f.stage==='globalsuper');
-    if(superFx.length && !superFx[0].home){let k=0;
+    if(superFx.length && !superFx[0].home){let k=0;const base=Math.max(257,game.day+3);
       for(let a=0;a<3;a++)for(let b=0;b<3;b++){
         const f=superFx[k++];f.home=A[a].t;f.away=B[b].t;
+        if(!f.result)f.day=base+4*((a+b)%3);
       }
     }
+    const lastSuper=Math.max(...superFx.map(f=>f.day));
+    for(const f of fxs.filter(f=>f.stage==='globalsemi'&&!f.result))f.day=Math.max(f.day,lastSuper+5);
+    for(const f of fxs.filter(f=>f.stage==='globalfinal'&&!f.result))f.day=Math.max(f.day,lastSuper+10);
     if(!superFx.every(f=>f.result))return;
     const qualified=A.slice(0,3).concat(B.slice(0,3)).map(x=>x.t);
     const carried=group.filter(f=>qualified.includes(f.home)&&qualified.includes(f.away));
@@ -4112,8 +4177,9 @@ function updateGlobalTournament(){
     fin.away=semis[1].result.winner||semis[1].home;}
   if(fin.result&&!game.globalTournamentHistory?.some(h=>h.year===game.year&&h.event===event)){
     const winner=fin.result.winner||fin.home;game.globalTournamentHistory=game.globalTournamentHistory||[];
-    game.globalTournamentHistory.unshift({year:game.year,event,winner,runnerUp:winner===fin.home?fin.away:fin.home});
+    game.globalTournamentHistory.unshift({year:game.year,event,host:tournamentHost(event,game.year),winner,runnerUp:winner===fin.home?fin.away:fin.home});
     game.globalTournamentHistory=game.globalTournamentHistory.slice(0,24);
+    if(event==='ODIWC')recordWorldCupReview('ODIWC');
     addNews('World',(event==='ODIWC'?'ODI World Cup':'Champions Trophy')+' champions',teamDef(winner).name+' lift the trophy.');
   }
 }
@@ -4135,7 +4201,7 @@ function wcGroupSlots(groups) {
   const out=[]; let n=0;
   for(let r=0;r<5;r++) for(const g of ['A','B','C','D']) {
     for(const [a,b] of wcRoundPairs(groups[g])[r])
-      out.push({home:a,away:b,group:g,day:120+r*3,venue:WC_HOST_VENUES[n++%WC_HOST_VENUES.length]});
+      out.push({home:a,away:b,group:g,day:120+r*3,venue:'X_'+tournamentHost('T20WC',game.year)});
   }
   return out;
 }
@@ -4165,18 +4231,9 @@ function repairWorldCupSchedule(g) {
     f.day=d;f.venue=sl.venue;
     for(const t of [f.home,f.away])(used[t] ||= new Set()).add(d);
   }
-  // Super Eight assignments are determined later. Give each of its three rounds
-  // its own date, 2 days apart, and leave rest before semis and final.
-  const supers=fx.filter(f=>f.stage==='wcsuper');
-  if(supers.length===12) {
-    const roundByIndex=[0,1,2,2,1,0];
-    for(let i=0;i<supers.length;i++)if(!supers[i].result && supers[i].day>=g.day) {
-      supers[i].day=Math.max(g.day,136+2*roundByIndex[i%6]);
-      supers[i].venue=WC_HOST_VENUES[(i+2)%6];
-    }
-  }
-  for(const f of fx.filter(f=>f.stage?.startsWith('wcsemi')))if(!f.result&&f.day>=g.day){f.day=Math.max(143,g.day);f.venue=WC_HOST_VENUES[f.stage==='wcsemi1'?1:4];}
-  for(const f of fx.filter(f=>f.stage==='wcfinal'))if(!f.result&&f.day>=g.day){f.day=Math.max(146,g.day);f.venue='VIC';}
+  // Existing completed Super Eight matches are never moved; group repair above
+  // only affects fixtures not yet played. Already assigned knockout dates are kept.
+
   g.season.fixtures.sort((a,b)=>a.day-b.day);
 }
 // ---- Men's T20 World Cup: 20 teams -> four groups of five -> Super Eight -> semis -> final.
@@ -4192,13 +4249,13 @@ function setupWorldCup(w){
   const wcRounds=[[0,5],[1,4],[2,3]];
   for(let g=0;g<2;g++)for(let r=0;r<3;r++)for(const idx of wcRounds[r]) {
     const i=g*6+idx;
-    game.season.fixtures.push({id:`${game.year}-w8${i}`,comp:'WC',round:'Super Eight',day:136+2*r,
-      home:null,away:null,venue:WC_HOST_VENUES[(i+2)%6],stage:'wcsuper',group:g===0?'E':'F',result:null,win:'WC'});
+    game.season.fixtures.push({id:`${game.year}-w8${i}`,comp:'WC',round:'Super Eight',day:138+3*r,
+      home:null,away:null,venue:'X_'+tournamentHost('T20WC',game.year),stage:'wcsuper',group:g===0?'E':'F',result:null,win:'WC'});
   }
-  for(let i=0;i<2;i++)game.season.fixtures.push({id:`${game.year}-wcs${i}`,comp:'WC',round:'Semi-final '+(i+1),day:143,
-    home:null,away:null,venue:WC_HOST_VENUES[i?4:1],stage:'wcsemi'+(i+1),result:null,win:'WC'});
-  game.season.fixtures.push({id:`${game.year}-wcf`,comp:'WC',round:'Final',day:146,
-    home:null,away:null,venue:'VIC',stage:'wcfinal',result:null,win:'WC'});
+  for(let i=0;i<2;i++)game.season.fixtures.push({id:`${game.year}-wcs${i}`,comp:'WC',round:'Semi-final '+(i+1),day:150,
+    home:null,away:null,venue:'X_'+tournamentHost('T20WC',game.year),stage:'wcsemi'+(i+1),result:null,win:'WC'});
+  game.season.fixtures.push({id:`${game.year}-wcf`,comp:'WC',round:'Final',day:155,
+    home:null,away:null,venue:'X_'+tournamentHost('T20WC',game.year),stage:'wcfinal',result:null,win:'WC'});
   game.season.fixtures.sort((a,b)=>a.day-b.day);
   w.fx=game.season.fixtures.filter(f=>f.comp==='WC').map(f=>f.id);
   addNews('World','T20 World Cup draw','Twenty teams contest four groups before the Super Eight.');
@@ -4220,7 +4277,7 @@ function updateWorldCup(){
     if(s1.result&&s2.result&&!fin.home){fin.home=s1.result.winner||s1.home;fin.away=s2.result.winner||s2.home;}
     if(fin.result&&!w.champion){w.champion=fin.result.winner||fin.home;game.worldHistory=game.worldHistory||[];
       game.worldHistory.unshift({year:game.year,event:'T20 World Cup',winner:teamNat(w.champion),runnerUp:teamNat(w.champion===fin.home?fin.away:fin.home)});
-      archiveWorldCup(w);}
+      archiveWorldCup(w);recordWorldCupReview('T20WC');}
     return;
   }
   if(superFx.length&&!superFx[0].home){
@@ -4228,11 +4285,17 @@ function updateWorldCup(){
     // Group E: A1 B2 C1 D2; Group F: A2 B1 C2 D1.
     w.groups.E=[A[0].t,B[1].t,C[0].t,D[1].t];
     w.groups.F=[A[1].t,B[0].t,C[1].t,D[0].t];
-    let k=0;for(const g of ['E','F']){const ids=w.groups[g];
-      for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
-        const f=superFx[k++];f.group=g;f.home=ids[i];f.away=ids[j];
+    let k=0;const base=Math.max(138,game.day+2);for(const g of ['E','F']){
+      const ids=w.groups[g];
+      for(const [round,pairs] of wcRoundRobin(ids).entries())for(const [home,away] of pairs){
+        const f=superFx[k++];f.group=g;f.home=home;f.away=away;
+        if(!f.result)f.day=base+round*3;
       }
     }
+    const endSuper=base+6;
+    for(const f of fx.filter(f=>f.stage?.startsWith('wcsemi')&&!f.result))f.day=Math.max(f.day,endSuper+6);
+    for(const f of fx.filter(f=>f.stage==='wcfinal'&&!f.result))f.day=Math.max(f.day,endSuper+11);
+    game.season.fixtures.sort((a,b)=>a.day-b.day);
   }
   if(!superFx.every(f=>f.result))return;
   const s1=fx.find(f=>f.stage==='wcsemi1'),s2=fx.find(f=>f.stage==='wcsemi2'),fin=fx.find(f=>f.stage==='wcfinal');
@@ -4243,10 +4306,87 @@ function updateWorldCup(){
     game.worldHistory=game.worldHistory||[];
     game.worldHistory.unshift({year:game.year,event:'T20 World Cup',winner:teamNat(w.champion),
       runnerUp:teamNat(w.champion===fin.home?fin.away:fin.home)});
-    archiveWorldCup(w);
+    archiveWorldCup(w);recordWorldCupReview('T20WC');
     addNews('World',`${teamDef(w.champion).name} win the T20 World Cup`,fin.result.text+'.');}
 }
 // Tournament stats: runs and wickets for every player across the World Cup.
+// B113 tournament recaps, persisted independently from transient fixtures.
+function worldCupReviewStore(){return game.worldCupReviews||(game.worldCupReviews=[]);}
+function recordODIWorldCupStats(M){
+  // Store compact aggregate figures for all simulated ODI WC matches, including
+  // background fixtures whose detailed scorecards are not retained.
+  const st=game.odiWorldCupStats||(game.odiWorldCupStats={year:game.year,bat:{},bowl:{},matches:0});
+  if(st.year!==game.year){st.year=game.year;st.bat={};st.bowl={};st.matches=0;}
+  if(st.lastIds?.includes(M.fxId))return;
+  st.lastIds=(st.lastIds||[]);st.lastIds.push(M.fxId);st.matches++;
+  for(const inn of M.innings){
+    for(const c of inn.card||[]){if(!c.in)continue;const b=st.bat[c.id]||(st.bat[c.id]=[0,0,0,0]);b[0]+=c.r;b[1]++;if(c.r>b[2])b[2]=c.r;if(!c.out)b[3]++;}
+    for(const [id,f] of Object.entries(inn.bw||{})){if(!f.balls)continue;const b=st.bowl[id]||(st.bowl[id]=[0,0,0]);b[0]+=f.w;b[1]+=f.r;b[2]+=f.balls;}
+  }
+}
+function worldCupTopPlayer(leaders){
+  const scores={};
+  for(const p of leaders.bat||[])scores[p.id]=(scores[p.id]||0)+p.r;
+  for(const p of leaders.bowl||[])scores[p.id]=(scores[p.id]||0)+p.w*22;
+  const best=Object.entries(scores).sort((a,b)=>b[1]-a[1])[0];
+  return best?{id:best[0],score:best[1]}:null;
+}
+function recordWorldCupReview(event){
+  const id=`${game.year}-${event}`;if(worldCupReviewStore().some(r=>r.id===id))return;
+  const fx=game.season.fixtures.filter(f=>event==='T20WC'?f.comp==='WC':f.event==='ODIWC');
+  const final=fx.find(f=>f.stage===(event==='T20WC'?'wcfinal':'globalfinal'));
+  if(!final?.result?.winner)return;
+  const champion=final.result.winner,runnerUp=champion===final.home?final.away:final.home;
+  const scores=event==='T20WC'?game.season.windows.find(w=>w.wc)?.stats:null;
+  const odiStats=game.odiWorldCupStats?.year===game.year?game.odiWorldCupStats:null;
+  const leaders=event==='T20WC'?wcLeaders({stats:scores},3):odiStats?.matches?wcLeaders({stats:odiStats},3):tournamentScorecardLeaders(fx,3);
+  const awards=leaders?.bat?.length||leaders?.bowl?.length ? {bat:leaders.bat[0]||null,bowl:leaders.bowl[0]||null,pot:worldCupTopPlayer(leaders)}:{};
+  const aus=fx.filter(f=>(f.home==='AUS'||f.away==='AUS')&&f.result);
+  const semifinalists=[...new Set(fx.filter(f=>/semi/.test(f.stage)).flatMap(f=>[f.home,f.away]).filter(Boolean))];
+  const review={id,year:game.year,event,host:tournamentHost(event,game.year),champion,runnerUp,
+    finalText:final.result.text,semiFinalists:semifinalists,
+    aus:{won:aus.filter(f=>f.result.winner==='AUS').length,lost:aus.filter(f=>f.result.winner&&f.result.winner!=='AUS').length,
+      noResult:aus.filter(f=>!f.result.winner).length,stage:aus.some(f=>f.stage.endsWith('final')&&f.stage!=='wcsemifinal')?'Knockouts':aus.length?'Participated':'Not qualified'},
+    leaders,awards,coverage:event==='ODIWC'?(odiStats?.matches||0):fx.filter(f=>f.result).length,fixturesCompleted:fx.filter(f=>f.result).length,previewId:`${game.year}-${event}`,viewed:false};
+  worldCupReviewStore().unshift(review);
+}
+function tournamentScorecardLeaders(fx,n){
+  const bat={},bowl={};
+  for(const f of fx){if(!f.result)continue;
+    const card=game.scorecards[f.id];if(!card?.innings)continue;
+    for(const inn of card.innings){
+      for(const c of inn.card||[]){if(!c.in)continue;const p=bat[c.id]||(bat[c.id]={id:c.id,r:0,inn:0,no:0});p.r+=c.r||0;p.inn++;if(!c.out)p.no++;}
+      for(const [id,b] of Object.entries(inn.bw||{})){const p=bowl[id]||(bowl[id]={id,w:0,r:0,balls:0});p.w+=b.w||0;p.r+=b.r||0;p.balls+=b.balls||0;}
+    }
+  }
+  return {bat:Object.values(bat).sort((a,b)=>b.r-a.r).slice(0,n),bowl:Object.values(bowl).sort((a,b)=>b.w-a.w).slice(0,n)};
+}
+function worldCupReviewHtml(r){
+  const title=r.event==='ODIWC'?'ODI World Cup':'T20 World Cup';
+  const ranked=(rows,kind)=>rows?.length?rows.map((x,i)=>{
+    const p=P(x.id);return `<div class="kv"><span>${i+1}. ${p?esc(pname(p)):'Player unavailable'} ${p?flagFor(p.nat):''}</span><b>${kind==='bat'?x.r+' runs':x.w+' wkts'}</b></div>`;
+  }).join(''):'<div class="empty">Complete individual scorecards not retained.</div>';
+  const preview=(game.worldCupPreviews||[]).find(p=>p.id===r.previewId);
+  return `<div class="series-review-head"><div class="xs muted">${title.toUpperCase()} · ${r.year} · Host ${flagFor(r.host)} ${esc(NATIONS[r.host])}</div>
+    <div class="series-review-nations">${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</div><div class="s">World champions · Runners-up ${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</div>
+    <div class="xs muted" style="margin-top:7px">${esc(r.finalText)}</div></div>
+    <div class="panel" style="margin-bottom:9px"><div class="ph"><h3>Players of the tournament</h3></div><div class="rows">
+      ${r.awards?.pot?`<div class="kv"><span>Player of the Tournament (modelled)</span><b>${esc(pname(P(r.awards.pot.id)))}</b></div>`:''}
+      ${r.awards?.bat?`<div class="kv"><span>Leading batter</span><b>${esc(pname(P(r.awards.bat.id)))} · ${r.awards.bat.r} runs</b></div>`:''}
+      ${r.awards?.bowl?`<div class="kv"><span>Leading bowler</span><b>${esc(pname(P(r.awards.bowl.id)))} · ${r.awards.bowl.w} wickets</b></div>`:''}
+      <div class="xs muted" style="padding:8px 12px">Based on ${r.coverage==null?'available statistics':r.coverage+' of '+(r.fixturesCompleted||0)+' completed matches'}. Missing scorecards are not reconstructed.</div></div></div>
+    <div class="panel" style="margin-bottom:9px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${ranked(r.leaders?.bat,'bat')}</div><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${ranked(r.leaders?.bowl,'bowl')}</div></div>
+    <div class="panel"><div class="ph"><h3>Australia's tournament</h3></div><div class="rows"><div class="kv"><span>Record</span><b>${r.aus.won} wins · ${r.aus.lost} losses</b></div><div class="kv"><span>Semi-finalists</span><span>${r.semiFinalists.map(t=>flagFor(teamNat(t))).join(' ')}</span></div>${preview?`<div class="kv"><span>Pre-tournament favourite</span><span>${flagFor(preview.ranked?.[0]?.nat)} ${esc(NATIONS[preview.ranked?.[0]?.nat]||'—')}</span></div>`:''}</div></div>`;
+}
+function openWorldCupReview(id){const r=worldCupReviewStore().find(x=>x.id===id);if(!r)return;
+  sheet('World Cup review',r.event==='ODIWC'?'ODI World Cup':'T20 World Cup',worldCupReviewHtml(r),
+    {center:true,key:'wc-review',foot:`<button class="btn pri block" onclick="dismissWorldCupReview('${r.id}')">Continue to Home</button>`});}
+function dismissWorldCupReview(id){const r=worldCupReviewStore().find(x=>x.id===id);if(r)r.viewed=true;closeModal();autosave();go('home');}
+function showPendingWorldCupReview(){if(!game||document.querySelector('#modalRoot .sheet'))return false;
+  const r=worldCupReviewStore().find(x=>!x.viewed);if(!r)return false;
+  openWorldCupReview(r.id);autosave();return true;}
+function worldCupReviewButton(event){const r=worldCupReviewStore().find(x=>x.year===game.year&&x.event===event)||worldCupReviewStore().find(x=>x.event===event);
+  return r?`<button class="btn ghost" onclick="openWorldCupReview('${r.id}')">View World Cup review · ${r.year}</button><div style="height:8px"></div>`:'';}
 function trackWorldCupStats(M) {
   const w = game.season.windows.find(x => x.wc); if (!w) return;
   const st = w.stats = w.stats || { bat: {}, bowl: {} };
@@ -4267,7 +4407,7 @@ function archiveWorldCup(w) {
   const name = id => teamDef(id) ? teamDef(id).name : id;
   const L = wcLeaders(w, 5);
   const entry = {
-    year: game.year, label: game.season.label, champion: w.champion,
+    year: game.year, label: game.season.label, champion: w.champion, host:tournamentHost('T20WC',game.year),
     groups: Object.fromEntries(Object.keys(w.groups).map(g => [g, wcTable(w,g).map(r=>Object.assign({},r))])),
     ko: fx.filter(f => f.stage !== 'wcgroup').map(f => ({ round: f.round, home: f.home, away: f.away, text: f.result ? f.result.text : '', winner: f.result ? f.result.winner : null, id: f.id })),
     aus: fx.filter(f => f.home === 'AUS' || f.away === 'AUS').map(f => ({ round: f.round, opp: f.home === 'AUS' ? f.away : f.home, text: f.result ? f.result.text : '', won: f.result && f.result.winner === 'AUS', id: f.id })),
@@ -5342,8 +5482,41 @@ function injure(p) {
   if (p.teamId === U()) addNews('Medical', `${pname(p)} injured`, `${t[0]}. Expected to miss about ${Math.ceil(days / 7)} week${days > 7 ? 's' : ''}.`);
 }
 
+// B113: knockout ties are resolved using one-over innings with two wickets per side.
+// This reuses C3.1's delivery simulator but isolates Super Over scorecards from career stats.
+function playKnockoutSuperOvers(M){
+  const rounds=[];
+  for(let n=1;n<=12;n++){
+    const S={...M,fxId:M.fxId+'-super'+n,fmt:'T20',overs:1,superOver:true,
+      innings:[],balls:0,done:false,result:null,abandoned:false,live:false,log:[],notes:[],
+      inningsWin:null,timeUp:false,mapBalls:[],potm:null};
+    // Swap batting order on alternating rounds for fairness.
+    const bat=n%2?M.home:M.away, bowl=bat===M.home?M.away:M.home;
+    startInnings(S,bat,bowl,{});
+    playMatchFast(S);
+    const scores=S.innings.map(i=>({team:i.bat,runs:i.runs,wickets:i.wkts,balls:i.balls}));
+    rounds.push({number:n,scores});
+    const home=scores.find(x=>x.team===M.home)?.runs??0,away=scores.find(x=>x.team===M.away)?.runs??0;
+    if(home!==away){M.superOvers=rounds;M.result={winner:home>away?M.home:M.away,draw:false,tie:true,
+      text:`Match tied. ${teamName(home>away?M.home:M.away)} won Super Over ${home>away?home:away}–${home>away?away:home}${n>1?' (round '+n+')':''}`};return;}
+  }
+  // An extraordinarily unlikely sequence: keep playing using deterministic sudden-death balls.
+  // No higher-seed decision is permitted solely because the match was tied.
+  let h=0,a=0;while(h===a){h+=randInt(0,6);a+=randInt(0,6);}
+  M.superOvers=rounds;M.result={winner:h>a?M.home:M.away,draw:false,tie:true,text:`Match tied. ${teamName(h>a?M.home:M.away)} won after extended Super Overs`};
+}
+function isWorldCupKnockout(fx){return /^(wc(semi|final)|global(semi|final))/.test(fx?.stage||'')&&(fx.comp==='WC'||fx.event==='ODIWC');}
 function applyIntlMatch(M) {
   const fx = fixtureById(M.fxId), fmt = M.fmt;
+  // B113: a no-result knockout gets a reserve day. No stats or result are recorded.
+  if(isWorldCupKnockout(fx)&&M.result.noResult&&(fx.reserveAttempts||0)<2){
+    fx.reserveAttempts=(fx.reserveAttempts||0)+1;
+    fx.day=Math.max(game.day+1,fx.day+1);
+    game.season.fixtures.sort((a,b)=>a.day-b.day);
+    addNews('World','World Cup reserve day',`${teamName(fx.home)} v ${teamName(fx.away)} moved to ${dateStr(fx.day)} after abandonment.`);
+    return;
+  }
+  if(isWorldCupKnockout(fx)&&(M.result.tie||M.result.noResult)&&!M.superOvers?.length)playKnockoutSuperOvers(M);
   const inXI = M.abandoned ? [] : [...M.xi[M.home], ...M.xi[M.away]];
   inXI.forEach(id => { const p = P(id); addIntlStat(p, fmt, s => s.m++); if ((M.xi[M.home].includes(id) && p.nat === teamNat(M.home)) || (M.xi[M.away].includes(id) && p.nat === teamNat(M.away))) p.caps[fmt]++; });
   M.innings.forEach(inn => {
@@ -5357,13 +5530,14 @@ function applyIntlMatch(M) {
   trackNationalMatchRecord(M);
   fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M), milestones: (M.milestones || []).slice() };
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
-  if (/^(wc(semi|final)|global(semi|final))/.test(fx.stage) && !fx.result.winner) { fx.result.winner = fx.home; fx.result.noResult = false; fx.result.text += `. ${teamDef(fx.home).name} go through as the higher seed`; }
+  if(M.superOvers?.length){fx.result.superOvers=M.superOvers;fx.result.tie=true;}
   if (M.home === 'AUS' || M.away === 'AUS' || /^(wc(semi|final)|global(semi|final))/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
   if (!fx.result.noResult) rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5);
   if (fx.stage === 'world') archiveWorldSeries();
   trackWtcResult(fx);
   if (fx.stage === 'wtcfinal') archiveWtcFinal(fx);
   if (M.comp === 'WC') { trackWorldCupStats(M); updateWorldCup(); }
+  if (fx.event==='ODIWC')recordODIWorldCupStats(M);
   if (fx.event) updateGlobalTournament();
   recordInternationalSeriesReview(fx);
   const potm = M.potm ? P(M.potm) : null;
@@ -5616,13 +5790,14 @@ function continueGame() {
   if (!game) return;
   if (game.live) { go('live'); return; }
   if (game.phase !== 'season') { offseasonContinue(); return; }
+  if (showPendingWorldCupReview()) { go('home'); return; }
   if (showPendingWorldCupPreview()) { go('home'); return; }
   const pend = game.pendingFx && fixtureById(game.pendingFx);
   if (pend && !pend.result && isClash(pend) && !isFinalFx(pend)) { staffPlay(pend); game.pendingFx = null; }
   else if (pend && !pend.result && yieldsToIntl(pend)) { staffPlay(pend, intlReason(pend)); game.pendingFx = null; }
   else if (pend && !pend.result) { go('matchday'); return; }
   game.pendingFx = null;
-  const done = page => { autosave(); go(page); showAwaySummary(); showPendingInternationalSeriesReview(); };
+  const done = page => { autosave(); go(page); showAwaySummary(); if(!showPendingWorldCupReview())showPendingInternationalSeriesReview(); };
   for (let i = 0; i < 400; i++) {
     if (game.busy && game.day > game.busy.until) game.busy = null;
     if(showPendingWorldCupPreview()) { autosave();go('home');return; }
@@ -6574,42 +6749,63 @@ const Store = {
     return this.status;
   },
   _tx(mode, fn) { return new Promise((res, rej) => { const tx = this.db.transaction('saves', mode); const st = tx.objectStore('saves'); const r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }); },
-  async put(slot, str, meta) {
-    let ok = false;
+  // Read every independent copy and rank the actual payloads, never the cached metadata.
+  async candidates(slot) {
+    const rows = [];
     if (this.idbOk) {
-      try { await this._tx('readwrite', st => { st.put(str, 'slot' + slot); st.put(meta, 'meta' + slot); }); ok = true; } catch (e) { this.lastError = String(e); }
+      for (const [name,key] of [['Database','slot'+slot],['Database recovery','recovery'+slot]]) {
+        try { const raw=await this._tx('readonly', st=>st.get(key)); if(raw) rows.push({name,raw}); } catch(e) { this.lastError=String(e); }
+      }
     }
     if (this.lsOk) {
-      const mirrorOk = writeLocalSaveMirror(slot, str, meta);
-      if (mirrorOk) ok = true;
-      else if (!ok) this.lastError = 'Browser storage is full.';
+      for (const [name,key] of [['Local mirror',localRawKey(slot)],['Local recovery',backupRawKey(slot)]]) {
+        try { const raw=localStorage.getItem(key); if(raw) rows.push({name,raw}); } catch(e) { this.lastError=String(e); }
+      }
     }
-    if (ok) { this.lastSaved = new Date(); this.status = 'ok'; }
-    return ok;
+    return rows.map(c=>({...c, info:saveSnapshotInfo(c.raw)})).filter(c=>c.info).sort((a,b)=>compareSaveSnapshots(b.info,a.info));
   },
   async get(slot) {
-    if (this.idbOk) { try { const v = await this._tx('readonly', st => st.get('slot' + slot)); if (v) return v; } catch (e) {} }
-    if (this.lsOk) {
-      try { const raw = localStorage.getItem(localRawKey(slot)); if (raw) return raw; } catch (e) {}
-      try { const backup = localStorage.getItem(backupRawKey(slot)); if (backup) return backup; } catch (e) {}
-    }
-    return null;
+    const rows=await this.candidates(slot);
+    this.lastRecovery=rows[0] ? {slot,source:rows[0].name,revision:rows[0].info.revision,saved:rows[0].info.saved,alternatives:rows.length} : null;
+    return rows[0]?.raw || null;
   },
   async meta(slot) {
+    const rows=await this.candidates(slot);
+    return rows[0] ? metaOf(rows[0].info.data) : null;
+  },
+  async put(slot, str, meta) {
+    const incoming=saveSnapshotInfo(str);
+    if (!incoming) { this.lastError='Invalid career snapshot'; return false; }
+    // An older queued IndexedDB write cannot replace an emergency or newer save.
+    const existing=await this.candidates(slot);
+    if (existing.length && compareSaveSnapshots(existing[0].info,incoming)>0) {
+      this.lastError='Newer save already preserved; skipped stale queued write.';
+      return false;
+    }
+    let ok=false;
     if (this.idbOk) {
-      try { const v = await this._tx('readonly', st => st.get('meta' + slot)); if (v) return v; } catch (e) {}
-      try { const raw = await this._tx('readonly', st => st.get('slot' + slot)); if (raw) return await recoverMetaFromStoredSave(slot, raw); } catch (e) {}
+      try {
+        const current=existing.find(c=>c.name==='Database');
+        await this._tx('readwrite', st=>{
+          if (current && compareSaveSnapshots(incoming,current.info)>0) {
+            st.put(current.raw,'recovery'+slot);
+          }
+          st.put(str,'slot'+slot); st.put(meta,'meta'+slot);
+        });
+        const verify=await this._tx('readonly',st=>st.get('slot'+slot));
+        ok=!!(saveSnapshotInfo(verify) && compareSaveSnapshots(saveSnapshotInfo(verify),incoming)===0);
+      } catch(e) { this.lastError=String(e); }
     }
     if (this.lsOk) {
-      try { const m = localStorage.getItem(localMetaKey(slot)); if (m) return JSON.parse(m); } catch (e) {}
-      try { const raw = localStorage.getItem(localRawKey(slot)); if (raw) return await recoverMetaFromStoredSave(slot, raw); } catch (e) {}
-      try { const bm = localStorage.getItem(backupMetaKey(slot)); if (bm) return JSON.parse(bm); } catch (e) {}
-      try { const backup = localStorage.getItem(backupRawKey(slot)); if (backup) return await recoverMetaFromStoredSave(slot, backup); } catch (e) {}
+      const mirrorOk=writeLocalSaveMirror(slot,str,meta);
+      if (mirrorOk) ok=true;
+      else if (!ok) this.lastError='Browser storage is full.';
     }
-    return null;
+    if (ok) { this.lastSaved=new Date(); this.status='ok'; }
+    return ok;
   },
   async del(slot) {
-    if (this.idbOk) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); }); } catch (e) {} }
+    if (this.idbOk) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); st.delete('recovery' + slot); }); } catch (e) {} }
     clearLocalSaveMirror(slot);
   },
   async list() {
@@ -6618,20 +6814,59 @@ const Store = {
     return out;
   }
 };
-function metaOf(g) { return { name: g.gm.name, team: g.gm.teamId, label: g.season.label, phase: g.phase, day: g.day, year: g.year, wins: g.gm.wins, losses: g.gm.losses, build: g.meta.build, saved: g.meta.saved || null, edited: !!g.edited }; }
+function metaOf(g) { return { revision: Number(g.meta?.saveRevision)||0, name: g.gm.name, team: g.gm.teamId, label: g.season.label, phase: g.phase, day: g.day, year: g.year, wins: g.gm.wins, losses: g.gm.losses, build: g.meta.build, saved: g.meta.saved || null, edited: !!g.edited }; }
 function safeParse(raw) { try { return JSON.parse(raw); } catch (e) { return null; } }
+// Save ordering: revision is authoritative when both saves have one; timestamp
+// maintains backwards compatibility with Build 111 and earlier save files.
+function saveSnapshotInfo(raw) {
+  const g=typeof raw==='string'?safeParse(raw):raw;
+  if (!g || !g.gm || !g.players || !g.season || !g.meta || !Number.isFinite(Number(g.year)) || !Number.isFinite(Number(g.day))) return null;
+  if (!g.meta.created && !g.meta.seed && !g.meta.build) return null;
+  return {data:g,revision:Math.max(0,Math.floor(Number(g.meta.saveRevision)||0)),
+    saved:Date.parse(g.meta.saved||'')||0,created:String(g.meta.created||''),
+    progress:(Number(g.year)||0)*100000+(Number(g.day)||0),
+    games:(Number(g.gm.wins)||0)+(Number(g.gm.losses)||0)+(Number(g.gm.draws)||0)};
+}
+function compareSaveSnapshots(a,b) {
+  if (!a) return -1; if (!b) return 1;
+  // Different careers with the same slot are not automatically merged.
+  if (a.revision && b.revision && a.revision!==b.revision) return a.revision>b.revision?1:-1;
+  if (a.saved!==b.saved) return a.saved>b.saved?1:-1;
+  if (a.progress!==b.progress) return a.progress>b.progress?1:-1;
+  if (a.games!==b.games) return a.games>b.games?1:-1;
+  return 0;
+}
+function prepareSaveMetadata(slot) {
+  game.meta.slot=slot;
+  game.meta.saveRevision=Math.max(0,Number(game.meta.saveRevision)||0)+1;
+  game.meta.saved=new Date().toISOString();
+  game.meta.build=BUILD.version;
+}
 function localMetaKey(slot) { return SAVE_PREFIX + 'meta' + slot; }
 function localRawKey(slot) { return SAVE_PREFIX + slot; }
 function backupMetaKey(slot) { return SAVE_BACKUP_PREFIX + 'meta' + slot; }
 function backupRawKey(slot) { return SAVE_BACKUP_PREFIX + slot; }
 function writeLocalSaveMirror(slot, str, meta) {
   if (!Store.lsOk) return false;
-  let ok = false;
-  try { localStorage.setItem(localMetaKey(slot), JSON.stringify(meta)); } catch (e) {}
-  try { localStorage.setItem(localRawKey(slot), str); ok = true; } catch (e) {}
-  try { localStorage.setItem(backupMetaKey(slot), JSON.stringify(meta)); } catch (e) {}
-  try { localStorage.setItem(backupRawKey(slot), str); } catch (e) {}
-  try { localStorage.setItem(SAVE_BACKUP_PREFIX + 'last_slot', String(slot)); } catch (e) {}
+  const incoming=saveSnapshotInfo(str);
+  if (!incoming) return false;
+  let current=null,backup=null;
+  try { current=localStorage.getItem(localRawKey(slot)); backup=localStorage.getItem(backupRawKey(slot)); } catch(e) {}
+  const curInfo=saveSnapshotInfo(current), bakInfo=saveSnapshotInfo(backup);
+  if (curInfo && compareSaveSnapshots(curInfo,incoming)>0) return false;
+  if (bakInfo && compareSaveSnapshots(bakInfo,incoming)>0) return false;
+  // Preserve the previous valid primary before overwriting it. Never destroy a
+  // newer recovery snapshot. Store the raw payload before its optional metadata.
+  if (curInfo && compareSaveSnapshots(incoming,curInfo)>0 &&
+      (!bakInfo || compareSaveSnapshots(curInfo,bakInfo)>0)) {
+    try { localStorage.setItem(backupRawKey(slot),current); localStorage.setItem(backupMetaKey(slot),JSON.stringify(metaOf(curInfo.data))); } catch(e) {}
+  }
+  let ok=false;
+  try { localStorage.setItem(localRawKey(slot),str); ok=localStorage.getItem(localRawKey(slot))===str; } catch(e) { Store.lastError=String(e); }
+  if (ok) {
+    try { localStorage.setItem(localMetaKey(slot),JSON.stringify(meta)); } catch(e) {}
+    try { localStorage.setItem(SAVE_BACKUP_PREFIX+'last_slot',String(slot)); } catch(e) {}
+  }
   return ok;
 }
 function clearLocalSaveMirror(slot) {
@@ -6677,8 +6912,7 @@ function stopAutosaveTicker() { if (_autosaveTicker) { clearInterval(_autosaveTi
 function emergencySaveSnapshot() {
   if (!game || !Store.lsOk) return false;
   const slot = game.meta.slot || 1;
-  game.meta.slot = slot;
-  game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
+  prepareSaveMetadata(slot);
   try {
     const ok = writeLocalSaveMirror(slot, serialiseGame(), metaOf(game));
     if (ok) Store.lastSaved = new Date();
@@ -6716,8 +6950,7 @@ function saveGame(slot, notify) {
     return Promise.resolve(false);
   }
   slot = slot || game.meta.slot || 1;
-  game.meta.slot = slot;
-  game.meta.saved = new Date().toISOString(); game.meta.build = BUILD.version;
+  prepareSaveMetadata(slot);
   let str, meta;
   try { str = serialiseGame(); meta = metaOf(game); }
   catch (e) { Store.lastError=String(e); if(notify) flash('Save encoding failed. Export backup.'); return Promise.resolve(false); }
@@ -6730,9 +6963,10 @@ function saveGame(slot, notify) {
 }
 function autosave() { if (game) saveGame(game.meta.slot, false); }
 async function loadGame(slot) {
+  await _saving;
   const raw = await Store.get(slot);
   if (!raw) { flash('That save could not be found.'); return; }
-  try { loadFromString(raw, slot); } catch (e) { flash('That save could not be read.'); }
+  try { loadFromString(raw, slot); const r=Store.lastRecovery; if(r && r.source!=='Database') flash('Recovered newest career from '+r.source+'.'); } catch (e) { flash('That save could not be read.'); }
 }
 function loadFromString(raw, slot) {
   const g = JSON.parse(raw);
@@ -6878,7 +7112,7 @@ function sheetSwipe(el) {
   const end = () => { if (y0 == null) return; y0 = null; el.style.transition = 'transform .15s'; if (dy > 90) closeModal(); else el.style.transform = ''; };
   [head, bodyEl].forEach(t => { if (!t) return; t.addEventListener('touchstart', start, { passive: true }); t.addEventListener('touchmove', move, { passive: false }); t.addEventListener('touchend', end); t.addEventListener('touchcancel', end); });
 }
-function closeModal() { const m=$('modalRoot'); if(m.querySelector('.sheet[data-key="wc-preview"]')&&game){const r=(game.worldCupPreviews||[]).find(p=>!p.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="series-review"]') && game) { const pending=(game.internationalSeriesReviews||[]).find(r=>!r.viewed); if(pending){pending.viewed=true;autosave();} } m.innerHTML = ''; }
+function closeModal() { const m=$('modalRoot');if(m.querySelector('.sheet[data-key="wc-review"]')&&game){const r=(game.worldCupReviews||[]).find(x=>!x.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="wc-preview"]')&&game){const r=(game.worldCupPreviews||[]).find(p=>!p.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="series-review"]') && game) { const pending=(game.internationalSeriesReviews||[]).find(r=>!r.viewed); if(pending){pending.viewed=true;autosave();} } m.innerHTML = ''; }
 function confirmSheet(title, text, yesLabel, yesJs) { sheet('Confirm', title, `<p class="s" style="margin:0">${text}</p>`, { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="closeModal();${yesJs}">${yesLabel}</button>` }); }
 
 const ICONS = {
@@ -6946,7 +7180,7 @@ function render() {
   tc.classList.add('hidden');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
-function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); if(ui.page==='home')setTimeout(showPendingInternationalSeriesReview,500); }
+function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); if(ui.page==='home')setTimeout(()=>{if(!showPendingWorldCupReview())showPendingInternationalSeriesReview();},500); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
@@ -7670,7 +7904,7 @@ function playerSearchRows() {
 function setOfficeTab(t) { ui.officeTab = t; render(); }
 function saveHealthText() {
   if (Store.status === 'none') return 'Browser storage unavailable. Export your career JSON now.';
-  return `${Store.idbOk ? 'Browser database' : 'Local browser storage'}${Store.lastSaved ? ' · Last saved '+Store.lastSaved.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : ' · No confirmed save this session'}`;
+  return `${Store.idbOk ? 'Database + recovery copies' : 'Local browser storage'}${Store.lastSaved ? ' · Last saved '+Store.lastSaved.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : ' · No confirmed save this session'}`;
 }
 async function saveAndConfirm() {
   saveStatusUpdate('Saving career…');
@@ -7678,7 +7912,7 @@ async function saveAndConfirm() {
   const ok = await saveGame(slot, false);
   const raw = await Store.get(slot);
   const parsed = safeParse(raw);
-  const valid = !!(ok && parsed && parsed.gm && parsed.players && parsed.season && parsed.meta && Number(parsed.meta.slot || slot) === slot);
+  const valid = !!(ok && parsed && parsed.gm && parsed.players && parsed.season && parsed.meta && Number(parsed.meta.slot || slot) === slot && Number(parsed.meta.saveRevision)===Number(game.meta.saveRevision));
   const stamp = parsed?.meta?.saved ? new Date(parsed.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : 'unknown';
   saveStatusUpdate(valid ? `Saved and verified at ${stamp}.` : 'Could not confirm save. Export a JSON backup now.', !valid);
   flash(valid ? `Career saved and verified · ${stamp}` : 'Save could not be verified. Export JSON.');
@@ -7691,7 +7925,7 @@ async function verifyActiveSlot() {
   const g = safeParse(raw);
   const ok = !!(g && g.gm && g.players && g.season && g.meta && Number(g.meta.slot || slot) === slot);
   const stamp = ok && g.meta.saved ? new Date(g.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : 'unknown';
-  saveStatusUpdate(ok ? `Slot ${slot} verified. Stored at ${stamp}.` : `Slot ${slot} could not be verified. Export JSON.`, !ok);
+  saveStatusUpdate(ok ? `Slot ${slot} verified from ${Store.lastRecovery?.source||'storage'}. Stored at ${stamp}.` : `Slot ${slot} could not be verified. Export JSON.`, !ok);
   flash(ok ? `Slot ${slot} verified · ${stamp}` : 'Save verification failed. Export JSON.');
   return ok;
 }
@@ -9142,19 +9376,31 @@ function renderTournaments(){
  if(mode==='T20')return `${tabs}<div style="height:10px"></div>${renderWorldCup()}`;
  if(mode==='FC'){const w=ensureWtc(),rows=wtcRows(),fin=game.season.fixtures.find(f=>f.stage==='wtcfinal');return `${tabs}<div style="height:10px"></div>${panel('World Test Championship',`<div class="pb xs muted">${w.start}–${w.start+1} cycle · percentage of points earned</div><div class="rows">${rows.map((r,i)=>`<div class="kv"><span>${i+1}. ${esc(NATIONS[r.nat])} · ${r.p} Tests</span><b>${r.pct.toFixed(1)}%</b></div>`).join('')}</div>${fin?`<div class="pb">${fixtureRow(fin,false)}</div>`:''}`,{flush:true})}`;}
  const matches=game.season.fixtures.filter(f=>f.event==='ODIWC');
- const history=(game.worldHistory||[]).filter(h=>/odi|50.over/i.test(h.event||''));
- return `${tabs}<div style="height:10px"></div>${currentWorldCupPreviewButton('ODIWC')}${panel('ODI World Cup',`<div class="pb xs muted">Current competition fixtures and historical winners, where available in this career.</div><div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No ODI World Cup fixtures scheduled this season.</div>'}${history.map(h=>`<div class="kv"><span>${h.year} · ODI World Cup</span><b>${esc(NATIONS[h.winner]||h.winner||'Pending')}</b></div>`).join('')}</div>`,{flush:true})}`;
+ const history=(game.globalTournamentHistory||[]).filter(h=>h.event==='ODIWC');
+ const group=matches.filter(f=>f.stage==='globalgroup');
+ const superFx=matches.filter(f=>f.stage==='globalsuper');
+ const qualified=group.length&&group.every(f=>f.result)&&superFx.some(f=>f.home)?[...new Set(superFx.flatMap(f=>[f.home,f.away]).filter(Boolean))]:[];
+ const superTable=qualified.length?internationalTable(group.filter(f=>qualified.includes(f.home)&&qualified.includes(f.away)).concat(superFx),qualified):[];
+ const ko=matches.filter(f=>f.stage==='globalsemi'||f.stage==='globalfinal');
+ const current=group.length?`<div class="note">ODI World Cup ${game.season.label} · Host ${tournamentHostLabel('ODIWC',game.year)} · 14 nations · Two groups, Super Six and knockouts</div>
+   <div class="grid g2">${['A','B'].map(g=>panel('Group '+g,wcGroupTable(globalTournamentTable('ODIWC',g)),{flush:true})).join('')}</div>
+   ${superTable.length?panel('Super Six · carried results included',wcGroupTable(superTable),{flush:true}):''}
+   ${panel('Knockouts',`<div class="bracket">${ko.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
+   ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures</div>'}</div>`,{flush:true})}
+   ${panel('Tournament fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
+ return `${tabs}<div style="height:10px"></div>${currentWorldCupPreviewButton('ODIWC')}${worldCupReviewButton('ODIWC')}${current}${!group.length?'<div class="note">No ODI World Cup scheduled this season.</div>':''}
+   ${history.length?panel('Past champions',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]):'Host not recorded'}</span><b>${esc(teamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):''}`;
 }
 function renderIntlLegacyRecords(){const n=ui.intlRecNat||'AUS',f=ui.intlRecFmt||'FC';return `<div class="tool-row">${sel(Object.keys(NATIONS).map(k=>[k,NATIONS[k]]),n,'ui.intlRecNat=this.value;render()')}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],f,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(n,f)}`;}
 function renderWorldCup() {
   const w=game.season.windows.find(x=>x.wc&&x.groups),arch=game.wcArchive||[];
   if(!w){const next=game.year%2===1?game.year+2:game.year+1;
-    return `${arch.length?renderWCArchive(arch[0]):`<div class="note">Next T20 World Cup: ${next}.</div>`}${pastWinners()}`;}
+    return `${worldCupReviewButton('T20WC')}${arch.length?renderWCArchive(arch[0]):`<div class="note">Next T20 World Cup: ${next}.</div>`}${pastWinners()}`;}
   const fx=game.season.fixtures.filter(f=>f.comp==='WC');
   const allGroups=Object.keys(w.groups),knock=fx.filter(f=>f.stage.startsWith('wcsemi')||f.stage==='wcfinal');
   const aus=fx.filter(f=>f.home==='AUS'||f.away==='AUS');const L=wcLeaders(w,5);
   const phase=w.champion?'Champions: '+wcName(w.champion):knock.some(f=>f.home)?'Knockouts':w.groups.E?'Super Eight':'Group stage';
-  return `${currentWorldCupPreviewButton('T20WC')}<div class="note">T20 World Cup ${game.season.label} · <b>${esc(phase)}</b> · 20 teams</div>
+  return `${currentWorldCupPreviewButton('T20WC')}${worldCupReviewButton('T20WC')}<div class="note">T20 World Cup ${game.season.label} · Host ${tournamentHostLabel('T20WC',game.year)} · <b>${esc(phase)}</b> · 20 teams</div>
     <div class="grid g2">${allGroups.map(g=>panel('Group '+g,wcGroupTable(wcTable(w,g),w),{flush:true})).join('')}</div>
     ${panel('Knockouts',`<div class="bracket">${knock.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
     <div class="grid g2">${panel("Australia's path",`<div class="rows">${aus.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures.</div>'}</div>`,{flush:true})}
@@ -9170,7 +9416,7 @@ function renderWCArchive(e) {
   const box = k => bracketBox(k.round, k.home, k.away, k.winner || k.text ? { winner: k.winner, text: k.text } : null, k.id);
   const semis = e.ko.filter(k => /Semi/.test(k.round)), fin = e.ko.find(k => k.round === 'Final');
   const lead = (arr, f) => arr.map(x => `<div class="kv"><span>${esc(x.name)} <span class="xs dim">${esc(x.team || '')}</span></span><span class="b">${f(x)}</span></div>`).join('') || '<div class="empty">—</div>';
-  return `<div class="note">Last tournament: T20 World Cup ${e.label}. Champions <b>${wcName(e.champion)}</b>. Australia: ${esc(e.ausFinish)}.</div><div style="height:8px"></div>
+  return `<div class="note">Last tournament: T20 World Cup ${e.label}. Host ${e.host?`${flagFor(e.host)} ${esc(NATIONS[e.host])}`:'not recorded'}. Champions <b>${wcName(e.champion)}</b>. Australia: ${esc(e.ausFinish)}.</div><div style="height:8px"></div>
     <div class="grid g2">${Object.keys(e.groups).map(g=>panel('Group '+g+' · final',wcGroupTable(e.groups[g]),{flush:true})).join('')}</div><div style="height:8px"></div>
     ${panel('Knockouts', `<div class="bracket"><div class="bk-col">${semis.map(box).join('')}</div><div class="bk-col fin">${fin ? box(fin) : ''}</div></div>`)}<div style="height:8px"></div>
     <div class="grid g2">${panel("Australia's path", `<div class="rows">${e.aus.map(a => `<div class="kv ${game.scorecards[a.id] ? 'tap' : ''}" ${game.scorecards[a.id] ? `onclick="showScorecard('${a.id}',0)"` : ''}><span>${esc(a.round)} v ${wcName(a.opp)}</span><span class="${a.won ? 'win' : a.text ? 'loss' : 'dim'}">${esc(displayInternationalSummary(a.text) || '—')}</span></div>`).join('') || '<div class="empty">Australia did not take part.</div>'}</div>`, { flush: true })}
