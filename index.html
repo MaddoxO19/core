@@ -1079,6 +1079,43 @@ body.live-mode .actbar{display:none}
 .sheet-bg.centered>.sheet{width:100%;max-width:510px;max-height:calc(100dvh - 28px);height:auto;min-height:0;border-radius:15px;padding-bottom:0;animation:fade .15s ease-out;box-shadow:0 16px 50px rgba(0,0,0,.45)}
 .sheet-bg.centered .sheet-b{flex:0 1 auto;overflow-y:auto}
 .sheet-bg.centered .sheet-f{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
+/* B116 World Cup review: responsive typographic hierarchy, fixed totals and compact names. */
+.sheet[data-key="wc-review"] .sheet-b{padding:12px 14px 17px}
+.wc-review{font-size:13px;line-height:1.45}
+.wc-review-hero{text-align:center;padding:12px 3px 19px}
+.wc-review-kicker{font-size:11px;color:var(--accent);font-weight:800;letter-spacing:.085em;text-transform:uppercase}
+.wc-review-host{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--muted);font-size:11px;margin:7px 0 17px;letter-spacing:.02em}
+.wc-review-champion{display:flex;align-items:center;justify-content:center;gap:9px;font-size:clamp(21px,6vw,27px);font-weight:850;line-height:1.22;letter-spacing:-.025em}
+.wc-review-champion .legacy-flag{width:32px!important;max-width:32px!important;min-width:32px!important;height:22px!important;max-height:22px!important;min-height:22px!important}
+.wc-review-champion-label{font-size:12px;font-weight:800;color:var(--accent);margin:7px 0 10px}
+.wc-review-runner{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;font-size:12px}
+.wc-review-final{font-size:11px;color:var(--muted);margin-top:9px}
+.wc-review-section{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--s1);margin:0 0 12px}
+.wc-review-section>h3{margin:0;padding:14px 14px 9px;color:var(--muted);font-size:11px;font-weight:850;letter-spacing:.085em;text-transform:uppercase}
+.wc-review-section>h3.wc-review-subhead{padding-top:18px;border-top:1px solid var(--line2);margin-top:9px}
+.wc-review-award{display:grid;grid-template-columns:minmax(0,38%) minmax(0,62%);gap:8px;align-items:center;padding:11px 13px;border-top:1px solid var(--line2)}
+.wc-review-section>h3+.wc-review-award{border-top:0}
+.wc-review-award-label{color:var(--muted);font-size:12px;line-height:1.35}
+.wc-review-qualification{display:block;font-size:10px}
+.wc-review-award-result{min-width:0;display:flex;align-items:flex-end;flex-direction:column;gap:2px;text-align:right}
+.wc-review-player{display:inline-flex;align-items:center;justify-content:flex-start;gap:5px;min-width:0;max-width:100%;font-size:12.5px;font-weight:750;color:var(--text)}
+.wc-review-player-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wc-review-flag{display:inline-flex;align-items:center;flex:none}
+.wc-review-flag .legacy-flag{width:21px!important;min-width:21px!important;max-width:21px!important;height:15px!important;min-height:15px!important;max-height:15px!important}
+.wc-review-nat{color:var(--muted);font-weight:650;font-size:10px;flex:none}
+.wc-review-award-value{font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wc-review-rank{display:grid;grid-template-columns:21px minmax(0,1fr) auto;align-items:center;gap:6px;padding:11px 13px;border-top:1px solid var(--line2)}
+.wc-review-section>h3+.wc-review-rank{border-top:0}
+.wc-review-rank-num{font-size:12px;color:var(--muted)}
+.wc-review-rank .wc-review-player{overflow:hidden}
+.wc-review-stat{font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right}
+.wc-review-note{color:var(--muted);font-size:11px;padding:12px 13px;line-height:1.55;border-top:1px solid var(--line2)}
+.wc-review-info{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-top:1px solid var(--line2);font-size:12px}
+.wc-review-section>h3+.wc-review-info{border-top:0}
+.wc-review-info>span:first-child{color:var(--muted)}
+.wc-review-semis,.wc-review-favourite{display:flex;align-items:center;gap:5px}
+@media(max-width:380px){.sheet[data-key="wc-review"] .sheet-b{padding-left:9px;padding-right:9px}.wc-review-award{grid-template-columns:minmax(0,34%) minmax(0,66%);padding:10px}.wc-review-rank{padding:10px}.wc-review-player{font-size:11.5px}.wc-review-nat{font-size:9px}}
+
 /* B110 contract sheet and international awards on phones */
 .intl-award-recipient{display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;text-align:right}
 .neglog{max-height:175px;overflow:auto;overscroll-behavior:contain}
@@ -1141,7 +1178,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.38 Build 115', title: 'World Cup Qualification Indicators', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.40 Build 117', title: 'Seven-Match One-Day Cup', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -1227,7 +1264,7 @@ const TRAINING = {
 
 // Calendar, in days from 1 October of the season's first year.
 const CAL = {
-  ODC: [3,15,27,38,49], ODC_FINAL: 56,
+  ODC: [3,15,27,38,49,106,113], ODC_FINAL: 117,
   SHIELD: [8,20,32,43,125,132,139,146,153,160], SHIELD_FINAL: 167,
   T20: [64,67,70,73,76,79,82,85,88,91], T20_SEMI: 95, T20_FINAL: 99,
   TRADE_DEADLINE: 118,
@@ -1605,7 +1642,12 @@ function buildSeason(year) {
   let n = 1;
   const add = (comp, round, day, home, away, stage) => fixtures.push({ id: year + '-' + (n++), comp, round, day, home, away, stage: stage || 'league', result: null });
 
-  roundRobin(shuffle(ids)).forEach((pairs, i) => pairs.forEach(([h, a]) => add('ODC', i + 1, CAL.ODC[i], h, a)));
+  // Five single round-robin rounds plus two reversed-venue return rounds.
+  // Every state plays seven league fixtures, with a 3/4 or 4/3 home/away split.
+  // Existing seasons retain their stored fixtures; only newly built seasons use this schedule.
+  const od = roundRobin(shuffle(ids));
+  [...od, ...od.slice(0, 2).map(r => r.map(([h, a]) => [a, h]))]
+    .forEach((pairs, i) => pairs.forEach(([h, a]) => add('ODC', i + 1, CAL.ODC[i], h, a)));
   add('ODC', 'Final', CAL.ODC_FINAL, null, null, 'final');
 
   const sh = roundRobin(shuffle(ids));
@@ -4367,22 +4409,54 @@ function tournamentScorecardLeaders(fx,n){
   }
   return {bat:Object.values(bat).sort((a,b)=>b.r-a.r).slice(0,n),bowl:Object.values(bowl).sort((a,b)=>b.w-a.w).slice(0,n)};
 }
+// B116: tournament review presentation helpers. Display labels never change player identity or history.
+function wcReviewDisplayName(p){
+  if(!p)return 'Player unavailable';
+  const full=String(pname(p)||'').trim().replace(/\s+/g,' ');
+  if(full.length<=19)return full;
+  const parts=full.split(' ');
+  if(parts.length<2)return full;
+  return `${parts[0][0]} ${parts.slice(1).join(' ')}`;
+}
+function wcReviewPlayer(id){
+  const p=P(id);
+  if(!p)return '<span class="wc-review-player wc-review-missing">Player unavailable</span>';
+  const nat=String(p.nat||'').replace(/^X_/,'');
+  const knownFlag=typeof LEGACY_FLAG_ASSETS!=='undefined'&&LEGACY_FLAG_ASSETS[nat];
+  return `<span class="wc-review-player" title="${esc(pname(p))} · ${esc(NATIONS[nat]||nat||'Nationality unavailable')}"><span class="wc-review-player-name">${esc(wcReviewDisplayName(p))}</span>${knownFlag?`<span class="wc-review-flag">${flagFor(nat)}</span>`:''}<span class="wc-review-nat">${esc(nat||'—')}</span></span>`;
+}
+function wcReviewRow(label,person,value){
+  return `<div class="wc-review-award"><span class="wc-review-award-label">${label}</span><span class="wc-review-award-result">${person}${value?`<strong class="wc-review-award-value">${value}</strong>`:''}</span></div>`;
+}
 function worldCupReviewHtml(r){
   const title=r.event==='ODIWC'?'ODI World Cup':'T20 World Cup';
-  const ranked=(rows,kind)=>rows?.length?rows.map((x,i)=>{
-    const p=P(x.id);return `<div class="kv"><span>${i+1}. ${p?esc(pname(p)):'Player unavailable'} ${p?flagFor(p.nat):''}</span><b>${kind==='bat'?x.r+' runs':x.w+' wkts'}</b></div>`;
-  }).join(''):'<div class="empty">Complete individual scorecards not retained.</div>';
+  const ranked=(rows,kind)=>rows?.length?rows.map((x,i)=>
+    `<div class="wc-review-rank"><span class="wc-review-rank-num">${i+1}.</span>${wcReviewPlayer(x.id)}<strong class="wc-review-stat">${kind==='bat'?Number(x.r||0)+' runs':Number(x.w||0)+' wickets'}</strong></div>`
+  ).join(''):'<div class="empty">Complete individual scorecards not retained.</div>';
   const preview=(game.worldCupPreviews||[]).find(p=>p.id===r.previewId);
-  return `<div class="series-review-head"><div class="xs muted">${title.toUpperCase()} · ${r.year} · Host ${flagFor(r.host)} ${esc(NATIONS[r.host])}</div>
-    <div class="series-review-nations">${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</div><div class="s">World champions · Runners-up ${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</div>
-    <div class="xs muted" style="margin-top:7px">${esc(r.finalText)}</div></div>
-    <div class="panel" style="margin-bottom:9px"><div class="ph"><h3>Players of the tournament</h3></div><div class="rows">
-      ${r.awards?.pot?`<div class="kv"><span>Player of the Tournament (modelled)</span><b>${esc(pname(P(r.awards.pot.id)))}</b></div>`:''}
-      ${r.awards?.bat?`<div class="kv"><span>Leading batter</span><b>${esc(pname(P(r.awards.bat.id)))} · ${r.awards.bat.r} runs</b></div>`:''}
-      ${r.awards?.bowl?`<div class="kv"><span>Leading bowler</span><b>${esc(pname(P(r.awards.bowl.id)))} · ${r.awards.bowl.w} wickets</b></div>`:''}
-      <div class="xs muted" style="padding:8px 12px">Based on ${r.coverage==null?'available statistics':r.coverage+' of '+(r.fixturesCompleted||0)+' completed matches'}. Missing scorecards are not reconstructed.</div></div></div>
-    <div class="panel" style="margin-bottom:9px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${ranked(r.leaders?.bat,'bat')}</div><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${ranked(r.leaders?.bowl,'bowl')}</div></div>
-    <div class="panel"><div class="ph"><h3>Australia's tournament</h3></div><div class="rows"><div class="kv"><span>Record</span><b>${r.aus.won} wins · ${r.aus.lost} losses</b></div><div class="kv"><span>Semi-finalists</span><span>${r.semiFinalists.map(t=>flagFor(teamNat(t))).join(' ')}</span></div>${preview?`<div class="kv"><span>Pre-tournament favourite</span><span>${flagFor(preview.ranked?.[0]?.nat)} ${esc(NATIONS[preview.ranked?.[0]?.nat]||'—')}</span></div>`:''}</div></div>`;
+  const awardRows=[
+    r.awards?.pot?wcReviewRow('Player of the Tournament <span class="wc-review-qualification">(modelled)</span>',wcReviewPlayer(r.awards.pot.id),''):'',
+    r.awards?.bat?wcReviewRow('Leading batter',wcReviewPlayer(r.awards.bat.id),Number(r.awards.bat.r||0)+' runs'):'',
+    r.awards?.bowl?wcReviewRow('Leading bowler',wcReviewPlayer(r.awards.bowl.id),Number(r.awards.bowl.w||0)+' wickets'):''
+  ].join('');
+  const host=String(r.host||'');
+  return `<div class="wc-review">
+    <div class="wc-review-hero"><div class="wc-review-kicker">${esc(title.toUpperCase())} · ${esc(r.year)}</div>
+      <div class="wc-review-host">HOSTED BY ${flagFor(host)} ${esc(NATIONS[host]||host||'Not recorded')}</div>
+      <div class="wc-review-champion">${flagFor(teamNat(r.champion))}<span>${esc(teamName(r.champion))}</span></div>
+      <div class="wc-review-champion-label">World champions</div>
+      <div class="wc-review-runner">Runners-up ${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</div>
+      <div class="wc-review-final">${esc(r.finalText||'')}</div></div>
+    <section class="wc-review-section"><h3>Players of the tournament</h3>
+      ${awardRows||'<div class="empty">Tournament awards unavailable.</div>'}
+      <div class="wc-review-note">Based on ${r.coverage==null?'available statistics':r.coverage+' of '+(r.fixturesCompleted||0)+' completed matches'}. Missing scorecards are not reconstructed.</div></section>
+    <section class="wc-review-section"><h3>Top three batters</h3>${ranked(r.leaders?.bat,'bat')}
+      <h3 class="wc-review-subhead">Top three bowlers</h3>${ranked(r.leaders?.bowl,'bowl')}</section>
+    <section class="wc-review-section"><h3>Australia's tournament</h3>
+      <div class="wc-review-info"><span>Record</span><strong>${r.aus.won} wins · ${r.aus.lost} losses</strong></div>
+      <div class="wc-review-info"><span>Semi-finalists</span><span class="wc-review-semis">${r.semiFinalists.map(t=>`<span title="${esc(teamName(t))}">${flagFor(teamNat(t))}</span>`).join(' ')}</span></div>
+      ${preview?`<div class="wc-review-info"><span>Pre-tournament favourite</span><span class="wc-review-favourite">${flagFor(preview.ranked?.[0]?.nat)} ${esc(NATIONS[preview.ranked?.[0]?.nat]||'—')}</span></div>`:''}</section>
+  </div>`;
 }
 function openWorldCupReview(id){const r=worldCupReviewStore().find(x=>x.id===id);if(!r)return;
   sheet('World Cup review',r.event==='ODIWC'?'ODI World Cup':'T20 World Cup',worldCupReviewHtml(r),
