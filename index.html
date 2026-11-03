@@ -1135,7 +1135,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.33 Build 110', title: 'Career Longevity, Ages and Contract Integrity', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.34 Build 111', title: 'World Cup Previews and Negotiation Reconciliation', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -3932,6 +3932,72 @@ function showPendingInternationalSeriesReview(){
   if(r)openInternationalSeriesReview(r.id);
 }
 
+// Build 111: persistent, pre-first-fixture World Cup preview. No match engine effects.
+function worldCupPreviewStore(){return game.worldCupPreviews||(game.worldCupPreviews=[]);}
+function worldCupPreviewFixtureGroup(event){
+  return game.season.fixtures.filter(f=>event==='T20WC'?f.comp==='WC'&&f.stage==='wcgroup':f.event==='ODIWC'&&f.stage==='globalgroup');
+}
+function worldCupPreviewDue(){
+  if(!game||game.phase!=='season')return null;
+  for(const event of ['T20WC','ODIWC']){
+    const fx=worldCupPreviewFixtureGroup(event);
+    if(!fx.length||fx.some(f=>f.result))continue;
+    const first=Math.min(...fx.map(f=>f.day));
+    if(game.day<first-1)continue;
+    const id=`${game.year}-${event}`;
+    if(worldCupPreviewStore().some(p=>p.id===id))continue;
+    return {event,id,fx,first};
+  }
+  return null;
+}
+function createWorldCupPreview(info){
+  const {event,id,fx,first}=info, rankings=game.nation.rankings||{};
+  const teams=[...new Set(fx.flatMap(f=>[f.home,f.away]).filter(Boolean))];
+  const strength=t=>rankings[teamNat(t)]||0;
+  const ranked=teams.slice().sort((a,b)=>strength(b)-strength(a)||a.localeCompare(b));
+  const favorites=ranked.slice(0,3).map(t=>({id:t,nat:teamNat(t),rating:strength(t)}));
+  // A dark horse is a competitive team outside the leading three, not a random selection.
+  const darkHorse=ranked.length>3?{id:ranked[3],nat:teamNat(ranked[3])}:null;
+  const participants=new Set(teams.map(teamNat));
+  const eligible=Object.values(game.players).filter(p=>!p.retired&&participants.has(p.nat));
+  const scored=(type)=>eligible.slice().sort((a,b)=>{
+    const metric=p=>type==='bat'?batRating(p,event==='T20WC'?'T20':'OD'):type==='bowl'?bowlRating(p,event==='T20WC'?'T20':'OD'):(batRating(p,event==='T20WC'?'T20':'OD')+bowlRating(p,event==='T20WC'?'T20':'OD'))/2;
+    return metric(b)-metric(a)||a.id.localeCompare(b.id);
+  });
+  const selectedNations={};
+  const pickStar=(list,used,pred)=>{const pool=list.filter(p=>!used.has(p.id)&&(!pred||pred(p)));const p=pool.find(p=>(selectedNations[p.nat]||0)<2)||pool[0];if(p){used.add(p.id);selectedNations[p.nat]=(selectedNations[p.nat]||0)+1;return{id:p.id,name:pname(p),nat:p.nat,age:p.age};}return null;};
+  const used=new Set();
+  const stars={batter:pickStar(scored('bat'),used),bowler:pickStar(scored('bowl').filter(p=>canBowl(p)),used),allrounder:pickStar(scored('all'),used,p=>['BAR','BWAR'].includes(p.role)),rising:pickStar(scored('bat'),used,p=>p.age<=23)};
+  const previous=(event==='T20WC'?(game.worldHistory||[]).filter(h=>h.event==='T20 World Cup'):(game.globalTournamentHistory||[]).filter(h=>h.event==='ODIWC')).sort((a,b)=>b.year-a.year)[0];
+  const champ=previous?(previous.winner||null):null;
+  const australia=fx.filter(f=>f.home==='AUS'||f.away==='AUS').sort((a,b)=>a.day-b.day)[0]||null;
+  const opening=fx.slice().sort((a,b)=>a.day-b.day)[0];
+  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':'ODI World Cup',teams:teams.length,first,ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
+  worldCupPreviewStore().push(result);return result;
+}
+function worldCupPreviewHtml(r){
+  const nationLine=x=>x?`${flagFor(x.nat)} ${esc(NATIONS[x.nat]||x.nat)}`:'–';
+  const starLine=(label,p)=>p?`<div class="kv"><span>${label}</span><span><span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> ${flagFor(p.nat)}</span></div>`:'';
+  return `<div class="series-review-head"><div class="xs muted">PRE-TOURNAMENT PREVIEW · ${r.year}</div><div class="series-review-nations">${esc(r.title)}</div><div class="s">${r.teams} competing nations · Opening ${dateStr(r.first)}</div></div>
+    <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Pre-tournament favourites</h3></div><div class="rows">${r.ranked.map((t,i)=>`<div class="kv"><span>${i+1}. ${nationLine(t)}</span><b>${Math.round(t.rating)} rating</b></div>`).join('')}</div></div>
+    <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Players to watch</h3></div><div class="rows">${starLine('Leading batter',r.stars.batter)}${starLine('Leading bowler',r.stars.bowler)}${starLine('All-rounder',r.stars.allrounder)}${starLine('Rising star',r.stars.rising)}</div></div>
+    <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${r.champion?`<div class="kv"><span>Defending champions</span><span>${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>
+    <div class="xs dim" style="margin-top:9px">Pre-tournament forecasts use current international ratings and player abilities, not simulated outcomes.</div>`;
+}
+function openWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(!r)return;sheet('World Cup preview',r.title,worldCupPreviewHtml(r),{center:true,key:'wc-preview',foot:`<button class="btn pri block" onclick="dismissWorldCupPreview('${r.id}')">Begin World Cup</button>`});}
+function dismissWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(r)r.viewed=true;closeModal();autosave();}
+function showPendingWorldCupPreview(){
+  if(!game||document.querySelector('#modalRoot .sheet'))return false;
+  let r=worldCupPreviewStore().find(p=>!p.viewed);
+  if(!r){const info=worldCupPreviewDue();if(info)r=createWorldCupPreview(info);}
+  if(!r)return false;
+  autosave();openWorldCupPreview(r.id);return true;
+}
+function currentWorldCupPreviewButton(event){
+  const r=worldCupPreviewStore().find(p=>p.year===game.year&&p.event===event);
+  return r?`<button class="btn ghost" onclick="openWorldCupPreview('${r.id}')">View pre-tournament preview</button><div style="height:8px"></div>`:'';
+}
+
 // ---- Global ODI competitions and qualification ----
 // The historical/fixture calendar is a fictional FTP-style world. Qualification is
 // seeded from world rankings at draw time; future cycles reselect the strongest teams.
@@ -4556,14 +4622,38 @@ function expireInbox() { (game.inbox || []).forEach(m => { if (!m.done && game.d
 const AGENT_STYLES = { tough:{ label:'Hard-nosed', mult:1.12, patience:2 }, fair:{ label:'Straight shooter', mult:1.0, patience:3 }, friendly:{ label:'Easy to deal with', mult:0.96, patience:4 } };
 function agentOf(p) { if (!p.agent) { const nm = genName('AUS'); p.agent = { name: nm[0] + ' ' + nm[1], style: weightedPick(Object.keys(AGENT_STYLES), k => ({ tough:2, fair:3, friendly:1.5 })[k]) }; } return p.agent; }
 function prefYears(p) { return p.age <= 25 ? 3 : p.age <= 30 ? 2 : 1; }
+function negotiationSuspension(p) {
+  const b=p.negBreakdown;
+  if(b && b.year===game.year && game.day<b.untilDay) return b;
+  if(b && b.year===game.year && b.seasonLock) return b;
+  // Backward-compatible conversion of any old permanent block into a timed restriction.
+  if(!b && Number.isFinite(p.noTalksUntil) && game.day<p.noTalksUntil) {
+    p.negBreakdown={count:1,year:game.year,untilDay:p.noTalksUntil,ask:null,years:null,mode:'extend'};
+    return p.negBreakdown;
+  }
+  return null;
+}
+function contractNegotiationDemand(p,mode) {
+  const b=p.negBreakdown;
+  const ag=agentOf(p),per=ensurePersona(p),own=p.teamId===U();
+  let ask=askingSalary(p)*AGENT_STYLES[ag.style].mult*(per==='ambitious'?1.08:1)*(per==='loyal'&&own?0.9:1)*(own&&p.morale<45?1.12:1)*(1-(game.gm.rep-40)/500);
+  if(mode==='resign'&&game.offseason){const e=game.offseason.expiring?.find(x=>x.id===p.id);if(e)ask=Math.max(ask,e.ask*0.95);}
+  const penalty=b?.count?1+Math.min(0.20,b.count*0.04):1;
+  return Math.max(MIN_SALARY,Math.round(ask*penalty/5000)*5000);
+}
+function recordNegotiationBreakdown(p,n) {
+  const old=p.negBreakdown||{};
+  const count=(old.count||0)+1;
+  const cooldown=count===1?30:count===2?60:90;
+  p.negBreakdown={count,year:game.year,untilDay:game.day+cooldown,seasonLock:count>=4,ask:n.ask,years:n.years,mode:n.mode};
+  p.noTalksUntil=game.day+cooldown;
+}
 function startNegotiation(id, mode) {
   const p = P(id), ag = agentOf(p), per = ensurePersona(p);
-  if (p.noTalksUntil && game.day < p.noTalksUntil && game.phase === 'season') return { ok: false, reason: `${p.last}'s camp is not taking calls right now.` };
+  if (negotiationSuspension(p)) return { ok: false, suspended:true, reason: `${p.last}'s camp is not taking calls right now.` };
   if (mode === 'extend' && p.wantsOut) return { ok: false, reason: `${p.last} has asked for a trade and will not discuss a new deal.` };
   const own = p.teamId === U();
-  let ask = askingSalary(p) * AGENT_STYLES[ag.style].mult * (per === 'ambitious' ? 1.08 : 1) * (per === 'loyal' && own ? 0.9 : 1) * (own && p.morale < 45 ? 1.12 : 1) * (1 - (game.gm.rep - 40) / 500);
-  if (mode === 'resign' && game.offseason) { const e = game.offseason.expiring.find(x => x.id === id); if (e) ask = Math.max(ask, e.ask * 0.95); }
-  ask = Math.max(MIN_SALARY, Math.round(ask / 5000) * 5000);
+  let ask = contractNegotiationDemand(p,mode);
   game.neg = { id, mode, ask, years: prefYears(p), offerSalary: Math.round(ask*0.9/5000)*5000, offerYears: prefYears(p), patience: AGENT_STYLES[ag.style].patience, log: [`${ag.name} (${AGENT_STYLES[ag.style].label.toLowerCase()}): "We are looking for ${money(ask)} a season over ${prefYears(p)} year${prefYears(p) > 1 ? 's' : ''}."`], done: false };
   return { ok: true };
 }
@@ -4599,18 +4689,20 @@ function closeNegotiation() {
   let msg = null;
   if (n.done === 'agreed') {
     const { salary, years } = n.final;
-    if (n.mode === 'sign') {
+    if (salary > capSpace(U())+(n.mode==='sign'?0:p.contract?.salary||0)) { msg='Insufficient salary cap space.'; }
+    else if (n.mode === 'sign') {
       if (squadOf(U()).length >= SQUAD_MAX) msg = `Squad is full (${SQUAD_MAX}).`;
       else if (p.nat !== 'AUS' && overseasCount(U()) >= OVERSEAS_MAX) msg = `You already have ${OVERSEAS_MAX} overseas players.`;
       else { p.teamId = U(); p.contract = { salary, years }; logTx(`Signed ${pname(p)} (${money(salary)} × ${years}).`); addNews('Signing', `${pname(p)} signs with ${teamName(U())}`, `${ROLES[p.role].label}, ${p.age}. ${money(salary)} a season for ${years} year${years > 1 ? 's' : ''}.`); msg = 'Signed.'; }
     } else if (n.mode === 'extend') { p.contract = { salary, years: Math.max(p.contract.years, years) }; /* displayed term is the resulting duration */ p.morale = clamp(p.morale + 6, 5, 100); logTx(`Extended ${pname(p)} (${money(salary)}).`); msg = 'Extension agreed.'; }
     else if (n.mode === 'resign') { const e = game.offseason.expiring.find(x => x.id === n.id); p.contract = { salary, years }; if (e) e.status = 'signed'; logTx(`Re-signed ${pname(p)} (${money(salary)} × ${years}).`); msg = 'Re-signed.'; }
   } else if (n.done === 'walked') {
-    p.noTalksUntil = game.day + 30;
+    recordNegotiationBreakdown(p,n);
     if (p.teamId === U()) p.morale = clamp(p.morale - 6, 5, 100);
-    if (n.mode === 'resign') { const e = game.offseason.expiring.find(x => x.id === n.id); if (e) e.status = 'released'; }
+    // A breakdown suspends talks; it does not silently release an expiring player.
     msg = `${p.last} walked away from talks.`;
   }
+  if(n.done==='agreed'&&['Signed.','Extension agreed.','Re-signed.'].includes(msg)){p.negBreakdown=null;p.noTalksUntil=null;}
   game.neg = null;
   return msg;
 }
@@ -5524,6 +5616,7 @@ function continueGame() {
   if (!game) return;
   if (game.live) { go('live'); return; }
   if (game.phase !== 'season') { offseasonContinue(); return; }
+  if (showPendingWorldCupPreview()) { go('home'); return; }
   const pend = game.pendingFx && fixtureById(game.pendingFx);
   if (pend && !pend.result && isClash(pend) && !isFinalFx(pend)) { staffPlay(pend); game.pendingFx = null; }
   else if (pend && !pend.result && yieldsToIntl(pend)) { staffPlay(pend, intlReason(pend)); game.pendingFx = null; }
@@ -5532,6 +5625,7 @@ function continueGame() {
   const done = page => { autosave(); go(page); showAwaySummary(); showPendingInternationalSeriesReview(); };
   for (let i = 0; i < 400; i++) {
     if (game.busy && game.day > game.busy.until) game.busy = null;
+    if(showPendingWorldCupPreview()) { autosave();go('home');return; }
     playAIFixturesToday();
     let ufx, g2 = 0;
     while ((ufx = userFixtureToday()) && g2++ < 6) {
@@ -5559,6 +5653,7 @@ function simDays(n, untilEnd) {
   if (!game || game.live || game.phase !== 'season') return;
   const start = game.day;
   for (let i = 0; i < 400; i++) {
+    if(showPendingWorldCupPreview()){autosave();go('home');return;}
     playAIFixturesToday();
     let ufx, g2 = 0;
     while ((ufx = userFixtureToday()) && g2++ < 5) quickPlay(ufx);
@@ -6416,7 +6511,7 @@ function startNewSeason() {
   rolloverWtc(game.year);
   game.day = 0; game.scorecards = {}; game.pendingFx = null; game.offers = []; game.live = null;
   if (game.fin) game.fin.ledger = blankLedger();
-  Object.values(game.players).forEach(p => { p.rest = false; p.noTalksUntil = null; });
+  Object.values(game.players).forEach(p => { p.rest = false; p.noTalksUntil = null; /* Negotiation history remains, but the previous season's cooldown expires. */ });
   FMT_LIST.forEach(f => game.userXI[f] = (game.userXI[f] || []).filter(id => P(id) && P(id).teamId === U()));
   if (game.captain && (!P(game.captain) || P(game.captain).teamId !== U())) game.captain = null;
   if (!game.captain) { const c = squadOf(U()).sort((a, b) => (peakOvr(b) + b.age * 0.6) - (peakOvr(a) + a.age * 0.6))[0]; game.captain = c ? c.id : null; }
@@ -6783,7 +6878,7 @@ function sheetSwipe(el) {
   const end = () => { if (y0 == null) return; y0 = null; el.style.transition = 'transform .15s'; if (dy > 90) closeModal(); else el.style.transform = ''; };
   [head, bodyEl].forEach(t => { if (!t) return; t.addEventListener('touchstart', start, { passive: true }); t.addEventListener('touchmove', move, { passive: false }); t.addEventListener('touchend', end); t.addEventListener('touchcancel', end); });
 }
-function closeModal() { const m=$('modalRoot'); if(m.querySelector('.sheet[data-key="series-review"]') && game) { const pending=(game.internationalSeriesReviews||[]).find(r=>!r.viewed); if(pending){pending.viewed=true;autosave();} } m.innerHTML = ''; }
+function closeModal() { const m=$('modalRoot'); if(m.querySelector('.sheet[data-key="wc-preview"]')&&game){const r=(game.worldCupPreviews||[]).find(p=>!p.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="series-review"]') && game) { const pending=(game.internationalSeriesReviews||[]).find(r=>!r.viewed); if(pending){pending.viewed=true;autosave();} } m.innerHTML = ''; }
 function confirmSheet(title, text, yesLabel, yesJs) { sheet('Confirm', title, `<p class="s" style="margin:0">${text}</p>`, { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="closeModal();${yesJs}">${yesLabel}</button>` }); }
 
 const ICONS = {
@@ -9046,9 +9141,9 @@ function renderTournaments(){
  const tabs=seg([['OD','ODI World Cup'],['T20','T20 World Cup'],['FC','Test Championship']],mode,'(v=>{ui.tournamentFormat=v;render();})');
  if(mode==='T20')return `${tabs}<div style="height:10px"></div>${renderWorldCup()}`;
  if(mode==='FC'){const w=ensureWtc(),rows=wtcRows(),fin=game.season.fixtures.find(f=>f.stage==='wtcfinal');return `${tabs}<div style="height:10px"></div>${panel('World Test Championship',`<div class="pb xs muted">${w.start}–${w.start+1} cycle · percentage of points earned</div><div class="rows">${rows.map((r,i)=>`<div class="kv"><span>${i+1}. ${esc(NATIONS[r.nat])} · ${r.p} Tests</span><b>${r.pct.toFixed(1)}%</b></div>`).join('')}</div>${fin?`<div class="pb">${fixtureRow(fin,false)}</div>`:''}`,{flush:true})}`;}
- const matches=game.season.fixtures.filter(f=>f.comp==='CWC'||f.event==='CWC'||String(f.stage||'').toLowerCase().includes('odiwc'));
+ const matches=game.season.fixtures.filter(f=>f.event==='ODIWC');
  const history=(game.worldHistory||[]).filter(h=>/odi|50.over/i.test(h.event||''));
- return `${tabs}<div style="height:10px"></div>${panel('ODI World Cup',`<div class="pb xs muted">Current competition fixtures and historical winners, where available in this career.</div><div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No ODI World Cup fixtures scheduled this season.</div>'}${history.map(h=>`<div class="kv"><span>${h.year} · ODI World Cup</span><b>${esc(NATIONS[h.winner]||h.winner||'Pending')}</b></div>`).join('')}</div>`,{flush:true})}`;
+ return `${tabs}<div style="height:10px"></div>${currentWorldCupPreviewButton('ODIWC')}${panel('ODI World Cup',`<div class="pb xs muted">Current competition fixtures and historical winners, where available in this career.</div><div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No ODI World Cup fixtures scheduled this season.</div>'}${history.map(h=>`<div class="kv"><span>${h.year} · ODI World Cup</span><b>${esc(NATIONS[h.winner]||h.winner||'Pending')}</b></div>`).join('')}</div>`,{flush:true})}`;
 }
 function renderIntlLegacyRecords(){const n=ui.intlRecNat||'AUS',f=ui.intlRecFmt||'FC';return `<div class="tool-row">${sel(Object.keys(NATIONS).map(k=>[k,NATIONS[k]]),n,'ui.intlRecNat=this.value;render()')}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],f,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(n,f)}`;}
 function renderWorldCup() {
@@ -9059,7 +9154,7 @@ function renderWorldCup() {
   const allGroups=Object.keys(w.groups),knock=fx.filter(f=>f.stage.startsWith('wcsemi')||f.stage==='wcfinal');
   const aus=fx.filter(f=>f.home==='AUS'||f.away==='AUS');const L=wcLeaders(w,5);
   const phase=w.champion?'Champions: '+wcName(w.champion):knock.some(f=>f.home)?'Knockouts':w.groups.E?'Super Eight':'Group stage';
-  return `<div class="note">T20 World Cup ${game.season.label} · <b>${esc(phase)}</b> · 20 teams</div>
+  return `${currentWorldCupPreviewButton('T20WC')}<div class="note">T20 World Cup ${game.season.label} · <b>${esc(phase)}</b> · 20 teams</div>
     <div class="grid g2">${allGroups.map(g=>panel('Group '+g,wcGroupTable(wcTable(w,g),w),{flush:true})).join('')}</div>
     ${panel('Knockouts',`<div class="bracket">${knock.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
     <div class="grid g2">${panel("Australia's path",`<div class="rows">${aus.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures.</div>'}</div>`,{flush:true})}
@@ -9102,7 +9197,7 @@ function globalTournamentPanel() {
  if(fxs.length){const ev=fxs[0].event, title=ev==='ODIWC'?'ODI World Cup':'Champions Trophy';
   const table=g=>globalTournamentTable(ev,g).map(r=>`<div class="row" style="padding:7px 10px"><div class="grow s">${tdot(r.t)} ${esc(teamDef(r.t).name)}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('');
   const knock=fxs.filter(f=>f.stage==='globalsuper'||f.stage.startsWith('globalsemi')||f.stage==='globalfinal');
-  sections=panel(title,`<div class="note">${ev==='ODIWC'?'14 teams · Super Six · Knockouts':'8 teams · Knockouts'}</div><div class="grid g2"><div><div class="lbl">Group A</div>${table('A')}</div><div><div class="lbl">Group B</div>${table('B')}</div></div><div class="lbl" style="padding-top:10px">Knockouts</div>${knock.map(f=>`<div class="kv"><span>${esc(f.round)}: ${f.home?esc(teamDef(f.home).name):'TBC'} v ${f.away?esc(teamDef(f.away).name):'TBC'}</span><span>${f.result?esc(displayInternationalSummary(f.result.text)):'–'}</span></div>`).join('')}`,{flush:true});
+  sections=currentWorldCupPreviewButton(ev)+panel(title,`<div class="note">${ev==='ODIWC'?'14 teams · Super Six · Knockouts':'8 teams · Knockouts'}</div><div class="grid g2"><div><div class="lbl">Group A</div>${table('A')}</div><div><div class="lbl">Group B</div>${table('B')}</div></div><div class="lbl" style="padding-top:10px">Knockouts</div>${knock.map(f=>`<div class="kv"><span>${esc(f.round)}: ${f.home?esc(teamDef(f.home).name):'TBC'} v ${f.away?esc(teamDef(f.away).name):'TBC'}</span><span>${f.result?esc(displayInternationalSummary(f.result.text)):'–'}</span></div>`).join('')}`,{flush:true});
  }
  return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(teamDef(h.winner).name)}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
 }
@@ -9253,8 +9348,27 @@ function renderClub() {
 function doUpgrade(k) { confirmSheet('Upgrade facility', `Upgrade the ${FACILITIES[k].label.toLowerCase()} to level ${facLevel(k) + 1} for ${money(upgradeCost(k))}?`, 'Upgrade', `const r=upgradeFacility('${k}');flash(r.ok?'Upgraded.':r.reason);autosave();render()`); }
 
 // Contract talks with the player's agent.
+function negotiationReconciliationSheet(id, mode) {
+  const p=P(id);if(!p)return;
+  const b=negotiationSuspension(p);if(!b){negotiate(id,mode);return;}
+  const ask=Math.max(MIN_SALARY,Math.round(Math.max(b.ask||0,contractNegotiationDemand(p,mode))/5000)*5000);
+  const years=Math.max(1,Math.min(5,b.years||prefYears(p)));
+  const rem=b.seasonLock?'Until next season':Math.max(0,b.untilDay-game.day)+' calendar days';
+  const capRoom=capSpace(U())+(mode==='sign'?0:p.contract?.salary||0);
+  const canAccept=ask<=capRoom && !(mode==='sign'&&(p.retired||p.teamId||squadOf(U()).length>=SQUAD_MAX||(p.nat!=='AUS'&&overseasCount(U())>=OVERSEAS_MAX))) && !(mode==='extend'&&p.wantsOut) && !(mode==='resign'&&!game.offseason?.expiring?.some(e=>e.id===id&&e.status!=='released'));
+  const body=`<div class="note">${esc(agentOf(p).name)} has suspended negotiations after previous offers. You may wait for the cooling-off period or accept the agent's current terms immediately.</div><div class="kv"><span>Relationship</span><b>Strained · ${b.count} breakdown${b.count===1?'':'s'}</b></div><div class="kv"><span>Talks resume</span><b>${esc(rem)}</b></div><div class="kv"><span>Agent's terms</span><b>${money(ask)} × ${years} years</b></div><div class="kv"><span>Total contract</span><b>${money(ask*years)}</b></div>${!canAccept?'<div class="note bad">The proposed deal cannot be signed with the current squad, contract status or available salary cap.</div>':''}`;
+  sheet('Negotiations suspended',pname(p),body,{foot:`<button class="btn ghost" onclick="closeModal()">Wait</button><button class="btn pri" ${canAccept?'':'disabled'} onclick="acceptSuspendedAgentTerms('${id}','${mode}',${ask},${years})">Accept ${money(ask)} × ${years} yrs</button>`});
+}
+function acceptSuspendedAgentTerms(id,mode,salary,years){
+  const p=P(id);if(!p||!negotiationSuspension(p))return;
+  const fresh=contractNegotiationDemand(p,mode);
+  const b=p.negBreakdown;
+  if(salary<Math.max(b?.ask||0,fresh)||years!==(b?.years||prefYears(p))){negotiationReconciliationSheet(id,mode);return;}
+  game.neg={id,mode,done:'agreed',final:{salary,years},ask:salary,years,log:[],patience:0};
+  finishNeg();
+}
 function negotiate(id, mode) {
-  if (!game.neg || game.neg.id !== id) { const r = startNegotiation(id, mode); if (!r.ok) { flash(r.reason); return; } }
+  if (!game.neg || game.neg.id !== id) { const r = startNegotiation(id, mode); if (!r.ok) { if(r.suspended)negotiationReconciliationSheet(id,mode);else flash(r.reason); return; } }
   negSheet();
 }
 function negSheet() {
