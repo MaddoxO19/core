@@ -1120,6 +1120,24 @@ body.live-mode .actbar{display:none}
 .intl-award-recipient{display:inline-flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;text-align:right}
 .neglog{max-height:175px;overflow:auto;overscroll-behavior:contain}
 @media(max-width:480px){.intl-award-recipient{max-width:57%;line-height:1.3}.kv:has(.intl-award-recipient){gap:8px}.kv:has(.intl-award-recipient)>span:first-child{max-width:43%}}
+
+/* B120 tournament presentation: clean metadata strip and compact review. */
+.wc-preview-head{padding:8px 1px 16px!important}
+.wc-preview-meta{display:grid;grid-template-columns:.7fr 1.15fr 1.05fr;gap:0;margin-top:17px;border:1px solid var(--line);border-radius:10px;overflow:hidden;text-align:left}
+.wc-preview-meta>div{min-width:0;padding:10px 9px;display:flex;flex-direction:column;gap:5px;border-right:1px solid var(--line)}
+.wc-preview-meta>div:last-child{border-right:0}
+.wc-preview-meta span{font-size:10px;letter-spacing:.07em;font-weight:800;color:var(--muted)}
+.wc-preview-meta b{font-size:12px;font-weight:750;line-height:1.25;min-width:0;overflow-wrap:break-word}
+.wc-preview-meta b .legacy-flag{vertical-align:middle}
+.sheet[data-key="wc-review"] .sheet-b{padding-top:8px}
+.wc-review-hero{padding:6px 3px 13px}
+.wc-review-host{margin:5px 0 12px}
+.wc-review-champion-label{margin:3px 0 6px}
+.wc-review-final{margin:5px 0 6px}
+.wc-review-runner{color:var(--muted)}
+.wc-review-award{grid-template-columns:minmax(0,39%) minmax(0,61%);padding:10px 12px}
+.sheet[data-key="wc-review"] .sheet-f .btn{min-height:39px;padding:9px 14px}
+@media(max-width:380px){.wc-preview-meta>div{padding:9px 6px}.wc-preview-meta b{font-size:11px}}
 </style>
 </head>
 <body>
@@ -1178,7 +1196,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.42 Build 119', title: 'Domestic Team Crest Refresh', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.43 Build 120', title: 'Champions Trophy Hub and Tournament Presentation', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -3985,11 +4003,11 @@ function showPendingInternationalSeriesReview(){
 // Build 111: persistent, pre-first-fixture World Cup preview. No match engine effects.
 function worldCupPreviewStore(){return game.worldCupPreviews||(game.worldCupPreviews=[]);}
 function worldCupPreviewFixtureGroup(event){
-  return game.season.fixtures.filter(f=>event==='T20WC'?f.comp==='WC'&&f.stage==='wcgroup':f.event==='ODIWC'&&f.stage==='globalgroup');
+  return game.season.fixtures.filter(f=>event==='T20WC'?f.comp==='WC'&&f.stage==='wcgroup':f.event===event&&f.stage==='globalgroup');
 }
 function worldCupPreviewDue(){
   if(!game||game.phase!=='season')return null;
-  for(const event of ['T20WC','ODIWC']){
+  for(const event of ['T20WC','ODIWC','CT']){
     const fx=worldCupPreviewFixtureGroup(event);
     if(!fx.length||fx.some(f=>f.result))continue;
     const first=Math.min(...fx.map(f=>f.day));
@@ -4018,23 +4036,23 @@ function createWorldCupPreview(info){
   const pickStar=(list,used,pred)=>{const pool=list.filter(p=>!used.has(p.id)&&(!pred||pred(p)));const p=pool.find(p=>(selectedNations[p.nat]||0)<2)||pool[0];if(p){used.add(p.id);selectedNations[p.nat]=(selectedNations[p.nat]||0)+1;return{id:p.id,name:pname(p),nat:p.nat,age:p.age};}return null;};
   const used=new Set();
   const stars={batter:pickStar(scored('bat'),used),bowler:pickStar(scored('bowl').filter(p=>canBowl(p)),used),allrounder:pickStar(scored('all'),used,p=>['BAR','BWAR'].includes(p.role)),rising:pickStar(scored('bat'),used,p=>p.age<=23)};
-  const previous=(event==='T20WC'?(game.worldHistory||[]).filter(h=>h.event==='T20 World Cup'):(game.globalTournamentHistory||[]).filter(h=>h.event==='ODIWC')).sort((a,b)=>b.year-a.year)[0];
+  const previous=(event==='T20WC'?(game.worldHistory||[]).filter(h=>h.event==='T20 World Cup'):(game.globalTournamentHistory||[]).filter(h=>h.event===event)).sort((a,b)=>b.year-a.year)[0];
   const champ=previous?(previous.winner||null):null;
   const australia=fx.filter(f=>f.home==='AUS'||f.away==='AUS').sort((a,b)=>a.day-b.day)[0]||null;
   const opening=fx.slice().sort((a,b)=>a.day-b.day)[0];
-  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':'ODI World Cup',teams:teams.length,first,host:tournamentHost(event,game.year),ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
+  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':event==='CT'?'Champions Trophy':'ODI World Cup',teams:teams.length,first,host:tournamentHost(event,game.year),ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
   worldCupPreviewStore().push(result);return result;
 }
 function worldCupPreviewHtml(r){
   const nationLine=x=>x?`${flagFor(x.nat)} ${esc(NATIONS[x.nat]||x.nat)}`:'–';
   const starLine=(label,p)=>p?`<div class="kv"><span>${label}</span><span><span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> ${flagFor(p.nat)}</span></div>`:'';
-  return `<div class="series-review-head"><div class="xs muted">PRE-TOURNAMENT PREVIEW · ${r.year}</div><div class="series-review-nations">${esc(r.title)}</div><div class="s">${r.teams} competing nations · Host ${r.host?`${flagFor(r.host)} ${esc(NATIONS[r.host])}`:'TBC'} · Opening ${dateStr(r.first)}</div></div>
+  return `<div class="series-review-head wc-preview-head"><div class="xs muted">PRE-TOURNAMENT PREVIEW · ${r.year}</div><div class="series-review-nations">${esc(r.title)}</div>
+    <div class="wc-preview-meta"><div><span>TEAMS</span><b>${r.teams}</b></div><div><span>HOST</span><b>${r.host?`${flagFor(r.host)} ${esc(NATIONS[r.host]||r.host)}`:'TBC'}</b></div><div><span>OPENS</span><b>${dateStr(r.first)}</b></div></div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Pre-tournament favourites</h3></div><div class="rows">${r.ranked.map((t,i)=>`<div class="kv"><span>${i+1}. ${nationLine(t)}</span><b>${Math.round(t.rating)} rating</b></div>`).join('')}</div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Players to watch</h3></div><div class="rows">${starLine('Leading batter',r.stars.batter)}${starLine('Leading bowler',r.stars.bowler)}${starLine('All-rounder',r.stars.allrounder)}${starLine('Rising star',r.stars.rising)}</div></div>
-    <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${r.champion?`<div class="kv"><span>Defending champions</span><span>${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>
-    <div class="xs dim" style="margin-top:9px">Pre-tournament forecasts use current international ratings and player abilities, not simulated outcomes.</div>`;
+    <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${r.champion?`<div class="kv"><span>Defending champions</span><span>${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>`;
 }
-function openWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(!r)return;sheet('World Cup preview',r.title,worldCupPreviewHtml(r),{center:true,key:'wc-preview',foot:`<button class="btn pri block" onclick="dismissWorldCupPreview('${r.id}')">Begin World Cup</button>`});}
+function openWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(!r)return;sheet('Tournament preview',r.title,worldCupPreviewHtml(r),{center:true,key:'wc-preview',foot:`<button class="btn pri block" onclick="dismissWorldCupPreview('${r.id}')">Begin Tournament</button>`});}
 function dismissWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(r)r.viewed=true;closeModal();autosave();}
 function showPendingWorldCupPreview(){
   if(!game||document.querySelector('#modalRoot .sheet'))return false;
@@ -4042,6 +4060,24 @@ function showPendingWorldCupPreview(){
   if(!r){const info=worldCupPreviewDue();if(info)r=createWorldCupPreview(info);}
   if(!r)return false;
   autosave();openWorldCupPreview(r.id);return true;
+}
+// B120: one-time guide for Champions Trophy careers upgraded mid-event.
+function showPendingChampionsTrophyBrief(){
+ if(!game||game.phase!=='season'||document.querySelector('#modalRoot .sheet'))return false;
+ const fx=game.season.fixtures.filter(f=>f.event==='CT');
+ if(!fx.length||fx.every(f=>!!f.result))return false;
+ const begun=fx.some(f=>!!f.result);
+ if(!begun)return false; // A new tournament gets its full pre-tournament preview instead.
+ const key=String(game.year),seen=game.championsTrophyBriefings||(game.championsTrophyBriefings=[]);
+ if(seen.includes(key))return false;
+ seen.push(key);autosave();
+ const completed=fx.filter(f=>f.result).length;
+ sheet('Champions Trophy',`Champions Trophy · ${game.year}`,`<div class="note">Tournament in progress · ${completed} of ${fx.length} fixtures completed</div>
+  <div class="wc-preview-meta"><div><span>NATIONS</span><b>8</b></div><div><span>HOST</span><b>${tournamentHostLabel('CT',game.year)}</b></div><div><span>FORMAT</span><b>ODI</b></div></div>
+  <div class="note" style="margin-top:12px">Two groups of four. Each nation plays three group matches. The top two from each group advance to the semi-finals, followed by the final.</div>
+  <div class="note">Group tables, knockout bracket, Australia’s results and all fixtures are available under International → Tournaments → Champions Trophy.</div>`,
+  {center:true,key:'ct-guide',foot:`<button class="btn pri block" onclick="closeModal();ui.intlTab='wc';ui.tournamentFormat='CT';go('intl')">View Champions Trophy</button>`});
+ return true;
 }
 function currentWorldCupPreviewButton(event){
   const r=worldCupPreviewStore().find(p=>p.year===game.year&&p.event===event);
@@ -4227,7 +4263,7 @@ function updateGlobalTournament(){
     const winner=fin.result.winner||fin.home;game.globalTournamentHistory=game.globalTournamentHistory||[];
     game.globalTournamentHistory.unshift({year:game.year,event,host:tournamentHost(event,game.year),winner,runnerUp:winner===fin.home?fin.away:fin.home});
     game.globalTournamentHistory=game.globalTournamentHistory.slice(0,24);
-    if(event==='ODIWC')recordWorldCupReview('ODIWC');
+    if(event==='ODIWC'||event==='CT')recordWorldCupReview(event);
     addNews('World',(event==='ODIWC'?'ODI World Cup':'Champions Trophy')+' champions',teamDef(winner).name+' lift the trophy.');
   }
 }
@@ -4360,10 +4396,11 @@ function updateWorldCup(){
 // Tournament stats: runs and wickets for every player across the World Cup.
 // B113 tournament recaps, persisted independently from transient fixtures.
 function worldCupReviewStore(){return game.worldCupReviews||(game.worldCupReviews=[]);}
-function recordODIWorldCupStats(M){
+function recordODIWorldCupStats(M,event){
   // Store compact aggregate figures for all simulated ODI WC matches, including
   // background fixtures whose detailed scorecards are not retained.
-  const st=game.odiWorldCupStats||(game.odiWorldCupStats={year:game.year,bat:{},bowl:{},matches:0});
+  const key=event==='CT'?'championsTrophyStats':'odiWorldCupStats';
+  const st=game[key]||(game[key]={year:game.year,bat:{},bowl:{},matches:0});
   if(st.year!==game.year){st.year=game.year;st.bat={};st.bowl={};st.matches=0;}
   if(st.lastIds?.includes(M.fxId))return;
   st.lastIds=(st.lastIds||[]);st.lastIds.push(M.fxId);st.matches++;
@@ -4381,12 +4418,13 @@ function worldCupTopPlayer(leaders){
 }
 function recordWorldCupReview(event){
   const id=`${game.year}-${event}`;if(worldCupReviewStore().some(r=>r.id===id))return;
-  const fx=game.season.fixtures.filter(f=>event==='T20WC'?f.comp==='WC':f.event==='ODIWC');
+  const fx=game.season.fixtures.filter(f=>event==='T20WC'?f.comp==='WC':f.event===event);
   const final=fx.find(f=>f.stage===(event==='T20WC'?'wcfinal':'globalfinal'));
   if(!final?.result?.winner)return;
   const champion=final.result.winner,runnerUp=champion===final.home?final.away:final.home;
   const scores=event==='T20WC'?game.season.windows.find(w=>w.wc)?.stats:null;
-  const odiStats=game.odiWorldCupStats?.year===game.year?game.odiWorldCupStats:null;
+  const statStore=event==='CT'?game.championsTrophyStats:game.odiWorldCupStats;
+  const odiStats=statStore?.year===game.year?statStore:null;
   const leaders=event==='T20WC'?wcLeaders({stats:scores},3):odiStats?.matches?wcLeaders({stats:odiStats},3):tournamentScorecardLeaders(fx,3);
   const awards=leaders?.bat?.length||leaders?.bowl?.length ? {bat:leaders.bat[0]||null,bowl:leaders.bowl[0]||null,pot:worldCupTopPlayer(leaders)}:{};
   const aus=fx.filter(f=>(f.home==='AUS'||f.away==='AUS')&&f.result);
@@ -4395,7 +4433,7 @@ function recordWorldCupReview(event){
     finalText:final.result.text,semiFinalists:semifinalists,
     aus:{won:aus.filter(f=>f.result.winner==='AUS').length,lost:aus.filter(f=>f.result.winner&&f.result.winner!=='AUS').length,
       noResult:aus.filter(f=>!f.result.winner).length,stage:aus.some(f=>f.stage.endsWith('final')&&f.stage!=='wcsemifinal')?'Knockouts':aus.length?'Participated':'Not qualified'},
-    leaders,awards,coverage:event==='ODIWC'?(odiStats?.matches||0):fx.filter(f=>f.result).length,fixturesCompleted:fx.filter(f=>f.result).length,previewId:`${game.year}-${event}`,viewed:false};
+    leaders,awards,coverage:event==='T20WC'?fx.filter(f=>f.result).length:(odiStats?.matches||0),fixturesCompleted:fx.filter(f=>f.result).length,previewId:`${game.year}-${event}`,viewed:false};
   worldCupReviewStore().unshift(review);
 }
 function tournamentScorecardLeaders(fx,n){
@@ -4429,7 +4467,7 @@ function wcReviewRow(label,person,value){
   return `<div class="wc-review-award"><span class="wc-review-award-label">${label}</span><span class="wc-review-award-result">${person}${value?`<strong class="wc-review-award-value">${value}</strong>`:''}</span></div>`;
 }
 function worldCupReviewHtml(r){
-  const title=r.event==='ODIWC'?'ODI World Cup':'T20 World Cup';
+  const title=r.event==='ODIWC'?'ODI World Cup':r.event==='CT'?'Champions Trophy':'T20 World Cup';
   const ranked=(rows,kind)=>rows?.length?rows.map((x,i)=>
     `<div class="wc-review-rank"><span class="wc-review-rank-num">${i+1}.</span>${wcReviewPlayer(x.id)}<strong class="wc-review-stat">${kind==='bat'?Number(x.r||0)+' runs':Number(x.w||0)+' wickets'}</strong></div>`
   ).join(''):'<div class="empty">Complete individual scorecards not retained.</div>';
@@ -4442,14 +4480,14 @@ function worldCupReviewHtml(r){
   const host=String(r.host||'');
   return `<div class="wc-review">
     <div class="wc-review-hero"><div class="wc-review-kicker">${esc(title.toUpperCase())} · ${esc(r.year)}</div>
-      <div class="wc-review-host">HOSTED BY ${flagFor(host)} ${esc(NATIONS[host]||host||'Not recorded')}</div>
+      <div class="wc-review-host">Host ${flagFor(host)} ${esc(NATIONS[host]||host||'Not recorded')}</div>
       <div class="wc-review-champion">${flagFor(teamNat(r.champion))}<span>${esc(teamName(r.champion))}</span></div>
-      <div class="wc-review-champion-label">World champions</div>
-      <div class="wc-review-runner">Runners-up ${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</div>
-      <div class="wc-review-final">${esc(r.finalText||'')}</div></div>
+      <div class="wc-review-champion-label">${r.event==='CT'?'Champions Trophy winners':'World champions'}</div>
+      <div class="wc-review-final">${esc(r.finalText||'')}</div>
+      <div class="wc-review-runner">Runners-up ${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</div></div>
     <section class="wc-review-section"><h3>Players of the tournament</h3>
       ${awardRows||'<div class="empty">Tournament awards unavailable.</div>'}
-      <div class="wc-review-note">Based on ${r.coverage==null?'available statistics':r.coverage+' of '+(r.fixturesCompleted||0)+' completed matches'}. Missing scorecards are not reconstructed.</div></section>
+      ${r.coverage<(r.fixturesCompleted||0)?`<div class="wc-review-note">Available individual statistics cover ${r.coverage||0} of ${r.fixturesCompleted||0} completed matches. Missing scorecards are not reconstructed.</div>`:''}</section>
     <section class="wc-review-section"><h3>Top three batters</h3>${ranked(r.leaders?.bat,'bat')}
       <h3 class="wc-review-subhead">Top three bowlers</h3>${ranked(r.leaders?.bowl,'bowl')}</section>
     <section class="wc-review-section"><h3>Australia's tournament</h3>
@@ -4459,14 +4497,14 @@ function worldCupReviewHtml(r){
   </div>`;
 }
 function openWorldCupReview(id){const r=worldCupReviewStore().find(x=>x.id===id);if(!r)return;
-  sheet('World Cup review',r.event==='ODIWC'?'ODI World Cup':'T20 World Cup',worldCupReviewHtml(r),
-    {center:true,key:'wc-review',foot:`<button class="btn pri block" onclick="dismissWorldCupReview('${r.id}')">Continue to Home</button>`});}
+  sheet('Tournament review',r.event==='ODIWC'?'ODI World Cup':r.event==='CT'?'Champions Trophy':'T20 World Cup',worldCupReviewHtml(r),
+    {center:true,key:'wc-review',foot:`<button class="btn pri block" onclick="dismissWorldCupReview('${r.id}')">Continue</button>`});}
 function dismissWorldCupReview(id){const r=worldCupReviewStore().find(x=>x.id===id);if(r)r.viewed=true;closeModal();autosave();go('home');}
 function showPendingWorldCupReview(){if(!game||document.querySelector('#modalRoot .sheet'))return false;
   const r=worldCupReviewStore().find(x=>!x.viewed);if(!r)return false;
   openWorldCupReview(r.id);autosave();return true;}
 function worldCupReviewButton(event){const r=worldCupReviewStore().find(x=>x.year===game.year&&x.event===event)||worldCupReviewStore().find(x=>x.event===event);
-  return r?`<button class="btn ghost" onclick="openWorldCupReview('${r.id}')">View World Cup review · ${r.year}</button><div style="height:8px"></div>`:'';}
+  return r?`<button class="btn ghost" onclick="openWorldCupReview('${r.id}')">View tournament review · ${r.year}</button><div style="height:8px"></div>`:'';}
 function trackWorldCupStats(M) {
   const w = game.season.windows.find(x => x.wc); if (!w) return;
   const st = w.stats = w.stats || { bat: {}, bowl: {} };
@@ -5655,7 +5693,7 @@ function applyIntlMatch(M) {
   trackWtcResult(fx);
   if (fx.stage === 'wtcfinal') archiveWtcFinal(fx);
   if (M.comp === 'WC') { trackWorldCupStats(M); updateWorldCup(); }
-  if (fx.event==='ODIWC')recordODIWorldCupStats(M);
+  if (fx.event==='ODIWC'||fx.event==='CT')recordODIWorldCupStats(M,fx.event);
   if (fx.event) updateGlobalTournament();
   recordInternationalSeriesReview(fx);
   const potm = M.potm ? P(M.potm) : null;
@@ -5910,15 +5948,16 @@ function continueGame() {
   if (game.phase !== 'season') { offseasonContinue(); return; }
   if (showPendingWorldCupReview()) { go('home'); return; }
   if (showPendingWorldCupPreview()) { go('home'); return; }
+  if (showPendingChampionsTrophyBrief()) { go('home'); return; }
   const pend = game.pendingFx && fixtureById(game.pendingFx);
   if (pend && !pend.result && isClash(pend) && !isFinalFx(pend)) { staffPlay(pend); game.pendingFx = null; }
   else if (pend && !pend.result && yieldsToIntl(pend)) { staffPlay(pend, intlReason(pend)); game.pendingFx = null; }
   else if (pend && !pend.result) { go('matchday'); return; }
   game.pendingFx = null;
-  const done = page => { autosave(); go(page); showAwaySummary(); if(!showPendingWorldCupReview())showPendingInternationalSeriesReview(); };
+  const done = page => { autosave(); go(page); showAwaySummary(); if(!showPendingWorldCupReview()&&!showPendingChampionsTrophyBrief())showPendingInternationalSeriesReview(); };
   for (let i = 0; i < 400; i++) {
     if (game.busy && game.day > game.busy.until) game.busy = null;
-    if(showPendingWorldCupPreview()) { autosave();go('home');return; }
+    if(showPendingWorldCupPreview()||showPendingChampionsTrophyBrief()) { autosave();go('home');return; }
     playAIFixturesToday();
     let ufx, g2 = 0;
     while ((ufx = userFixtureToday()) && g2++ < 6) {
@@ -5946,7 +5985,7 @@ function simDays(n, untilEnd) {
   if (!game || game.live || game.phase !== 'season') return;
   const start = game.day;
   for (let i = 0; i < 400; i++) {
-    if(showPendingWorldCupPreview()){autosave();go('home');return;}
+    if(showPendingWorldCupPreview()||showPendingChampionsTrophyBrief()){autosave();go('home');return;}
     playAIFixturesToday();
     let ufx, g2 = 0;
     while ((ufx = userFixtureToday()) && g2++ < 5) quickPlay(ufx);
@@ -7298,7 +7337,7 @@ function render() {
   tc.classList.add('hidden');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
-function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); if(ui.page==='home')setTimeout(()=>{if(!showPendingWorldCupReview())showPendingInternationalSeriesReview();},500); }
+function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); if(ui.page==='home')setTimeout(()=>{if(!showPendingWorldCupReview()&&!showPendingWorldCupPreview()&&!showPendingChampionsTrophyBrief())showPendingInternationalSeriesReview();},500); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
@@ -9518,8 +9557,9 @@ function bracketBox(round, home, away, res, fxId) {
 }
 function renderTournaments(){
  const mode=ui.tournamentFormat||'T20';
- const tabs=seg([['OD','ODI World Cup'],['T20','T20 World Cup'],['FC','Test Championship']],mode,'(v=>{ui.tournamentFormat=v;render();})');
+ const tabs=seg([['OD','ODI World Cup'],['CT','Champions Trophy'],['T20','T20 World Cup'],['FC','Test Championship']],mode,'(v=>{ui.tournamentFormat=v;render();})');
  if(mode==='T20')return `${tabs}<div style="height:10px"></div>${renderWorldCup()}`;
+ if(mode==='CT')return `${tabs}<div style="height:10px"></div>${renderChampionsTrophy()}`;
  if(mode==='FC'){const w=ensureWtc(),rows=wtcRows(),fin=game.season.fixtures.find(f=>f.stage==='wtcfinal');return `${tabs}<div style="height:10px"></div>${panel('World Test Championship',`<div class="pb xs muted">${w.start}–${w.start+1} cycle · percentage of points earned</div><div class="rows">${rows.map((r,i)=>`<div class="kv"><span>${i+1}. ${esc(NATIONS[r.nat])} · ${r.p} Tests</span><b>${r.pct.toFixed(1)}%</b></div>`).join('')}</div>${fin?`<div class="pb">${fixtureRow(fin,false)}</div>`:''}`,{flush:true})}`;}
  const matches=game.season.fixtures.filter(f=>f.event==='ODIWC');
  const history=(game.globalTournamentHistory||[]).filter(h=>h.event==='ODIWC');
@@ -9538,6 +9578,21 @@ function renderTournaments(){
    ${history.length?panel('Past champions',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]):'Host not recorded'}</span><b>${esc(teamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):''}`;
 }
 function renderIntlLegacyRecords(){const n=ui.intlRecNat||'AUS',f=ui.intlRecFmt||'FC';return `<div class="tool-row">${sel(Object.keys(NATIONS).map(k=>[k,NATIONS[k]]),n,'ui.intlRecNat=this.value;render()')}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],f,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(n,f)}`;}
+// B120: Full Champions Trophy hub, works with an already active or completed CT save.
+function renderChampionsTrophy(){
+ const event='CT',matches=game.season.fixtures.filter(f=>f.event===event);
+ const history=(game.globalTournamentHistory||[]).filter(h=>h.event===event);
+ const groups=matches.filter(f=>f.stage==='globalgroup');
+ const ko=matches.filter(f=>f.stage==='globalsemi'||f.stage==='globalfinal');
+ const current=groups.length?`<div class="note">Champions Trophy ${game.season.label} · Host ${tournamentHostLabel('CT',game.year)} · 8 nations · Two groups of four · Top two reach semi-finals</div>
+ <div class="grid g2">${['A','B'].map(g=>panel('Group '+g,wcGroupTable(globalTournamentTable(event,g),{cutoff:2,destination:'to semi-finals',final:groups.filter(f=>f.group===g).every(f=>!!f.result)}),{flush:true})).join('')}</div>
+ ${panel('Knockouts',`<div class="bracket">${ko.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
+ ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">Australia has no scheduled matches in this tournament.</div>'}</div>`,{flush:true})}
+ ${panel('Fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
+ const historyPanel=history.length?panel('Past Champions Trophy winners',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]||h.host):'Host not recorded'}</span><b>${esc(teamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):'';
+ const nextYear=game.year+( (1-game.year%4+4)%4||4 );
+ return `${currentWorldCupPreviewButton('CT')}${worldCupReviewButton('CT')}${current||`<div class="note">No Champions Trophy scheduled this season. Next cycle: ${nextYear}.</div>`}${historyPanel}`;
+}
 function renderWorldCup() {
   const w=game.season.windows.find(x=>x.wc&&x.groups),arch=game.wcArchive||[];
   if(!w){const next=game.year%2===1?game.year+2:game.year+1;
