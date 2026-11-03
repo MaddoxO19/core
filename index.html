@@ -1059,6 +1059,20 @@ body.live-mode .actbar{display:none}
 .career-opponent summary::-webkit-details-marker{display:none}
 .career-opp-detail{padding:8px 12px 12px 16px;color:var(--muted);font-size:12px;line-height:1.9;background:rgba(10,20,30,.3)}
 @media(min-width:650px){.career-stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+/* Build 109 series review: compact, centred, scroll-friendly modal */
+.series-review-head{text-align:center;padding:9px 4px 16px}
+.series-review-nations{font-size:19px;font-weight:800;line-height:1.3;margin:8px 0 5px}
+.series-review-score{font-size:36px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--accent);margin-bottom:4px}
+.series-review-star{text-align:center;margin:0 0 13px;padding:15px 10px;border:1px solid var(--line2);border-radius:12px;background:var(--s2)}
+.series-review-name{font-size:19px;font-weight:800;margin:6px 0}
+
+
+/* Build 109: centred series review instead of the standard bottom drawer. */
+.sheet-bg.centered{align-items:center!important;padding:14px;box-sizing:border-box}
+.sheet-bg.centered>.sheet{width:100%;max-width:510px;max-height:calc(100dvh - 28px);height:auto;min-height:0;border-radius:15px;padding-bottom:0;animation:fade .15s ease-out;box-shadow:0 16px 50px rgba(0,0,0,.45)}
+.sheet-bg.centered .sheet-b{flex:0 1 auto;overflow-y:auto}
+.sheet-bg.centered .sheet-f{padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
 </style>
 </head>
 <body>
@@ -1117,7 +1131,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.31 Build 108', title: 'Opponent Records and Career Dashboards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.32 Build 109', title: 'International Series Review', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -3826,6 +3840,94 @@ function archiveWorldSeries() {
   if (game.worldSeriesHistory.length>120) game.worldSeriesHistory.length=120;
 }
 
+// Build 109 — bilateral international series reviews. This uses actual match
+// results and saved scorecard contributions, not player career totals.
+function seriesReviewKey(fx) {
+  if (!fx || !['TEST','ODI','T20I'].includes(fx.comp)) return null;
+  if (fx.seriesId && fx.stage === 'world') return fx.seriesId;
+  if (fx.stage === 'intl' && fx.win) return fx.win + '-' + fx.comp;
+  return null;
+}
+function ensureSeriesReviewStore() {
+  if (!Array.isArray(game.internationalSeriesReviews)) game.internationalSeriesReviews=[];
+  return game.internationalSeriesReviews;
+}
+function recordInternationalSeriesReview(fx) {
+  const id=seriesReviewKey(fx);
+  if (!id || !game || !game.season) return null;
+  // Only pop up for bilateral tours involving the GM's national side.
+  if (fx.home!=='AUS' && fx.away!=='AUS') return null;
+  const all=(game.season.fixtures||[]).filter(f=>seriesReviewKey(f)===id).sort((a,b)=>a.day-b.day||String(a.id).localeCompare(String(b.id)));
+  if (!all.length || all.some(f=>!f.result)) return null;
+  const store=ensureSeriesReviewStore();
+  const existing=store.find(r=>r.id===id);
+  if (existing) return existing;
+  const home=all[0].home,away=all[0].away;
+  const hw=all.filter(f=>f.result.winner===home).length;
+  const aw=all.filter(f=>f.result.winner===away).length;
+  const draws=all.filter(f=>!f.result.winner&&!f.result.noResult).length;
+  const noResults=all.filter(f=>f.result.noResult).length;
+  const winner=hw>aw?home:aw>hw?away:null;
+  const perf={}; let covered=0;
+  function entry(pid){return perf[pid]||(perf[pid]={id:pid,runs:0,balls:0,outs:0,innings:0,wickets:0,conceded:0,bowled:0,matchesAwarded:0});}
+  for(const f of all){
+    const sc=(game.scorecards||{})[f.id];
+    if(sc && Array.isArray(sc.innings)) {
+      covered++;
+      for(const inn of sc.innings){
+        for(const b of (inn.card||[])){
+          if(!b.in)continue;
+          const p=entry(b.id);p.runs+=b.r||0;p.balls+=b.b||0;p.innings++;if(b.out)p.outs++;
+        }
+        const bw=Array.isArray(inn.bw)?inn.bw:Object.entries(inn.bw||{}).map(([id,x])=>({id,...x}));
+        for(const b of bw){const p=entry(b.id);p.wickets+=b.w||0;p.conceded+=b.r||0;p.bowled+=b.balls||0;}
+      }
+    }
+    if(f.result.potm){entry(f.result.potm).matchesAwarded++;}
+  }
+  const candidates=Object.values(perf).filter(x=>x.innings||x.bowled).map(x=>({...x,name:P(x.id)?pname(P(x.id)):'Unknown',nat:P(x.id)?.nat||'',batAverage:x.outs?x.runs/x.outs:null,bowlAverage:x.wickets?x.conceded/x.wickets:null}));
+  const batting=candidates.filter(x=>x.innings).sort((a,b)=>b.runs-a.runs||((b.batAverage||0)-(a.batAverage||0))).slice(0,3);
+  const bowling=candidates.filter(x=>x.bowled).sort((a,b)=>b.wickets-a.wickets||((a.bowlAverage??Infinity)-(b.bowlAverage??Infinity))).slice(0,3);
+  // Weight format-appropriate batting and bowling contributions, plus Player of the Match awards.
+  // Only award Player of the Series when every match scorecard is available.
+  const fmt=fx.comp, bowlWeight=fmt==='TEST'?23:fmt==='ODI'?24:19;
+  const ranked=candidates.slice().sort((a,b)=>(b.runs+b.wickets*bowlWeight+b.matchesAwarded*20)-(a.runs+a.wickets*bowlWeight+a.matchesAwarded*20));
+  const playerOfSeries=covered===all.length && ranked.length ? ranked[0] : null;
+  const review={id,year:game.year,fmt,home,away,winner,hw,aw,draws,noResults,total:all.length,
+    covered,playerOfSeries,batting,bowling,finalFixture:fx.id,viewed:false};
+  store.unshift(review);
+  if(store.length>120)store.length=120;
+  // Never issue a statistical award from incomplete evidence.
+  if(playerOfSeries && P(playerOfSeries.id)) {
+    const p=P(playerOfSeries.id);p.seriesHonours=p.seriesHonours||[];
+    if(!p.seriesHonours.some(x=>x.id===id))p.seriesHonours.push({id,year:game.year,format:fmt,opponent:home==='AUS'?away:home});
+  }
+  addNews('National','International series completed',`${teamName(home)} v ${teamName(away)}: ${hw}–${aw}${draws?' · '+draws+' draws':''}. ${winner?teamName(winner)+' win the series.':'Series drawn.'}`);
+  return review;
+}
+function seriesReviewHtml(r) {
+  const fmt=r.fmt==='TEST'?'Test':r.fmt==='ODI'?'ODI':'T20I';
+  const score=`${r.hw}–${r.aw}`;
+  const headline=r.winner?`${teamName(r.winner)} win the series`:'Series drawn';
+  const pos=r.playerOfSeries;
+  const f=n=>Number.isFinite(n)?n.toFixed(2):'–';
+  const leaderboard=(rows,type)=>rows.length?rows.map((p,i)=>`<div class="kv"><span><b>${i+1}.</b> <span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> <span class="xs dim">${esc(p.nat)}</span></span><span><b>${type==='bat'?p.runs+' runs':p.wickets+' wkts'}</b><span class="xs dim"> · avg ${f(type==='bat'?p.batAverage:p.bowlAverage)}</span></span></div>`).join(''):'<div class="xs muted">No scorecard statistics retained.</div>';
+  return `<div class="series-review-head"><div class="xs muted">${esc(fmt)} SERIES · ${r.total} MATCH${r.total===1?'':'ES'}</div><div class="series-review-nations">${esc(teamName(r.home))} v ${esc(teamName(r.away))}</div><div class="series-review-score">${score}</div><div class="s"><b>${esc(headline)}</b></div>${r.draws||r.noResults?`<div class="xs muted">${r.draws?`${r.draws} drawn`:''}${r.draws&&r.noResults?' · ':''}${r.noResults?`${r.noResults} no result`:''}</div>`:''}</div><div class="series-review-star"><div class="xs muted">PLAYER OF THE SERIES</div>${pos?`<div class="series-review-name link" onclick="closeModal();showPlayer('${pos.id}')">${esc(pos.name)}</div><div class="xs muted">${esc(pos.nat)} · ${pos.runs} runs · ${pos.wickets} wickets</div>`:'<div class="s muted">Not awarded · insufficient saved scorecards</div>'}</div><div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${leaderboard(r.batting||[],'bat')}</div></div><div class="panel"><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${leaderboard(r.bowling||[],'bowl')}</div></div>${r.covered<r.total?`<div class="xs muted" style="margin-top:8px">Statistics cover ${r.covered} of ${r.total} match scorecards; missing data are not estimated.</div>`:''}`;
+}
+function openInternationalSeriesReview(id) {
+  const r=ensureSeriesReviewStore().find(x=>x.id===id);if(!r)return;
+  sheet('International series review','Series completed',seriesReviewHtml(r),{center:true,key:'series-review',foot:`<button class="btn pri block" onclick="dismissInternationalSeriesReview('${r.id}')">Continue to Home</button>`});
+}
+function dismissInternationalSeriesReview(id){
+  const r=ensureSeriesReviewStore().find(x=>x.id===id);if(r)r.viewed=true;
+  closeModal();autosave();
+}
+function showPendingInternationalSeriesReview(){
+  if(!game||document.querySelector('#modalRoot .sheet'))return;
+  const r=ensureSeriesReviewStore().find(x=>!x.viewed);
+  if(r)openInternationalSeriesReview(r.id);
+}
+
 // ---- Global ODI competitions and qualification ----
 // The historical/fixture calendar is a fictional FTP-style world. Qualification is
 // seeded from world rankings at draw time; future cycles reselect the strongest teams.
@@ -4165,6 +4267,7 @@ function resetEditedPlayerHistory(p) {
   p.realCareer = null;
   p.realAge = false;
   p.ageResetYear = game.year;
+  p.seriesHonours = [];
 }
 function edUpdateChoices(id) {
   const p = P(id), form = document.getElementById('edForm');
@@ -5135,6 +5238,7 @@ function applyIntlMatch(M) {
   if (fx.stage === 'wtcfinal') archiveWtcFinal(fx);
   if (M.comp === 'WC') { trackWorldCupStats(M); updateWorldCup(); }
   if (fx.event) updateGlobalTournament();
+  recordInternationalSeriesReview(fx);
   const potm = M.potm ? P(M.potm) : null;
   if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
 }
@@ -5390,7 +5494,7 @@ function continueGame() {
   else if (pend && !pend.result && yieldsToIntl(pend)) { staffPlay(pend, intlReason(pend)); game.pendingFx = null; }
   else if (pend && !pend.result) { go('matchday'); return; }
   game.pendingFx = null;
-  const done = page => { autosave(); go(page); showAwaySummary(); };
+  const done = page => { autosave(); go(page); showAwaySummary(); showPendingInternationalSeriesReview(); };
   for (let i = 0; i < 400; i++) {
     if (game.busy && game.day > game.busy.until) game.busy = null;
     playAIFixturesToday();
@@ -5413,7 +5517,7 @@ function showAwaySummary() {
   const rows = log.map(e => { const f = fixtureById(e.fx), opp = e.team === f.home ? f.away : f.home, won = f.result && f.result.winner === e.team;
     const lad = game.season.standings[e.comp] ? ` · now ${ordinal(ladderPos(e.comp, e.team))} on the ${COMPS[e.comp].short} ladder` : '';
     return `<div class="row tap" onclick="${game.scorecards[e.fx] ? `showScorecard('${e.fx}',0)` : ''}"><div class="stack"><div class="main-t">${chip(f.comp, COMPS[f.comp].short)} ${esc(teamDef(e.team).nick)} v ${esc(teamDef(opp).nick)} · ${dateStr(f.day)}</div><div class="sub-t" style="white-space:normal"><span class="${won ? 'win' : f.result.winner ? 'loss' : ''}">${esc(e.text)}</span>${e.potm ? ` · player of the match ${esc(pname(P(e.potm)))}` : ''}${lad}</div>${e.why ? `<div class="xs dim" style="margin-top:2px">${esc(e.why)}</div>` : ''}</div></div>`; }).join('');
-  sheet('Your staff ran these matches', 'While you were away', `<div class="rows">${rows}</div>`, { flush: true, foot: '<button class="btn pri" onclick="closeModal()">Done</button>' });
+  sheet('Your staff ran these matches', 'While you were away', `<div class="rows">${rows}</div>`, { flush: true, foot: '<button class="btn pri" onclick="closeModal();showPendingInternationalSeriesReview()">Done</button>' });
 }
 // Sim several days, auto-playing the user's matches.
 function simDays(n, untilEnd) {
@@ -6602,7 +6706,7 @@ function fmtSeg(active, fn) { return seg(FMT_LIST.map(f => [f, compName(f)]), ac
 function flash(msg) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; document.body.appendChild(d); setTimeout(() => d.remove(), 2300); }
 function sheet(eyebrow, title, body, opts) {
   opts = opts || {};
-  $('modalRoot').innerHTML = `<div class="sheet-bg" onclick="if(event.target===this)closeModal()"><div class="sheet ${opts.wide ? 'wide' : ''} ${opts.tall ? 'tall' : ''}"${opts.key ? ` data-key="${opts.key}"` : ''}>
+  $('modalRoot').innerHTML = `<div class="sheet-bg ${opts.center ? 'centered' : ''}" onclick="if(event.target===this)closeModal()"><div class="sheet ${opts.wide ? 'wide' : ''} ${opts.tall ? 'tall' : ''}"${opts.key ? ` data-key="${opts.key}"` : ''}>
     <div class="sheet-h"><div class="ell">${eyebrow ? `<div class="e">${eyebrow}</div>` : ''}<div class="t ell">${title}</div>${opts.sub ? `<div class="sub ell">${opts.sub}</div>` : ''}</div>${opts.headBtn || ''}<button class="x" aria-label="Close" onclick="closeModal()">×</button></div>
     <div class="sheet-b ${opts.flush ? 'flush' : ''}">${body}</div>${opts.foot ? `<div class="sheet-f">${opts.foot}</div>` : ''}</div></div>`;
   sheetSwipe($('modalRoot').querySelector('.sheet'));
@@ -6626,7 +6730,7 @@ function sheetSwipe(el) {
   const end = () => { if (y0 == null) return; y0 = null; el.style.transition = 'transform .15s'; if (dy > 90) closeModal(); else el.style.transform = ''; };
   [head, bodyEl].forEach(t => { if (!t) return; t.addEventListener('touchstart', start, { passive: true }); t.addEventListener('touchmove', move, { passive: false }); t.addEventListener('touchend', end); t.addEventListener('touchcancel', end); });
 }
-function closeModal() { $('modalRoot').innerHTML = ''; }
+function closeModal() { const m=$('modalRoot'); if(m.querySelector('.sheet[data-key="series-review"]') && game) { const pending=(game.internationalSeriesReviews||[]).find(r=>!r.viewed); if(pending){pending.viewed=true;autosave();} } m.innerHTML = ''; }
 function confirmSheet(title, text, yesLabel, yesJs) { sheet('Confirm', title, `<p class="s" style="margin:0">${text}</p>`, { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="closeModal();${yesJs}">${yesLabel}</button>` }); }
 
 const ICONS = {
@@ -6694,7 +6798,7 @@ function render() {
   tc.classList.add('hidden');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
-function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); }
+function enterApp() { $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); if(ui.page==='home')setTimeout(showPendingInternationalSeriesReview,500); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
@@ -7733,7 +7837,9 @@ function australiaSeriesRecords() {
    if(!s.winner)r.drawn++;else if(s.winner==='AUS')r.won++;else r.lost++;
  }
  const rows=Object.keys(table).sort((a,b)=>(NATIONS[a]||a).localeCompare(NATIONS[b]||b));
- return `${panel('Completed series by opponent',`<div class="rows">${rows.map(n=>`<div class="kv"><span>${nationTag(n)} ${esc(NATIONS[n]||n)}</span><span class="s">${table[n].won} W · ${table[n].drawn} D · ${table[n].lost} L</span></div>`).join('')||'<div class="empty">No completed Australia series found in the retained series history.</div>'}</div><div class="pb xs muted">Counts completed series, not individual matches. Only series retained in this save are included.</div>`,{flush:true})}`;
+ const reviews=(game.internationalSeriesReviews||[]).filter(r=>r.home==='AUS'||r.away==='AUS');
+ const summary=reviews.length?panel('Series reviews',`<div class="rows">${reviews.map(r=>`<div class="kv"><span>${r.year} · ${esc(r.fmt)} · ${esc(teamName(r.home==='AUS'?r.away:r.home))}</span><button class="btn sm" onclick="openInternationalSeriesReview('${r.id}')">Review · ${r.hw}–${r.aw}</button></div>`).join('')}</div>`,{flush:true}):'';
+ return `${summary}${panel('Completed series by opponent',`<div class="rows">${rows.map(n=>`<div class="kv"><span>${nationTag(n)} ${esc(NATIONS[n]||n)}</span><span class="s">${table[n].won} W · ${table[n].drawn} D · ${table[n].lost} L</span></div>`).join('')||'<div class="empty">No completed Australia series found in the retained series history.</div>'}</div><div class="pb xs muted">Counts completed series, not individual matches. Only series retained in this save are included.</div>`,{flush:true})}`;
 }
 function renderNational(){
  const n=game.nation,t=ui.ausView||'team';
@@ -7789,7 +7895,7 @@ function showPlayer(id, tab) {
     const value = askingSalary(p), salary = p.contract ? p.contract.salary : null;
     body = `<div class="panel"><div class="rows"><div class="kv"><span>Nationality</span><span>${nationTag(p.nat)} ${esc(NATIONS[p.nat] || p.nat)}</span></div><div class="kv"><span>Club</span><span>${esc(p.teamId ? teamName(p.teamId) : 'Free agent')}</span></div><div class="kv"><span>Personality</span><span>${PERSONAS[ensurePersona(p)].label}</span></div><div class="kv"><span>Current deal</span><span>${salary == null ? 'Not contracted' : money(salary) + ' × ' + p.contract.years + ' yr'}</span></div><div class="kv"><span>Estimated market salary</span><span>${money(value)}</span></div>${salary != null ? `<div class="kv"><span>Annual contract value to club</span><span class="${value > salary ? 'win' : ''}">${value > salary ? money(value - salary) + ' below market' : value < salary ? money(salary - value) + ' above market' : 'Market rate'}</span></div>` : ''}<div class="kv"><span>Contract expectations</span><span>${contractConcern(p) ? 'Concerns raised' : 'No active grievance'}</span></div></div></div>`;
   } else if (tab === 'hist') {
-    body = `${careerChart(p)}<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
+    body = `${careerChart(p)}${p.seriesHonours?.length ? `<div class="panel" style="margin-bottom:9px"><div class="ph"><h3>International Player of the Series</h3></div><div class="rows">${p.seriesHonours.map(h=>`<div class="kv"><span>${h.year} · ${esc(h.format)}</span><span>${esc(teamName(h.opponent))}</span></div>`).join('')}</div></div>` : ''}<div class="panel"><div class="rows">${p.hist.slice().reverse().map(h => `<div class="kv"><span>${h.year}–${String(h.year + 1).slice(2)} ${tdot(h.team)}</span><span class="xs">FC ${h.FC.r}r ${h.FC.w}w · OD ${h.OD.r}r ${h.OD.w}w · T20 ${h.T20.r}r ${h.T20.w}w</span></div>`).join('') || '<div class="empty">No completed seasons in this career yet.</div>'}
       <div class="kv"><span>International caps</span><span>Tests ${p.caps.FC} · ODIs ${p.caps.OD} · T20Is ${p.caps.T20}</span></div></div></div>`;
   } else {
     body = profileOverview(p, own);
@@ -8194,7 +8300,7 @@ function finishLive() {
   applyMatch(M);
   const fxId = M.fxId;
   game.live = null; game.pendingFx = null; ui.matchReview = false;
-  autosave(); go('home'); showAwaySummary();
+  autosave(); go('home'); showAwaySummary(); showPendingInternationalSeriesReview();
 }
 function setLiveTab(t) { ui.liveTab = t; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
 function setLiveInn(k) { ui.liveInn = +k; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
