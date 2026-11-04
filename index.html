@@ -1138,6 +1138,13 @@ body.live-mode .actbar{display:none}
 .wc-review-award{grid-template-columns:minmax(0,39%) minmax(0,61%);padding:10px 12px}
 .sheet[data-key="wc-review"] .sheet-f .btn{min-height:39px;padding:9px 14px}
 @media(max-width:380px){.wc-preview-meta>div{padding:9px 6px}.wc-preview-meta b{font-size:11px}}
+/* Build 124: permit horizontal scrolling inside the player statistics sheet on Safari. */
+.sheet:has(.profile-stats-scroll){touch-action:auto}
+.profile-stats-scroll{display:block;width:100%;max-width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;scrollbar-width:thin}
+.profile-stats-scroll .tbl{width:max-content;min-width:100%;border-collapse:collapse}
+.profile-stats-scroll .tbl th,.profile-stats-scroll .tbl td{white-space:nowrap}
+.profile-stats-scroll .tbl th:first-child,.profile-stats-scroll .tbl td:first-child{position:sticky;left:0;z-index:1;background:var(--s1);box-shadow:1px 0 0 var(--line2)}
+.stats-scroll-note{padding:6px 12px 4px;text-align:right}
 </style>
 </head>
 <body>
@@ -1196,7 +1203,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.43 Build 120', title: 'Champions Trophy Hub and Tournament Presentation', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.47 Build 124', title: 'Profile Statistics and Contract Extensions', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -1205,7 +1212,7 @@ const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 const RATING_SHIFT = 6, STAFF_SHIFT = 8, SCALE_VERSION = 4;
 const INTL_BASE = 81 + RATING_SHIFT; // India's squad generation level (NATION_STRENGTH 82)
 const SAVE_SLOTS = 5;
-const SALARY_CAP = 3000000;
+const SALARY_CAP = 3600000; // B123: all six domestic clubs; existing signed contracts remain unchanged.
 const MIN_SALARY = 60000;
 const ROOKIE_SALARY = 60000;
 const SQUAD_MIN = 16, SQUAD_MAX = 24, OVERSEAS_MAX = 2;
@@ -1577,10 +1584,17 @@ function playerValueScore(p) {
   else if (p.age >= 30) v *= 0.9;
   return v;
 }
+// B123: higher market prices on NEW contracts only; existing deals are grandfathered.
+// Moderate, capped long-career inflation avoids indefinite wage growth against a fixed cap.
+function salaryMarketIndex() {
+  return 1 + Math.min(0.22, Math.max(0, (game?.year || 2026) - 2026) * 0.012);
+}
 function askingSalary(p) {
   const v = playerValueScore(p);
   const os = p.nat !== 'AUS' ? 1.1 : 1;
-  return clamp(Math.round((MIN_SALARY + v * 155000 * os) / 5000) * 5000, MIN_SALARY, 420000);
+  const elite = Math.max(0, Math.min(1, (marketOvr(p) - 86) / 12));
+  const premium = 1 + elite * 0.30;
+  return clamp(Math.round((MIN_SALARY + v * 188000 * os * premium * salaryMarketIndex()) / 5000) * 5000, MIN_SALARY, 520000);
 }
 function tradeValue(p) {
   let v = playerValueScore(p) * 100;
@@ -3203,7 +3217,7 @@ const STAFF_ROLES = {
 };
 const STAFF_ORDER = ['head','bat','bowl','analyst','physio','scout'];
 const COACH_STYLES = { aggressive:'Attacking', balanced:'Balanced', cautious:'Patient' }; // Preserve persisted style keys and their tactical lean.
-const STAFF_BUDGET = 900000;
+const STAFF_BUDGET = 1200000; // B123: separate staff budget for every domestic club.
 
 function makeStaff(role, q, teamId) {
   const nm = genName('AUS');
@@ -3213,7 +3227,13 @@ function makeStaff(role, q, teamId) {
   game.staff[s.id] = s;
   return s;
 }
-function staffAsk(s) { const base = s.role === 'head' ? 90000 : 50000; return Math.round((base + Math.pow(clamp((s.rating - STAFF_SHIFT - 35) / 55, 0, 1.15), 2) * (s.role === 'head' ? 210000 : 120000)) / 5000) * 5000; }
+function staffAsk(s) {
+  const base = s.role === 'head' ? 105000 : 60000;
+  const talent = Math.pow(clamp((s.rating - STAFF_SHIFT - 35) / 55, 0, 1.15), 2);
+  const elite = Math.max(0, Math.min(1, (s.rating - 83) / 14));
+  const annual = 1 + Math.min(0.18, Math.max(0, (game?.year || 2026) - 2026) * 0.010);
+  return Math.round(((base + talent * (s.role === 'head' ? 225000 : 135000)) * (1 + 0.16 * elite) * annual) / 5000) * 5000;
+}
 function staffOf(teamId) { return Object.values(game.staff || {}).filter(s => s.teamId === teamId); }
 function staffIn(teamId, role) { return staffOf(teamId).find(s => s.role === role) || null; }
 function staffRating(teamId, role) {
@@ -4473,7 +4493,7 @@ function worldCupReviewHtml(r){
   ).join(''):'<div class="empty">Complete individual scorecards not retained.</div>';
   const preview=(game.worldCupPreviews||[]).find(p=>p.id===r.previewId);
   const awardRows=[
-    r.awards?.pot?wcReviewRow('Player of the Tournament <span class="wc-review-qualification">(modelled)</span>',wcReviewPlayer(r.awards.pot.id),''):'',
+    r.awards?.pot?wcReviewRow('Player of the Tournament',wcReviewPlayer(r.awards.pot.id),''):'',
     r.awards?.bat?wcReviewRow('Leading batter',wcReviewPlayer(r.awards.bat.id),Number(r.awards.bat.r||0)+' runs'):'',
     r.awards?.bowl?wcReviewRow('Leading bowler',wcReviewPlayer(r.awards.bowl.id),Number(r.awards.bowl.w||0)+' wickets'):''
   ].join('');
@@ -4990,7 +5010,7 @@ function closeNegotiation() {
       if (squadOf(U()).length >= SQUAD_MAX) msg = `Squad is full (${SQUAD_MAX}).`;
       else if (p.nat !== 'AUS' && overseasCount(U()) >= OVERSEAS_MAX) msg = `You already have ${OVERSEAS_MAX} overseas players.`;
       else { p.teamId = U(); p.contract = { salary, years }; logTx(`Signed ${pname(p)} (${money(salary)} × ${years}).`); addNews('Signing', `${pname(p)} signs with ${teamName(U())}`, `${ROLES[p.role].label}, ${p.age}. ${money(salary)} a season for ${years} year${years > 1 ? 's' : ''}.`); msg = 'Signed.'; }
-    } else if (n.mode === 'extend') { p.contract = { salary, years: Math.max(p.contract.years, years) }; /* displayed term is the resulting duration */ p.morale = clamp(p.morale + 6, 5, 100); logTx(`Extended ${pname(p)} (${money(salary)}).`); msg = 'Extension agreed.'; }
+    } else if (n.mode === 'extend') { p.contract = { salary, years: p.contract.years + years }; /* extension adds the newly agreed term to years remaining */ p.morale = clamp(p.morale + 6, 5, 100); logTx(`Extended ${pname(p)} (${money(salary)}).`); msg = 'Extension agreed.'; }
     else if (n.mode === 'resign') { const e = game.offseason.expiring.find(x => x.id === n.id); p.contract = { salary, years }; if (e) e.status = 'signed'; logTx(`Re-signed ${pname(p)} (${money(salary)} × ${years}).`); msg = 'Re-signed.'; }
   } else if (n.done === 'walked') {
     recordNegotiationBreakdown(p,n);
@@ -6905,7 +6925,31 @@ const Store = {
     if (navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     return this.status;
   },
-  _tx(mode, fn) { return new Promise((res, rej) => { const tx = this.db.transaction('saves', mode); const st = tx.objectStore('saves'); const r = fn(st); tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error); }); },
+  // Build 121: Safari may suspend an IndexedDB transaction without firing its
+  // completion/error events. Never leave save buttons waiting indefinitely.
+  _tx(mode, fn) { return new Promise((res, rej) => {
+    let tx, timer, finished=false;
+    const settle=(err,value) => {
+      if(finished) return;
+      finished=true;
+      clearTimeout(timer);
+      if(err) rej(err); else res(value);
+    };
+    try {
+      tx=this.db.transaction('saves',mode);
+      const request=fn(tx.objectStore('saves'));
+      tx.oncomplete=()=>settle(null,request && request.result);
+      tx.onerror=()=>settle(tx.error || new Error('IndexedDB transaction error'));
+      tx.onabort=()=>settle(tx.error || new Error('IndexedDB transaction aborted'));
+      timer=setTimeout(()=>{
+        try { tx.abort(); } catch(e) {}
+        // Database may remain unusable for the remainder of this Safari session.
+        this.lastError='Browser database stalled. Using recovery storage where available.';
+        this.idbOk=false;
+        settle(new Error('IndexedDB timed out after 3 seconds'));
+      },3000);
+    } catch(e) { settle(e); }
+  }); },
   // Read every independent copy and rank the actual payloads, never the cached metadata.
   async candidates(slot) {
     const rows = [];
@@ -6924,6 +6968,10 @@ const Store = {
   async get(slot) {
     const rows=await this.candidates(slot);
     this.lastRecovery=rows[0] ? {slot,source:rows[0].name,revision:rows[0].info.revision,saved:rows[0].info.saved,alternatives:rows.length} : null;
+    if (rows.length>1 && rows.some(r=>r.info.created===rows[0].info.created &&
+        r.info.saved>rows[0].info.saved && r.info.revision<rows[0].info.revision)) {
+      this.lastError='Recovery copies disagree: later timestamp but lower revision. Highest revision retained; export JSON before proceeding.';
+    }
     return rows[0]?.raw || null;
   },
   async meta(slot) {
@@ -6937,6 +6985,14 @@ const Store = {
     const existing=await this.candidates(slot);
     if (existing.length && compareSaveSnapshots(existing[0].info,incoming)>0) {
       this.lastError='Newer save already preserved; skipped stale queued write.';
+      return false;
+    }
+    // If Safari has recovered an older progression point, do not clobber a
+    // genuinely further-advanced snapshot just because its revision is lower.
+    const ahead=existing.find(c=>c.info.created===incoming.created &&
+      (c.info.progress>incoming.progress || c.info.games>incoming.games));
+    if(ahead) {
+      this.lastError='Recovery copy has more career progress. Save blocked; verify saved slot or export JSON.';
       return false;
     }
     let ok=false;
@@ -6995,7 +7051,27 @@ function compareSaveSnapshots(a,b) {
 }
 function prepareSaveMetadata(slot) {
   game.meta.slot=slot;
-  game.meta.saveRevision=Math.max(0,Number(game.meta.saveRevision)||0)+1;
+  // B123: when Safari restores an older in-memory save, keep revision numbers
+  // monotonic relative to locally readable snapshots of this SAME career.
+  // Never use another career's revision to advance this one.
+  let highest=Math.max(0,Number(game.meta.saveRevision)||0);
+  if (Store.lsOk) {
+    for (const key of [localRawKey(slot),backupRawKey(slot)]) {
+      try {
+        const candidate=saveSnapshotInfo(localStorage.getItem(key));
+        if (candidate && candidate.created===String(game.meta.created||'')) {
+          // Do not let an earlier career state silently supersede later progress.
+          if(candidate.progress> ((Number(game.year)||0)*100000+(Number(game.day)||0)) ||
+             candidate.games > ((Number(game.gm.wins)||0)+(Number(game.gm.losses)||0)+(Number(game.gm.draws)||0))) {
+            Store.lastError='A later career snapshot exists in recovery storage. Verify the saved slot before continuing.';
+            continue;
+          }
+          highest=Math.max(highest,candidate.revision);
+        }
+      } catch(e) {}
+    }
+  }
+  game.meta.saveRevision=highest+1;
   game.meta.saved=new Date().toISOString();
   game.meta.build=BUILD.version;
 }
@@ -7012,6 +7088,12 @@ function writeLocalSaveMirror(slot, str, meta) {
   const curInfo=saveSnapshotInfo(current), bakInfo=saveSnapshotInfo(backup);
   if (curInfo && compareSaveSnapshots(curInfo,incoming)>0) return false;
   if (bakInfo && compareSaveSnapshots(bakInfo,incoming)>0) return false;
+  // Protect higher actual progress even when revision/timestamp ordering differs.
+  if ([curInfo,bakInfo].some(c=>c && c.created===incoming.created &&
+      (c.progress>incoming.progress || c.games>incoming.games))) {
+    Store.lastError='A more advanced recovery snapshot exists; refusing to overwrite it.';
+    return false;
+  }
   // Preserve the previous valid primary before overwriting it. Never destroy a
   // newer recovery snapshot. Store the raw payload before its optional metadata.
   if (curInfo && compareSaveSnapshots(incoming,curInfo)>0 &&
@@ -7108,11 +7190,29 @@ function saveGame(slot, notify) {
   }
   slot = slot || game.meta.slot || 1;
   prepareSaveMetadata(slot);
+  // Never allow the immediate local mirror to overwrite a later career state.
+  if (Store.lsOk) {
+    let ahead=false;
+    for (const key of [localRawKey(slot),backupRawKey(slot)]) {
+      try {
+        const c=saveSnapshotInfo(localStorage.getItem(key));
+        if(c && c.created===String(game.meta.created||'') &&
+          (c.progress>((Number(game.year)||0)*100000+(Number(game.day)||0)) ||
+           c.games>((Number(game.gm.wins)||0)+(Number(game.gm.losses)||0)+(Number(game.gm.draws)||0)))) ahead=true;
+      } catch(e) {}
+    }
+    if (ahead) {
+      Store.lastError='A more advanced career exists in browser recovery storage; save blocked. Verify slot and export JSON.';
+      if (notify) { saveStatusUpdate(Store.lastError,true); flash('Save blocked to protect newer progress.'); }
+      return Promise.resolve(false);
+    }
+  }
   let str, meta;
   try { str = serialiseGame(); meta = metaOf(game); }
   catch (e) { Store.lastError=String(e); if(notify) flash('Save encoding failed. Export backup.'); return Promise.resolve(false); }
   // Keep a best-effort synchronous fallback for Safari page suspension.
-  if (Store.lsOk) writeLocalSaveMirror(slot, str, meta);
+  const mirrorSaved=Store.lsOk && writeLocalSaveMirror(slot, str, meta);
+  if (mirrorSaved) { Store.lastSaved=new Date(meta.saved); Store.status='ok'; }
   const previous = _pendingSave;
   _pendingSave = {slot,str,meta,notify:!!notify || !!previous?.notify};
   if (!_saveBusy) _saving = drainSaveQueue();
@@ -7264,7 +7364,7 @@ function sheetSwipe(el) {
   if (!el) return;
   const head = el.querySelector('.sheet-h'), bodyEl = el.querySelector('.sheet-b');
   let y0 = null, dy = 0;
-  const start = e => { if (e.currentTarget === bodyEl && bodyEl.scrollTop > 0) return; y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none'; };
+  const start = e => { if (e.currentTarget === bodyEl && (bodyEl.scrollTop > 0 || e.target.closest('.profile-stats-scroll'))) return; y0 = e.touches[0].clientY; dy = 0; el.style.transition = 'none'; };
   const move = e => { if (y0 == null) return; dy = e.touches[0].clientY - y0; if (dy > 0) { el.style.transform = `translateY(${dy}px)`; if (e.cancelable) e.preventDefault(); } else if (e.currentTarget === bodyEl) { y0 = null; el.style.transform = ''; } };
   const end = () => { if (y0 == null) return; y0 = null; el.style.transition = 'transform .15s'; if (dy > 90) closeModal(); else el.style.transform = ''; };
   [head, bodyEl].forEach(t => { if (!t) return; t.addEventListener('touchstart', start, { passive: true }); t.addEventListener('touchmove', move, { passive: false }); t.addEventListener('touchend', end); t.addEventListener('touchcancel', end); });
@@ -8077,16 +8177,46 @@ function saveHealthText() {
   if (Store.status === 'none') return 'Browser storage unavailable. Export your career JSON now.';
   return `${Store.idbOk ? 'Database + recovery copies' : 'Local browser storage'}${Store.lastSaved ? ' · Last saved '+Store.lastSaved.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : ' · No confirmed save this session'}`;
 }
+// A visible manual save must complete even if Safari leaves an autosave in flight.
+// Verify a durable snapshot, not the status of the asynchronous queue.
+let _manualSaveActive=false;
 async function saveAndConfirm() {
-  saveStatusUpdate('Saving career…');
-  const slot = game.meta.slot || 1;
-  const ok = await saveGame(slot, false);
-  const raw = await Store.get(slot);
-  const parsed = safeParse(raw);
-  const valid = !!(ok && parsed && parsed.gm && parsed.players && parsed.season && parsed.meta && Number(parsed.meta.slot || slot) === slot && Number(parsed.meta.saveRevision)===Number(game.meta.saveRevision));
-  const stamp = parsed?.meta?.saved ? new Date(parsed.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : 'unknown';
-  saveStatusUpdate(valid ? `Saved and verified at ${stamp}.` : 'Could not confirm save. Export a JSON backup now.', !valid);
-  flash(valid ? `Career saved and verified · ${stamp}` : 'Save could not be verified. Export JSON.');
+  if (_manualSaveActive) { flash('A save check is already running.'); return; }
+  _manualSaveActive=true;
+  saveStatusUpdate('Saving and checking this career…');
+  try {
+    const slot=game.meta.slot || 1;
+    // Saving immediately serialises the current game and attempts the local mirror.
+    // The database work is bounded by the transaction timeout.
+    const pending=saveGame(slot,false);
+    const revision=Number(game.meta.saveRevision)||0;
+    const saved=game.meta.saved;
+    let completed=false;
+    await Promise.race([
+      Promise.resolve(pending).then(()=>{completed=true;},()=>{completed=true;}),
+      new Promise(resolve=>setTimeout(resolve,7000))
+    ]);
+    // Both local and database recovery candidates use the same ordering policy.
+    // A stalled database is skipped by the bounded transaction helper.
+    const raw=await Store.get(slot);
+    const info=saveSnapshotInfo(raw);
+    const valid=!!(info && Number(info.revision)>=revision &&
+      info.data.meta && Number(info.data.meta.slot||slot)===slot &&
+      info.data.meta.saved && Date.parse(info.data.meta.saved)>=Date.parse(saved));
+    if (valid) {
+      const stamp=new Date(info.data.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+      Store.lastSaved=new Date(info.data.meta.saved);
+      saveStatusUpdate(`Saved and verified at ${stamp} (${Store.lastRecovery?.source||'browser storage'}).`);
+      flash(`Career saved and verified · ${stamp}`);
+    } else {
+      saveStatusUpdate((Store.lastError ? Store.lastError + ' ' : '') + (completed ? 'Save could not be verified. Export a JSON backup now.' : 'Browser storage stalled. Export a JSON backup now.'),true);
+      flash('Save not confirmed. Export JSON backup.');
+    }
+  } catch(e) {
+    Store.lastError=String(e);
+    saveStatusUpdate('Save check failed. Export a JSON backup now.',true);
+    flash('Save could not be verified. Export JSON.');
+  } finally { _manualSaveActive=false; }
 }
 async function verifyActiveSlot() {
   const slot = game.meta.slot || 1;
@@ -8439,7 +8569,7 @@ function showPlayer(id, tab) {
     ${seg([['over','Overview'],['stats','Statistics'],['hist','Career'],['contract','Contract']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
   let body;
   if (tab === 'stats') {
-    const t = src => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>M</th><th>Runs</th><th>Avg</th><th>SR</th><th>100/50</th><th>HS</th><th>W</th><th>Avg</th><th>Econ</th><th>BB</th><th>Ct</th></tr></thead><tbody>${FMT_LIST.map(f => { const s = src[f]; return `<tr><td>${compName(f)}</td><td>${s.m}</td><td>${s.r}</td><td>${fmtNum(batAvgOf(s))}</td><td>${s.b ? fmtNum(srOf(s), 0) : '–'}</td><td>${s.c100}/${s.c50}</td><td>${hsStr(s)}</td><td>${s.w}</td><td>${fmtNum(bowlAvgOf(s))}</td><td>${fmtNum(econOf(s))}</td><td>${bbStr(s)}</td><td>${s.ct}${s.st ? '/' + s.st : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+    const t = src => `<div class="stats-scroll-note xs muted">Swipe across the table for bowling and fielding figures →</div><div class="tbl-wrap profile-stats-scroll" role="region" aria-label="Player statistics table, scroll horizontally for more columns" tabindex="0"><table class="tbl"><thead><tr><th></th><th>M</th><th>Inn</th><th>NO</th><th>Runs</th><th>Avg</th><th>SR</th><th>100/50</th><th>HS</th><th>W</th><th>Avg</th><th>Econ</th><th>BB</th><th>Ct</th></tr></thead><tbody>${FMT_LIST.map(f => { const s = src[f]; return `<tr><td>${compName(f)}</td><td>${s.m}</td><td>${s.inn}</td><td>${s.no}</td><td>${s.r}</td><td>${fmtNum(batAvgOf(s))}</td><td>${s.b ? fmtNum(srOf(s), 0) : '–'}</td><td>${s.c100}/${s.c50}</td><td>${hsStr(s)}</td><td>${s.w}</td><td>${fmtNum(bowlAvgOf(s))}</td><td>${fmtNum(econOf(s))}</td><td>${bbStr(s)}</td><td>${s.ct}${s.st ? '/' + s.st : ''}</td></tr>`; }).join('')}</tbody></table></div>`;
     body = `<div class="panel"><div class="ph"><h3>This season</h3></div>${t(p.stats.season)}</div><div style="height:8px"></div><div class="panel"><div class="ph"><h3>Domestic career</h3></div>${t(p.stats.career)}</div>${p.stats.intl ? `<div style="height:8px"></div><div class="panel"><div class="ph"><h3>International</h3>${p.realCareer ? `<span class="xs dim">Real record to ${p.realCareer}, then this career</span>` : ''}</div>${t(p.stats.intl).replace(/>Shield</, '>Test<').replace(/>One-Day</, '>ODI<').replace(/>T20</, '>T20I<')}</div>` : ''}`;
   } else if (tab === 'contract') {
     const value = askingSalary(p), salary = p.contract ? p.contract.salary : null;
