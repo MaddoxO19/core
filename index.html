@@ -1208,7 +1208,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.48 Build 125', title: 'Generational Talents and Playing Style Advantages', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.49 Build 126', title: 'Format Team and Player World Rankings', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -3248,6 +3248,8 @@ function migrateGame(g) {
   if (!g.nation) g.nation = { gm: false, conf: 60, rankings: initRankings(), history: [] };
   if (!g.nation.rankings) g.nation.rankings = initRankings();
   Object.entries(initRankings()).forEach(([n, r]) => { if (!Number.isFinite(g.nation.rankings[n])) g.nation.rankings[n] = r; });
+  // B126: preserve legacy combined ratings but introduce independent format Elo tables.
+  ensureWorldRankingState(g);
   g.worldSeriesHistory = g.worldSeriesHistory || [];
   g.globalTournamentHistory = g.globalTournamentHistory || [];
   g.associateQualificationHistory = g.associateQualificationHistory || [];
@@ -4642,12 +4644,109 @@ function wcAusFinish(w) {
   if (fx.some(f => f.stage.startsWith('wcsemi') && (f.home === 'AUS' || f.away === 'AUS'))) return 'Semi-finalists';
   return 'Group stage';
 }
-function rankPair(a, b, score) {
-  const R = game.nation.rankings, na = teamNat(a), nb = teamNat(b);
-  if (R[na] == null || R[nb] == null) return;
-  const exp = 1 / (1 + Math.pow(10, (R[nb] - R[na]) / 40));
-  const d = Math.round(8 * (score - exp));
-  R[na] += d; R[nb] -= d;
+// B126: independent Test, ODI and T20I nation Elo, plus performance-driven player ratings.
+// This is an ICC-style simulation, not the ICC's proprietary ranking formula.
+const WORLD_RANK_FMTS = ['FC','OD','T20'];
+const WORLD_RANK_LABELS = {FC:'Test',OD:'ODI',T20:'T20I'};
+const WORLD_RANK_CATS = ['bat','bowl','all'];
+function ensureWorldRankingState(g) {
+  if (!g || !g.nation) return;
+  const n = g.nation, base = n.rankings || initRankings();
+  n.formatRankings = n.formatRankings || {};
+  WORLD_RANK_FMTS.forEach(f => {
+    const R = n.formatRankings[f] || (n.formatRankings[f] = {});
+    Object.entries(initRankings()).forEach(([nat, v]) => {
+      if (!Number.isFinite(R[nat])) R[nat] = Number.isFinite(base[nat]) ? base[nat] : v;
+    });
+  });
+  n.playerRankings = n.playerRankings || {}; // per-player per-format recent-performance metrics
+  n.rankPrevious = n.rankPrevious || {}; // previous published position, per format and category
+  n.rankPeaks = n.rankPeaks || {}; // career-best positions and rating points
+}
+function teamWorldRanks(fmt) {
+  ensureWorldRankingState(game);
+  return game.nation.formatRankings[fmt] || game.nation.formatRankings.FC;
+}
+function worldPlayerRating(p, fmt, cat) {
+  if (!p || p.retired || !p.stats || !p.stats.intl) return 0;
+  const st = p.stats.intl[fmt], caps = p.caps && p.caps[fmt] || 0;
+  if (!st || caps < 2) return 0;
+  const recent = (game.nation.playerRankings || {})[p.id]?.[fmt] || {};
+  const batOpportunity = st.inn >= 2;
+  const bowlOpportunity = st.bb >= 48 && st.w >= 1;
+  // Long-term figures establish an existing career's baseline; an exponentially
+  // weighted performance score responds to each newly completed international.
+  const avg = st.inn > st.no ? st.r / (st.inn - st.no) : st.r;
+  const strike = st.b > 0 ? (st.r - (st.xr || 0)) / st.b * 100 : (fmt === 'FC' ? 55 : fmt === 'OD' ? 85 : 125);
+  const srBase = fmt === 'FC' ? 55 : fmt === 'OD' ? 85 : 125;
+  const batBase = clamp(195 + avg * 10.0 + (strike - srBase) * (fmt === 'FC' ? 1.2 : 1.6), 50, 945);
+  const bowlAvg = st.w ? st.rc / st.w : 60;
+  const econ = st.bb ? st.rc / (st.bb / 6) : (fmt === 'FC' ? 3.5 : fmt === 'OD' ? 5.5 : 8);
+  const econBase = fmt === 'FC' ? 3.4 : fmt === 'OD' ? 5.5 : 8;
+  const wpm = st.w / Math.max(1, caps);
+  const bowlBase = clamp(670 + wpm * 76 - (bowlAvg - 25) * 9 - (econ - econBase) * 35, 60, 940);
+  // A small sample cannot immediately displace long-established internationals.
+  const confidence = Math.min(1, caps / (fmt === 'FC' ? 16 : 20));
+  const br = batOpportunity ? Math.round(clamp((batBase * 0.78 + (Number.isFinite(recent.bat) ? recent.bat : batBase) * 0.22) * (0.60 + 0.40 * confidence), 0, 1000)) : 0;
+  const bw = bowlOpportunity ? Math.round(clamp((bowlBase * 0.78 + (Number.isFinite(recent.bowl) ? recent.bowl : bowlBase) * 0.22) * (0.60 + 0.40 * confidence), 0, 1000)) : 0;
+  if (cat === 'bat') return br;
+  if (cat === 'bowl') return bw;
+  return br >= 100 && bw >= 100 ? Math.round(br * bw / 1000) : 0;
+}
+function rankedWorldPlayers(fmt, cat) {
+  return Object.values(game.players).filter(p => !p.retired && p.nat && p.stats?.intl?.[fmt])
+    .map(p => ({id:p.id, p, score:worldPlayerRating(p, fmt, cat)}))
+    .filter(x => x.score > 0)
+    .sort((a,b) => b.score - a.score || (a.p.last || '').localeCompare(b.p.last || '') || String(a.id).localeCompare(String(b.id)));
+}
+function captureRankPositions(fmt) {
+  ensureWorldRankingState(game);
+  const prev = game.nation.rankPrevious;
+  WORLD_RANK_CATS.forEach(cat => {
+    const key = fmt + ':' + cat;
+    prev[key] = Object.fromEntries(rankedWorldPlayers(fmt,cat).map((r,i) => [r.id,i+1]));
+  });
+}
+function updatePlayerWorldRankings(M) {
+  ensureWorldRankingState(game);
+  const fmt = M.fmt, affected = new Map();
+  [...M.xi[M.home],...M.xi[M.away]].forEach(id => affected.set(id,{runs:0,outs:0,balls:0,w:0,rc:0,bb:0}));
+  M.innings.forEach(inn => {
+    inn.card.forEach(c => { if (!c.in) return; const x=affected.get(c.id); if(x){x.runs+=c.r;x.balls+=c.b;x.outs+=c.out?1:0;} });
+    Object.entries(inn.bw).forEach(([id,b])=>{const x=affected.get(id);if(x){x.w+=b.w;x.rc+=b.r;x.bb+=b.balls;}});
+  });
+  for (const [id,x] of affected) {
+    const rec = game.nation.playerRankings[id] || (game.nation.playerRankings[id] = {});
+    const form = rec[fmt] || (rec[fmt] = {});
+    if (x.balls > 0) {
+      const srBase = fmt === 'FC' ? 55 : fmt === 'OD' ? 85 : 125;
+      const score = clamp(195 + (x.outs ? x.runs / x.outs : x.runs * 0.8) * 10 + (x.runs / x.balls * 100 - srBase) * 1.4,50,945);
+      form.bat = Number.isFinite(form.bat) ? Math.round(0.84*form.bat+0.16*score) : Math.round(score);
+    }
+    if (x.bb >= 6) {
+      const economy = x.rc / (x.bb / 6), norm = fmt === 'FC' ? 3.4 : fmt === 'OD' ? 5.5 : 8;
+      const score = clamp(670 + x.w*100 - (x.w ? x.rc/x.w - 25 : 30)*6 - (economy-norm)*35,50,945);
+      form.bowl = Number.isFinite(form.bowl) ? Math.round(.84*form.bowl+.16*score) : Math.round(score);
+    }
+  }
+  // Store career peak positions only for players with international appearances.
+  WORLD_RANK_CATS.forEach(cat => {
+    rankedWorldPlayers(fmt,cat).forEach((r,i) => {
+      const peak = game.nation.rankPeaks[r.id] || (game.nation.rankPeaks[r.id]={});
+      const key = fmt+':'+cat, old=peak[key];
+      peak[key] = {rank:Math.min(old?.rank||Infinity,i+1),points:Math.max(old?.points||0,r.score)};
+    });
+  });
+}
+function rankPair(a, b, score, fmt) {
+  const na=teamNat(a),nb=teamNat(b),R=teamWorldRanks(fmt||'FC');
+  if (R[na] == null || R[nb] == null || na===nb) return;
+  const exp = 1/(1+Math.pow(10,(R[nb]-R[na])/40));
+  const d = Math.round(8*(score-exp));
+  R[na]+=d;R[nb]-=d;
+  // Preserve the historic composite table for older save consumers.
+  const legacy=game.nation.rankings;
+  if(legacy && legacy[na]!=null && legacy[nb]!=null){legacy[na]+=d;legacy[nb]-=d;}
 }
 
 // ---- Editor (commissioner mode) ----
@@ -5657,6 +5756,7 @@ function createGame(gmName, teamId, year, nationGm, rosterMode) {
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
   game.nation.rankings = initRankings();
+  ensureWorldRankingState(game);
   game.fin = initFinances(); game.inbox = [];
   // Squads
   if (game.meta.rosterMode === 'authentic') seedAuthenticWorld();
@@ -5772,6 +5872,7 @@ function applyIntlMatch(M) {
     return;
   }
   if(isWorldCupKnockout(fx)&&(M.result.tie||M.result.noResult)&&!M.superOvers?.length)playKnockoutSuperOvers(M);
+  if (!M.abandoned && !M.result.noResult) captureRankPositions(fmt);
   const inXI = M.abandoned ? [] : [...M.xi[M.home], ...M.xi[M.away]];
   inXI.forEach(id => { const p = P(id); addIntlStat(p, fmt, s => s.m++); if ((M.xi[M.home].includes(id) && p.nat === teamNat(M.home)) || (M.xi[M.away].includes(id) && p.nat === teamNat(M.away))) p.caps[fmt]++; });
   M.innings.forEach(inn => {
@@ -5787,7 +5888,10 @@ function applyIntlMatch(M) {
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
   if(M.superOvers?.length){fx.result.superOvers=M.superOvers;fx.result.tie=true;}
   if (M.home === 'AUS' || M.away === 'AUS' || /^(wc(semi|final)|global(semi|final))/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
-  if (!fx.result.noResult) rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5);
+  if (!fx.result.noResult) {
+    rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5, fmt);
+    updatePlayerWorldRankings(M);
+  }
   if (fx.stage === 'world') archiveWorldSeries();
   trackWtcResult(fx);
   if (fx.stage === 'wtcfinal') archiveWtcFinal(fx);
@@ -5823,6 +5927,7 @@ function applyMatch(M) {
   if (COMPS[M.comp].intl) return applyIntlMatch(M);
   const fx = fixtureById(M.fxId);
   const comp = COMPS[M.comp], fmt = M.fmt;
+  if (!M.abandoned && !M.result.noResult) captureRankPositions(fmt);
   const inXI = M.abandoned ? [] : [...M.xi[M.home], ...M.xi[M.away]];
   inXI.forEach(id => addStat(P(id), fmt, s => s.m++));
   learnFromMatch(M);
@@ -7721,14 +7826,14 @@ function attentionSheet() {
   sheet('Club updates', pending.length ? `${pending.length} update${pending.length===1?'':'s'}` : 'All caught up', body, {flush:true, foot: pending.length?'<button class="btn ghost block" onclick="closeModal()">Close</button>':''});
 }
 function nationHomeKpis() {
-  const n = game.nation || {}, rankings = n.rankings || {};
+  const n = game.nation || {}, rankings = teamWorldRanks('FC');
   const rank = Object.keys(rankings).sort((a, b) => rankings[b] - rankings[a]).indexOf('AUS') + 1;
   const mine = squadOf(U()).filter(p => p.natDuty).length;
   const st = (v, l, js) => `<button onclick="${js}"><b>${v}</b><span>${l}</span></button>`;
-  return `<div class="status-strip" style="grid-template-columns:repeat(3,1fr)">${st(rank ? ordinal(rank) : '–', 'World rank', "ui.intlTab='world';go('intl')")}${st(n.conf ?? '–', 'National board', "ui.intlTab='aus';go('intl')")}${st(mine, 'Your players', "ui.intlTab='aus';go('intl')")}</div>`;
+  return `<div class="status-strip" style="grid-template-columns:repeat(3,1fr)">${st(rank ? ordinal(rank) : '–', 'Test rank', "ui.intlTab='world';go('intl')")}${st(n.conf ?? '–', 'National board', "ui.intlTab='aus';go('intl')")}${st(mine, 'Your players', "ui.intlTab='aus';go('intl')")}</div>`;
 }
 function worldHomeRankings() {
- const ranks = (game.nation || {}).rankings || {};
+ const ranks = teamWorldRanks('FC');
  return Object.keys(ranks).sort((a,b)=>ranks[b]-ranks[a]).slice(0,5).map((n,i)=>`<div class="kv"><span>${i+1}. ${nationTag(n)} ${esc(NATIONS[n]||n)}</span><b>${Math.round(ranks[n])}</b></div>`).join('') || '<div class="empty">Rankings not yet available.</div>';
 }
 function renderHome() {
@@ -7770,7 +7875,7 @@ function renderHome() {
     ${strip}
     ${needs}
     <div class="grid g2">
-      <div class="grid">${homeNation ? panel('World rankings', `<div class="rows">${worldHomeRankings()}</div>`, { flush: true }) : panel('Ladder', ladderTable(hc, true), { flush: true, end: `<span class="home-comp-select">${sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()")}</span>` })}</div>
+      <div class="grid">${homeNation ? panel('Test rankings', `<div class="rows">${worldHomeRankings()}</div>`, { flush: true }) : panel('Ladder', ladderTable(hc, true), { flush: true, end: `<span class="home-comp-select">${sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()")}</span>` })}</div>
       <div class="grid">${wcHomeCard()}${up.length ? panel('Coming up', `<div class="rows">${up.map(f => fixtureRow(f, false)).join('')}</div>`, { flush: true }) : ''}${news}</div>
     </div></div>`;
 }
@@ -9859,18 +9964,31 @@ function globalTournamentPanel() {
  return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(teamDef(h.winner).name)}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
 }
 function renderWorld(){
- const mode=ui.worldView||'rankings';
- const tabs=seg([['rankings','Rankings'],['results','Results'],['qualification','Qualification']],mode,'(v=>{ui.worldView=v;render();})');
- if(mode==='results')return `${tabs}<div style="height:10px"></div>${intlResultsPanel(false)}`;
- if(mode==='qualification'){
-  const events=[['CWCQ','ODI qualification'],['T20Q','T20I qualification']];
-  const panels=events.map(([key,label])=>{const rows=associateQualificationTable(key);return panel(label,`<div class="rows">${rows.map((r,i)=>`<div class="row"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} P</span><b>${r.Pts} pts</b></div>`).join('')||'<div class="empty">No qualifying standings available.</div>'}</div>`,{flush:true});}).join('<div style="height:8px"></div>');
-  return `${tabs}<div style="height:10px"></div>${panels}`;
- }
- const R=game.nation.rankings,rk=Object.keys(R).sort((a,b)=>R[b]-R[a]);
- return `${tabs}<div style="height:10px"></div>${panel('World rankings',`<div class="rows">${rk.map((n,i)=>`<div class="row tap ${n==='AUS'?'me':''}" onclick="showTeam('${n==='AUS'?'AUS':'X_'+n}')"><span class="n">${i+1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n])}</div><b>${R[n]}</b></div>`).join('')}</div><div class="pb xs muted">Select a nation to view its team profile.</div>`,{flush:true})}`;
+  const mode=ui.worldView||'rankings';
+  const tabs=seg([['rankings','Rankings'],['results','Results'],['qualification','Qualification']],mode,'(v=>{ui.worldView=v;render();})');
+  if(mode==='results')return `${tabs}<div style="height:10px"></div>${intlResultsPanel(false)}`;
+  if(mode==='qualification'){
+   const events=[['CWCQ','ODI qualification'],['T20Q','T20I qualification']];
+   const panels=events.map(([key,label])=>{const rows=associateQualificationTable(key);return panel(label,`<div class="rows">${rows.map((r,i)=>`<div class="row"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} P</span><b>${r.Pts} pts</b></div>`).join('')||'<div class="empty">No qualifying standings available.</div>'}</div>`,{flush:true});}).join('<div style="height:8px"></div>');
+   return `${tabs}<div style="height:10px"></div>${panels}`;
+  }
+  const fmt=ui.worldRankFmt||'FC',kind=ui.worldRankKind||'teams',cat=ui.worldRankCat||'bat';
+  const selector = `${seg([['teams','Teams'],['players','Players']],kind,'(v=>{ui.worldRankKind=v;render();})')}<div style="height:7px"></div>${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],fmt,'(v=>{ui.worldRankFmt=v;render();})')}`;
+  let body;
+  if(kind==='teams'){
+    const R=teamWorldRanks(fmt),rk=Object.keys(R).sort((a,b)=>R[b]-R[a]||a.localeCompare(b));
+    body=panel(`${WORLD_RANK_LABELS[fmt]} team rankings`,`<div class="rows">${rk.map((n,i)=>`<div class="row tap ${n==='AUS'?'me':''}" onclick="showTeam('${n==='AUS'?'AUS':'X_'+n}')"><span class="n">${i+1}</span><div class="grow s">${nationTag(n)} ${esc(NATIONS[n]||n)}</div><b>${Math.round(R[n])}</b></div>`).join('')}</div><div class="pb xs muted">Independent Elo rating for each international format. Select a nation for its profile.</div>`,{flush:true});
+  }else{
+    const types=seg([['bat','Batting'],['bowl','Bowling'],['all','All-rounder']],cat,'(v=>{ui.worldRankCat=v;render();})');
+    const ranks=rankedWorldPlayers(fmt,cat).slice(0,25);
+    const prev=game.nation.rankPrevious?.[fmt+':'+cat]||{};
+    body=`${types}<div style="height:8px"></div>`+panel(`${WORLD_RANK_LABELS[fmt]} ${cat==='bat'?'batting':cat==='bowl'?'bowling':'all-rounder'} rankings`,`<div class="rows">${ranks.map((r,i)=>{
+      const old=prev[r.id],delta=old?old-(i+1):null,peak=game.nation.rankPeaks?.[r.id]?.[fmt+':'+cat];
+      return `<div class="row tap ${r.p.nat==='AUS'?'me':''}" onclick="showPlayer('${r.id}')"><span class="n">${i+1}</span><div class="stack"><span class="main-t">${esc(pname(r.p))}</span><span class="sub-t">${nationTag(r.p.nat)} ${esc(NATIONS[r.p.nat]||r.p.nat)}${peak?' · Peak #'+peak.rank:''}</span></div><div class="end"><span class="xs ${delta>0?'win':delta<0?'loss':'dim'}">${delta===null?'NEW':delta>0?'▲'+delta:delta<0?'▼'+(-delta):'•'}</span><b>${r.score}</b></div></div>`;
+    }).join('')||'<div class="empty">No qualified international players yet.</div>'}</div><div class="pb xs muted">Performance-based points (not player ability). Movement compares with the previous completed international match in this format. Rankings use a game-specific model, not official ICC ratings.</div>`,{flush:true});
+  }
+  return `${tabs}<div style="height:10px"></div>${selector}<div style="height:10px"></div>${body}`;
 }
-
 // Editor: four sections with one grid each, skills grouped as on the profile, and a pinned preview
 // of the three format ratings that updates as values change (edPreview works on a copy; nothing is saved until Save).
 function editPlayerSheet(id) {
