@@ -1145,6 +1145,11 @@ body.live-mode .actbar{display:none}
 .profile-stats-scroll .tbl th,.profile-stats-scroll .tbl td{white-space:nowrap}
 .profile-stats-scroll .tbl th:first-child,.profile-stats-scroll .tbl td:first-child{position:sticky;left:0;z-index:1;background:var(--s1);box-shadow:1px 0 0 var(--line2)}
 .stats-scroll-note{padding:6px 12px 4px;text-align:right}
+
+/* Build 125: discreet generational talent marker. */
+.talent-mark{display:inline-flex;align-items:center;gap:5px;color:var(--accent);border:1px solid rgba(244,197,66,.35);border-radius:7px;padding:5px 9px;margin:0 0 10px;font-size:11px;font-weight:800;letter-spacing:.01em}
+.talent-mark span{color:var(--muted);font-weight:600}
+.talent-note{margin:0 0 10px;font-size:12px;line-height:1.4}
 </style>
 </head>
 <body>
@@ -1203,7 +1208,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.47 Build 124', title: 'Profile Statistics and Contract Extensions', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.48 Build 125', title: 'Generational Talents and Playing Style Advantages', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -1432,6 +1437,79 @@ function specialistOf(p) {
 }
 function styleOf(p) { return p.style && STYLES[p.style] ? STYLES[p.style] : null; }
 function styleLabel(p) { const st = styleOf(p); return st ? st.label : ''; }
+
+// Build 125: generational talent is always derived from live ratings. No new save
+// fields or random draws, so existing careers and their player identities survive.
+// "Potential GOAT" is a talent projection, never an earned historical accolade.
+function talentTier(p, fmt, discipline) {
+  if (!p || p.retired) return 0;
+  const r = overall(p, fmt);
+  if (r < 95) return 0;
+  const g = group(p);
+  // A batting star who occasionally bowls never inherits an elite bowling bonus.
+  // Equally, a specialist bowler does not get elite batting bonuses for fielding.
+  if (discipline === 'bat' && g !== 'BAT' && g !== 'WK' && g !== 'AR') return 0;
+  if (discipline === 'bowl' && (g === 'BAT' || g === 'WK')) return 0;
+  if (discipline === 'bat' && batRating(p, fmt) < 90) return 0;
+  if (discipline === 'bowl' && (!canBowl(p) || bowlRating(p, fmt) < 90)) return 0;
+  return r >= 99 ? 0.05 : r >= 97 ? 0.04 : 0.02;
+}
+function potentialGoat(p) {
+  return !!p && !p.retired && FMT_LIST.some(fmt => overall(p, fmt) >= 97 &&
+    (talentTier(p, fmt, 'bat') >= 0.04 || talentTier(p, fmt, 'bowl') >= 0.04));
+}
+function talentLabel(p) { return potentialGoat(p) ? 'Potential GOAT' : ''; }
+
+// Context-specific, reversible style edges for very-high-rated players. The
+// factors alter delivery probabilities, not ratings, stats or stored player data.
+// Never call the gameplay RNG here; C3.1 remains the sole ball resolver.
+function generationalBallEdge(M, inn, batter, bowler, sc, context) {
+  const fmt = M.fmt;
+  const bt = talentTier(batter, fmt, 'bat');
+  const wt = talentTier(bowler, fmt, 'bowl');
+  if (!bt && !wt) return context;
+  const phase = fmt === 'FC' ? 'red' : phaseOf(fmt, inn.overNo, mOvers(M));
+  const early = sc.b < (fmt === 'FC' ? 30 : 12);
+  const chase = !!inn.target;
+  const ballsLeft = fmt === 'FC' ? 99999 : Math.max(0, mOvers(M) * 6 - inn.balls);
+  const need = chase ? Math.max(0, inn.target - inn.runs) : 0;
+  const closeChase = chase && fmt !== 'FC' && ballsLeft <= (fmt === 'T20' ? 30 : 60) &&
+    ballsLeft > 0 && need / ballsLeft >= 0.65 && need / ballsLeft <= 2.2;
+  const p = { ...context, weights:context.weights.slice() };
+  // Multipliers are capped at 5% on any single delivery; style only matters
+  // when the cricket situation actually calls for its particular strength.
+  if (bt) {
+    switch (batter.style) {
+      case 'anchor': if (early || (fmt === 'FC' && sc.b > 90)) p.pW *= 1 - bt; break;
+      case 'aggressor': if (phase === 'pp' || early) p.weights[4] *= 1 + bt; break;
+      case 'accumulator': p.weights[1] *= 1 + bt; p.weights[0] *= 1 - bt * 0.5; break;
+      case 'strokemaker': p.weights[4] *= 1 + bt; break;
+      case 'finisher': if (phase === 'death' || closeChase) { p.weights[5] *= 1 + bt; p.pW *= 1 - bt * 0.5; } break;
+      case 'enforcer': p.weights[5] *= 1 + bt; break;
+      case 'wkbat': if (sc.b >= 25) p.pW *= 1 - bt * 0.7; break;
+      case 'gloveman': if (fmt === 'FC' && sc.b > 25) p.pW *= 1 - bt * 0.5; break;
+      default: break;
+    }
+  }
+  if (wt) {
+    const spin = isSpin(bowler), pace = isPace(bowler);
+    switch (bowler.style) {
+      case 'swing': if (early && pace) p.pW *= 1 + wt; break;
+      case 'express': if (pace && (early || sc.b >= 40)) p.pW *= 1 + wt; break;
+      case 'lineLength': p.weights[4] *= 1 - wt; p.weights[5] *= 1 - wt; break;
+      case 'deathSpec': if (phase === 'death' && pace) { p.weights[5] *= 1 - wt; p.pW *= 1 + wt * 0.5; } break;
+      case 'holding': if (spin && (phase === 'middle' || fmt === 'FC')) { p.weights[4] *= 1 - wt; p.weights[5] *= 1 - wt; } break;
+      case 'wicketTaker': if (spin) p.pW *= 1 + wt; break;
+      case 'mystery': if (spin && (early || phase === 'middle')) p.pW *= 1 + wt; break;
+      default: break;
+    }
+  }
+  // Preserve the calibrated C3.1 upper and lower wicket-hazard bounds.
+  p.pW = clamp(p.pW, fmt === 'FC' ? 0.007 : fmt === 'OD' ? 0.010 : 0.016,
+    fmt === 'FC' ? 0.042 : fmt === 'OD' ? 0.065 : 0.095);
+  return p;
+}
+
 
 // §4 PLAYER GENERATION + VALUE --------------------------------------------
 function genName(nat, teamId) {
@@ -2283,7 +2361,8 @@ function ballContextC3(M, inn, batter, bowler, sc) {
   return { ...old, pW: hazard, weights: wts };
 }
 function ballContext(M, inn, batter, bowler, sc) {
-  return ENGINE_EXPERIMENT_C3 ? ballContextC3(M, inn, batter, bowler, sc) : ballContextC23(M, inn, batter, bowler, sc);
+  const base = ENGINE_EXPERIMENT_C3 ? ballContextC3(M, inn, batter, bowler, sc) : ballContextC23(M, inn, batter, bowler, sc);
+  return generationalBallEdge(M, inn, batter, bowler, sc, base);
 }
 const RUN_VALUES = [0, 1, 2, 3, 4, 6];
 function sampleRuns(w) {
@@ -8564,6 +8643,7 @@ function showPlayer(id, tab) {
   const bar = (l, v) => { v = Math.round(v); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
   const tcol = teamDef(p.teamId) ? teamDef(p.teamId).color : '#3b5568';
   const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label}${styleLabel(p) ? ' · <b>' + esc(styleLabel(p)) + '</b>' : ''} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${nationTag(p.nat)}</div></div>${statusChip(p)}</div>
+    ${potentialGoat(p) ? `<div class="talent-mark" title="Exceptional current ability, not an earned all-time accolade">Potential GOAT <span>· Generational talent</span></div>` : ''}
     <div class="ratings3">${(() => { const sp = specialistOf(p); return FMT_LIST.map(f => `<div class="${sp.label && sp.best === f ? 'best' : ''}"><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join(''); })()}</div>
     ${(() => { const sp = specialistOf(p), st = styleOf(p); return sp.label || st ? `<div class="xs muted" style="margin-top:6px">${st ? esc(st.desc) : ''}${sp.label ? `${st ? ' ' : ''}<b class="spec ${sp.best}">${sp.label}</b>.` : ''}</div>` : ''; })()}<div style="height:10px"></div>
     ${seg([['over','Overview'],['stats','Statistics'],['hist','Career'],['contract','Contract']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
@@ -8617,7 +8697,7 @@ function profileOverview(p, own) {
   const status = `<div class="pstat">${tile('Form', `${formArrow(p.form)} ${Math.round(p.form)}`)}${tile('Fitness', Math.round(p.fitness))}${tile('Potential', potGrade(p))}${own ? tile('Mood', `<span class="${{ good:'win', warn:'draw', bad:'loss' }[moodClass(p.morale)]}">${moodLabel(p.morale)}</span>`) : tile('Age', p.age)}</div>`;
   const plan = p.focus && p.focus !== 'none' ? DEV_FOCUS[p.focus].label : 'Balanced';
   const training = own ? `<div class="kv tap" onclick="closeModal();ui.squadTab='training';go('squad')"><span>Training</span><span>${esc(plan)} <span class="xs dim">· ${p.focusBy === 'gm' ? 'your call' : 'coach'} ▸</span></span></div>` : '';
-  return `${status}${formChart(p)}
+  return `${status}${potentialGoat(p) ? '<div class="note talent-note">Potential GOAT reflects exceptional current ability. All-time greatness must be earned through performances, honours and records.</div>' : ''}${formChart(p)}
     <div class="panel"><div class="ph"><h3>Skills</h3></div><div class="pb">${groups}</div></div>
     <div class="panel" style="margin-top:10px"><div class="ph"><h3>Strengths and weaknesses</h3>${own ? '' : '<div class="end xs dim">scouting</div>'}</div><div class="pb s">${scoutingHtml(p)}</div></div>
     <div class="panel" style="margin-top:10px"><div class="rows">
