@@ -1206,7 +1206,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.50 Build 127', title: 'Simplified Generational Talent Profile', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.52 Build 129', title: 'Records Averages and Innings Consistency', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4142,6 +4142,19 @@ function createWorldCupPreview(info){
   const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':event==='CT'?'Champions Trophy':'ODI World Cup',teams:teams.length,first,host:tournamentHost(event,game.year),ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
   worldCupPreviewStore().push(result);return result;
 }
+// Build 128: tournament histories store international nation codes (e.g. SA),
+// which must never be resolved through the domestic team lookup (SA = South Australia).
+// Also accepts international fixture IDs (X_SA), including older stored previews.
+function worldCupChampionNation(id){
+  if(!id)return null;
+  if(id==='AUS')return 'AUS';
+  const nat=typeof id==='string'&&id.startsWith('X_')?id.slice(2):id;
+  return Object.prototype.hasOwnProperty.call(NATIONS,nat)?nat:null;
+}
+function worldCupChampionHtml(id){
+  const nat=worldCupChampionNation(id);
+  return nat?`${flagFor(nat)} ${esc(NATIONS[nat])}`:'';
+}
 function worldCupPreviewHtml(r){
   const nationLine=x=>x?`${flagFor(x.nat)} ${esc(NATIONS[x.nat]||x.nat)}`:'–';
   const starLine=(label,p)=>p?`<div class="kv"><span>${label}</span><span><span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> ${flagFor(p.nat)}</span></div>`:'';
@@ -4149,7 +4162,7 @@ function worldCupPreviewHtml(r){
     <div class="wc-preview-meta"><div><span>TEAMS</span><b>${r.teams}</b></div><div><span>HOST</span><b>${r.host?`${flagFor(r.host)} ${esc(NATIONS[r.host]||r.host)}`:'TBC'}</b></div><div><span>OPENS</span><b>${dateStr(r.first)}</b></div></div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Pre-tournament favourites</h3></div><div class="rows">${r.ranked.map((t,i)=>`<div class="kv"><span>${i+1}. ${nationLine(t)}</span><b>${Math.round(t.rating)} rating</b></div>`).join('')}</div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Players to watch</h3></div><div class="rows">${starLine('Leading batter',r.stars.batter)}${starLine('Leading bowler',r.stars.bowler)}${starLine('All-rounder',r.stars.allrounder)}${starLine('Rising star',r.stars.rising)}</div></div>
-    <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${r.champion?`<div class="kv"><span>Defending champions</span><span>${flagFor(teamNat(r.champion))} ${esc(teamName(r.champion))}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>`;
+    <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${worldCupChampionNation(r.champion)?`<div class="kv"><span>Defending champions</span><span>${worldCupChampionHtml(r.champion)}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>`;
 }
 function openWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(!r)return;sheet('Tournament preview',r.title,worldCupPreviewHtml(r),{center:true,key:'wc-preview',foot:`<button class="btn pri block" onclick="dismissWorldCupPreview('${r.id}')">Begin Tournament</button>`});}
 function dismissWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(r)r.viewed=true;closeModal();autosave();}
@@ -5429,7 +5442,7 @@ function saveRows(set, cat, aus) {
     careerLeaders(fmt, scope, stat, 40).filter(x => !aus || x.p.nat === 'AUS').slice(0, 10).forEach(x => {
       const s = x.s, v = { run: s.r, wkt: s.w, c100: s.c100, avg: batAvgOf(s) }[cat];
       const t = x.p.teamId && teamDef(x.p.teamId) ? (teamDef(x.p.teamId).short || x.p.teamId) : (x.p.retired ? 'retired' : '');
-      out.push({ v, d: cat === 'avg' ? fmtNum(v) : v.toLocaleString('en-AU'), n: pname(x.p), t: scope === 'intl' ? (x.p.nat || t) : t, note: `${s.m} matches`, id: x.p.id });
+      out.push({ v, d: cat === 'avg' ? fmtNum(v) : v.toLocaleString('en-AU'), n: pname(x.p), t: scope === 'intl' ? (x.p.nat || t) : t, note: cat === 'avg' ? `${countNum(s.inn || 0)} innings` : `${countNum(s.m)} matches`, id: x.p.id });
     });
   }
   return out.filter(x => x.v != null && isFinite(x.v)).sort((a, b) => b.v - a.v);
@@ -10240,7 +10253,7 @@ function renderRecords() {
   if (cat === 'bb') rows = (R.bb[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.w}/${x.r}</td><td></td></tr>`).join('');
   if (cat === 'th' || cat === 'tl') rows = (R[cat][k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${x.t}</b><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${countNum(x.r)}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
   if (cat === 'pt') rows = (R.pt[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> & <b>${esc(x.b)}</b><div class="xs dim">${x.t} v ${x.opp} · ${ordinal(x.w)} wicket · ${x.y}</div></td><td class="b big">${countNum(x.r)}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
-  if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${countNum(s.m)} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${countNum(s.m)} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${countNum(s.r)} runs · ${countNum(s.w)} wkts`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${scope === 'intl' ? nationTag(x.p.nat) + ' ' + esc(x.p.nat) : (x.p.retired ? 'retired' : tdot(x.p.teamId))}</span><div class="xs dim">${sub}</div></td><td class="b big">${countNum(v)}</td><td></td></tr>`; }).join(''); }
+  if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${countNum(s.m)} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${countNum(s.m)} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${countNum(s.r)} runs · bat avg ${s.inn > s.no ? fmtNum(batAvgOf(s)) : '–'} · ${countNum(s.w)} wkts${s.w ? ` · bowl avg ${fmtNum(bowlAvgOf(s))}` : ''}`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${scope === 'intl' ? nationTag(x.p.nat) + ' ' + esc(x.p.nat) : (x.p.retired ? 'retired' : tdot(x.p.teamId))}</span><div class="xs dim">${sub}</div></td><td class="b big">${countNum(v)}</td><td></td></tr>`; }).join(''); }
   return `<div class="tool-row">${seg([['dom','Domestic'],['intl','Intl']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
     <div style="height:8px"></div>${sel(cats, cat, "ui.recCat=this.value;render()", 'full')}<div style="height:8px"></div>
     ${panel(`${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
