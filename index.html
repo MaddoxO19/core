@@ -1146,10 +1146,8 @@ body.live-mode .actbar{display:none}
 .profile-stats-scroll .tbl th:first-child,.profile-stats-scroll .tbl td:first-child{position:sticky;left:0;z-index:1;background:var(--s1);box-shadow:1px 0 0 var(--line2)}
 .stats-scroll-note{padding:6px 12px 4px;text-align:right}
 
-/* Build 125: discreet generational talent marker. */
-.talent-mark{display:inline-flex;align-items:center;gap:5px;color:var(--accent);border:1px solid rgba(244,197,66,.35);border-radius:7px;padding:5px 9px;margin:0 0 10px;font-size:11px;font-weight:800;letter-spacing:.01em}
-.talent-mark span{color:var(--muted);font-weight:600}
-.talent-note{margin:0 0 10px;font-size:12px;line-height:1.4}
+/* Build 127: plain generational talent label; no callout or pill. */
+.talent-mark{display:block;color:var(--accent);margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.01em}
 </style>
 </head>
 <body>
@@ -1208,7 +1206,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.49 Build 126', title: 'Format Team and Player World Rankings', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.50 Build 127', title: 'Simplified Generational Talent Profile', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -1440,7 +1438,7 @@ function styleLabel(p) { const st = styleOf(p); return st ? st.label : ''; }
 
 // Build 125: generational talent is always derived from live ratings. No new save
 // fields or random draws, so existing careers and their player identities survive.
-// "Potential GOAT" is a talent projection, never an earned historical accolade.
+// Generational Talent indicates exceptional ability, not an earned historical accolade.
 function talentTier(p, fmt, discipline) {
   if (!p || p.retired) return 0;
   const r = overall(p, fmt);
@@ -1458,7 +1456,7 @@ function potentialGoat(p) {
   return !!p && !p.retired && FMT_LIST.some(fmt => overall(p, fmt) >= 97 &&
     (talentTier(p, fmt, 'bat') >= 0.04 || talentTier(p, fmt, 'bowl') >= 0.04));
 }
-function talentLabel(p) { return potentialGoat(p) ? 'Potential GOAT' : ''; }
+function talentLabel(p) { return potentialGoat(p) ? 'Generational Talent' : ''; }
 
 // Context-specific, reversible style edges for very-high-rated players. The
 // factors alter delivery probabilities, not ratings, stats or stored player data.
@@ -8748,7 +8746,7 @@ function showPlayer(id, tab) {
   const bar = (l, v) => { v = Math.round(v); return `<div class="sk"><div class="flex"><span class="muted">${l}</span><b>${v}</b></div><div class="meter"><i style="width:${v}%"></i></div></div>`; };
   const tcol = teamDef(p.teamId) ? teamDef(p.teamId).color : '#3b5568';
   const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label}${styleLabel(p) ? ' · <b>' + esc(styleLabel(p)) + '</b>' : ''} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${nationTag(p.nat)}</div></div>${statusChip(p)}</div>
-    ${potentialGoat(p) ? `<div class="talent-mark" title="Exceptional current ability, not an earned all-time accolade">Potential GOAT <span>· Generational talent</span></div>` : ''}
+    ${potentialGoat(p) ? `<div class="talent-mark">Generational Talent</div>` : ''}
     <div class="ratings3">${(() => { const sp = specialistOf(p); return FMT_LIST.map(f => `<div class="${sp.label && sp.best === f ? 'best' : ''}"><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join(''); })()}</div>
     ${(() => { const sp = specialistOf(p), st = styleOf(p); return sp.label || st ? `<div class="xs muted" style="margin-top:6px">${st ? esc(st.desc) : ''}${sp.label ? `${st ? ' ' : ''}<b class="spec ${sp.best}">${sp.label}</b>.` : ''}</div>` : ''; })()}<div style="height:10px"></div>
     ${seg([['over','Overview'],['stats','Statistics'],['hist','Career'],['contract','Contract']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
@@ -8802,7 +8800,7 @@ function profileOverview(p, own) {
   const status = `<div class="pstat">${tile('Form', `${formArrow(p.form)} ${Math.round(p.form)}`)}${tile('Fitness', Math.round(p.fitness))}${tile('Potential', potGrade(p))}${own ? tile('Mood', `<span class="${{ good:'win', warn:'draw', bad:'loss' }[moodClass(p.morale)]}">${moodLabel(p.morale)}</span>`) : tile('Age', p.age)}</div>`;
   const plan = p.focus && p.focus !== 'none' ? DEV_FOCUS[p.focus].label : 'Balanced';
   const training = own ? `<div class="kv tap" onclick="closeModal();ui.squadTab='training';go('squad')"><span>Training</span><span>${esc(plan)} <span class="xs dim">· ${p.focusBy === 'gm' ? 'your call' : 'coach'} ▸</span></span></div>` : '';
-  return `${status}${potentialGoat(p) ? '<div class="note talent-note">Potential GOAT reflects exceptional current ability. All-time greatness must be earned through performances, honours and records.</div>' : ''}${formChart(p)}
+  return `${status}${formChart(p)}
     <div class="panel"><div class="ph"><h3>Skills</h3></div><div class="pb">${groups}</div></div>
     <div class="panel" style="margin-top:10px"><div class="ph"><h3>Strengths and weaknesses</h3>${own ? '' : '<div class="end xs dim">scouting</div>'}</div><div class="pb s">${scoutingHtml(p)}</div></div>
     <div class="panel" style="margin-top:10px"><div class="rows">
