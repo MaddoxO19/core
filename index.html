@@ -1206,7 +1206,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.52 Build 129', title: 'Records Averages and Innings Consistency', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.53 Build 130', title: 'Save Reliability and Injury Balance', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -5837,8 +5837,8 @@ function matchPerformance(M, id) {
 }
 
 const INJURIES = {
-  pace: [['Side strain',21,42,3],['Hamstring strain',10,24,3],['Back stress fracture',60,110,1],['Ankle sprain',7,20,2],['Finger fracture',14,35,1]],
-  other: [['Hamstring strain',10,24,3],['Finger fracture',14,35,2],['Calf strain',10,21,2],['Concussion',7,12,1],['Ankle sprain',7,20,2]]
+  pace: [['Side strain',12,28,3],['Hamstring strain',7,18,4],['Back stress fracture',35,70,1],['Ankle sprain',5,14,2],['Finger fracture',10,24,1]],
+  other: [['Hamstring strain',7,18,3],['Finger fracture',10,24,2],['Calf strain',7,16,2],['Concussion',5,10,1],['Ankle sprain',5,14,2]]
 };
 function injure(p) {
   const list = isPace(p) ? INJURIES.pace : INJURIES.other;
@@ -5926,6 +5926,9 @@ function matchWear(M, inXI) {
     // Overs bowled past a bowler's daily limit in a multi-day match: extra wear and injury risk.
     if (fmt === 'FC' && M.wl && M.wl[id]) { const cap = wlCap(p, 'day', M); const over = Object.values(M.wl[id].day).reduce((a, n) => a + Math.max(0, n - cap), 0); if (over) { p.fitness = clamp(p.fitness - over * 0.8, 35, 100); risk += over * (isPace(p) ? 0.004 : 0.0015); } }
     if (cond && p.teamId === U()) risk *= 0.75;
+    // B130: the former match risk produced excessive injury clusters during multi-format schedules.
+    // Keep workload, physio and medical facilities meaningful while moderating incidence.
+    risk *= 0.65;
     risk *= 1.3 - staffEff(p.teamId, 'physio') / 200;
     if (p.teamId === U()) risk *= 1 - (facLevel('medical') - 1) * 0.06;
     if (!p.injury && rand() < risk) injure(p);
@@ -7176,8 +7179,13 @@ const Store = {
   async put(slot, str, meta) {
     const incoming=saveSnapshotInfo(str);
     if (!incoming) { this.lastError='Invalid career snapshot'; return false; }
-    // An older queued IndexedDB write cannot replace an emergency or newer save.
+    // B130: never silently replace a different career occupying this slot.
     const existing=await this.candidates(slot);
+    if (existing.some(c=>c.info.created && incoming.created && c.info.created!==incoming.created)) {
+      this.lastError='This slot belongs to a different career. Choose an empty slot or delete it explicitly.';
+      return false;
+    }
+    // An older queued IndexedDB write cannot replace an emergency or newer save.
     if (existing.length && compareSaveSnapshots(existing[0].info,incoming)>0) {
       this.lastError='Newer save already preserved; skipped stale queued write.';
       return false;
@@ -7336,6 +7344,7 @@ let _saving = Promise.resolve(true);
 let _saveBusy = false;
 let _pendingSave = null;
 let _autosaveTicker = null;
+let _saveFailureNotified = false;
 function startAutosaveTicker() {
   if (_autosaveTicker) clearInterval(_autosaveTicker);
   _autosaveTicker = setInterval(() => {
@@ -7368,7 +7377,11 @@ async function drainSaveQueue() {
       let ok = false;
       try { ok = await Store.put(job.slot, job.str, job.meta); }
       catch (e) { Store.lastError=String(e); }
-      if (!ok) overall = false;
+      if (!ok) {
+        overall = false;
+        Store.status='error';
+        if (!_saveFailureNotified) { flash('Save failed. Export a JSON backup from Office → Saves.'); _saveFailureNotified=true; }
+      } else { _saveFailureNotified=false; }
       if (job.notify) {
         flash(ok ? `Saved to slot ${job.slot}.` : 'Save failed. Export your career JSON.');
         saveStatusUpdate(ok ? `Saved at ${new Date().toLocaleTimeString('en-AU')}.` : 'Save failed. Please export JSON.', !ok);
@@ -7397,6 +7410,8 @@ function saveGame(slot, notify) {
       } catch(e) {}
     }
     if (ahead) {
+      Store.status='error';
+      if (!_saveFailureNotified) { flash('Save blocked to protect later progress. Export JSON backup.'); _saveFailureNotified=true; }
       Store.lastError='A more advanced career exists in browser recovery storage; save blocked. Verify slot and export JSON.';
       if (notify) { saveStatusUpdate(Store.lastError,true); flash('Save blocked to protect newer progress.'); }
       return Promise.resolve(false);
@@ -7411,6 +7426,7 @@ function saveGame(slot, notify) {
   const previous = _pendingSave;
   _pendingSave = {slot,str,meta,notify:!!notify || !!previous?.notify};
   if (!_saveBusy) _saving = drainSaveQueue();
+  // The caller must verify the stored snapshot; a completed queue is not proof of durability.
   return _saving;
 }
 function autosave() { if (game) saveGame(game.meta.slot, false); }
@@ -7446,12 +7462,22 @@ function importSave() {
     const rd = new FileReader();
     rd.onload = async () => {
       try {
+        const source=saveSnapshotInfo(rd.result);
+        if (!source) throw new Error('Invalid backup');
         const metas = await Store.list();
-        const slot = (metas.findIndex(m => !m) + 1) || 1;
-        loadFromString(rd.result, slot);
-        saveGame(slot, false);
-        flash(`Imported into slot ${slot}.`);
-      } catch (e) { flash('That file is not a Legacy Cricket save.'); }
+        const empty=metas.findIndex(m=>!m);
+        if (empty<0) { flash('All five slots are occupied. Export and delete a career before importing.'); return; }
+        const slot=empty+1;
+        // Save the original payload first; do not replace the running career on failure.
+        const g=source.data;
+        g.meta.slot=slot;
+        const payload=JSON.stringify(g);
+        const ok=await Store.put(slot,payload,metaOf(g));
+        const saved=saveSnapshotInfo(await Store.get(slot));
+        if(!ok || !saved || saved.created!==source.created) { flash('Import not verified. Your current career is unchanged.'); return; }
+        loadFromString(payload,slot);
+        flash(`Backup restored and verified in slot ${slot}.`);
+      } catch(e) { Store.lastError=String(e); flash('This backup could not be restored.'); }
     };
     rd.readAsText(f);
   };
@@ -7669,13 +7695,13 @@ async function openNewCareer() {
   const metas = await Store.list();
   const cards = metas.map((g,k)=>{
     const i=k+1;
-    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name) + ' · ' + esc(teamName(g.team)) : 'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label,g.build].filter(Boolean).join(' · ')) : 'Start a new GM career here.'}</p><button class="cw-primary" onclick="careerChooseSlot(${i})">${g ? 'Replace Career' : 'Create Career'}</button></section>`;
+    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name) + ' · ' + esc(teamName(g.team)) : 'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label,g.build].filter(Boolean).join(' · ')) : 'Available for a new career.'}</p><button class="cw-primary" ${g?'disabled':''} onclick="careerChooseSlot(${i})">${g?'Occupied · Keep Career':'Create Career'}</button></section>`;
   }).join('');
-  careerScreen('Choose a Save Slot',-1,`${cards}<button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button><p class="cw-footnote">Import a .json career backup saved from Legacy Cricket.</p>`,'careerBackToMenu()');
+  careerScreen('Choose a Save Slot',-1,`${cards}<button class="cw-secondary cw-wide" onclick="openLoadCareer()">Manage Existing Saves</button><button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button><p class="cw-footnote">Existing careers are protected. Export a backup before deleting a slot.</p>`,'careerBackToMenu()');
 }
 async function careerChooseSlot(i) {
   const metas=await Store.list();
-  if (metas[i-1] && !confirm(`Replace save slot ${i}? This deletes the existing career in that slot.`)) return;
+  if (metas[i-1]) { flash('That slot already contains a career. Choose an empty slot.'); return; }
   careerDraft.slot=i; careerDraft.name='';careerDraft.team='NSW';careerDraft.nation=false;careerDraft.mode='fictional';careerDraft.editor=false;
   openCareerSetup();
 }
@@ -7692,28 +7718,51 @@ function careerChooseNation() {
 function careerSettings() {
   careerScreen('Career Settings',3,`<section class="cw-card">${careerStepHeader('Set up your career','Choose your player database and optional editing tools.')}<div class="cw-setting"><div><strong>Player Database</strong><small>Authentic names or a fictional cricket world.</small></div><select id="cw-mode" onchange="careerDraft.mode=this.value;document.getElementById('cw-mode-summary').textContent=this.value==='authentic'?'Authentic':'Fictional'"><option value="fictional" ${careerDraft.mode==='fictional'?'selected':''}>Fictional World</option><option value="authentic" ${careerDraft.mode==='authentic'?'selected':''}>Authentic World</option></select></div><div class="cw-setting"><div><strong>Commissioner Tools</strong><small>Allow player editing, player creation and team renaming. Edited careers are marked accordingly. You can also enable these tools later from Career.</small></div><label class="cw-toggle"><input type="checkbox" id="cw-editor" ${careerDraft.editor?'checked':''} onchange="careerDraft.editor=this.checked"><span>Enable editor</span></label></div><div class="cw-summary"><div class="cw-kicker">CAREER SUMMARY</div><h3>${esc(careerDraft.name || 'FitzO')}</h3><p>${esc(teamName(careerDraft.team))} · ${careerDraft.nation?'Australia National Team GM':'Domestic GM'}</p><div class="cw-summary-grid"><span><b>Slot ${careerDraft.slot}</b><small>Save slot</small></span><span><b id="cw-mode-summary">${careerDraft.mode==='authentic'?'Authentic':'Fictional'}</b><small>World</small></span><span><b>${careerDraft.nation?'Yes':'No'}</b><small>Australia</small></span></div></div><button class="cw-primary" onclick="startCareer()">Start Career</button></section>`,'careerChooseNation()');
 }
+let _careerStarting=false;
 async function startCareer() {
-  const metas=await Store.list();
-  if(metas[careerDraft.slot-1] && !confirm(`Replace the career in slot ${careerDraft.slot}? This cannot be undone.`)) return;
-  createGame(careerDraft.name || 'FitzO',careerDraft.team,2026,careerDraft.nation,careerDraft.mode);
-  game.meta.slot=careerDraft.slot;
-  if (careerDraft.editor) { game.editor = true; game.edited = true; }
-  saveGame(careerDraft.slot,false);
-  ensureCareerLaunchOriginal();
-  $('launch').innerHTML=careerLaunchOriginal;
-  $('launch').classList.remove('career-wizard-open');
-  enterApp();
+  if (_careerStarting) return;
+  _careerStarting=true;
+  try {
+    const metas=await Store.list();
+    if (metas[careerDraft.slot-1]) { flash('Slot occupied. Return and choose an empty slot.'); return; }
+    createGame(careerDraft.name || 'FitzO',careerDraft.team,2026,careerDraft.nation,careerDraft.mode);
+    game.meta.slot=careerDraft.slot;
+    if (careerDraft.editor) { game.editor = true; game.edited = true; }
+    const ok=await saveGame(careerDraft.slot,false);
+    const raw=await Store.get(careerDraft.slot);
+    const stored=saveSnapshotInfo(raw);
+    if (!ok || !stored || stored.created!==String(game.meta.created||'') || stored.revision<Number(game.meta.saveRevision||0)) {
+      flash('Career could not be saved. Check browser storage before starting.');
+      game=null;
+      return;
+    }
+    ensureCareerLaunchOriginal();
+    $('launch').innerHTML=careerLaunchOriginal;
+    $('launch').classList.remove('career-wizard-open');
+    enterApp();
+  } catch(e) { Store.lastError=String(e); flash('Could not create a verified save.'); }
+  finally { _careerStarting=false; }
 }
 async function openLoadCareer() {
   const metas=await Store.list();
   const cards=metas.map((g,k)=>{
     const i=k+1;
-    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name)+' · '+esc(teamName(g.team)):'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label,g.build].filter(Boolean).join(' · ')):'No career saved'}</p>${g ? `<button class="cw-primary" onclick="loadGame(${i})">Load Career</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete Save</button>`:''}</section>`;
+    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name)+' · '+esc(teamName(g.team)):'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label, g.saved ? 'Saved '+new Date(g.saved).toLocaleString('en-AU') : 'Save time unknown', 'Revision '+g.revision].filter(Boolean).join(' · ')):'No career saved'}</p>${g ? `<button class="cw-primary" onclick="loadGame(${i})">Load Career</button><button class="cw-secondary cw-wide" onclick="exportSlotBackup(${i})">Export backup</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete Save</button>`:''}</section>`;
   }).join('');
   careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage unavailable. Restore from a backup file.</div>':''}${cards}<button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button>`,'careerBackToMenu()');
 }
+async function exportSlotBackup(i) {
+  const raw=await Store.get(i);
+  if(!saveSnapshotInfo(raw)) { flash('No valid backup found for this slot.');return; }
+  downloadCareerJson(raw,`legacy-cricket-slot-${i}-backup.json`);
+}
+function downloadCareerJson(str,filename) {
+  const blob=new Blob([str],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
 async function deleteSlot(i) {
-  if(!confirm(`Delete save slot ${i} permanently?`))return;
+  if(!confirm(`Delete save slot ${i}? Export a JSON backup first if you want to keep this career.`))return;
   await Store.del(i);openLoadCareer();
 }
 function openMenu() {
@@ -7733,7 +7782,18 @@ function openMenu() {
     { flush: true, foot: `<button class="btn pri" onclick="saveGame(game.meta.slot,true)">Save now</button><button class="btn ghost" onclick="returnToLaunch()">Save and exit</button>` });
 }
 function showGMProfile() { openMenu(); }
-function returnToLaunch() { emergencySaveSnapshot(); saveGame(game.meta.slot, false); stopAutosaveTicker(); closeModal(); document.body.classList.remove('live-mode'); $('app').classList.add('hidden'); $('launch').classList.remove('hidden'); careerBackToMenu(); }
+async function returnToLaunch() {
+  if (!game) return;
+  const slot=game.meta.slot||1;
+  await saveGame(slot,false);
+  const saved=saveSnapshotInfo(await Store.get(slot));
+  if(!saved || saved.created!==String(game.meta.created||'') || saved.revision<Number(game.meta.saveRevision||0)){
+    flash('Exit blocked: save not verified. Export your career backup.');
+    return;
+  }
+  stopAutosaveTicker(); closeModal(); document.body.classList.remove('live-mode');
+  $('app').classList.add('hidden'); $('launch').classList.remove('hidden'); careerBackToMenu();
+}
 function showHelp() {
   sheet('Guide', 'How to play', `<div class="help">
     <h4>The loop</h4><p>Continue moves the calendar on and stops whenever you are needed: a match, a trade offer, a national call-up. On match day, play live ball by ball or quick-sim.</p>
@@ -8370,6 +8430,7 @@ function playerSearchRows() {
 function setOfficeTab(t) { ui.officeTab = t; render(); }
 function saveHealthText() {
   if (Store.status === 'none') return 'Browser storage unavailable. Export your career JSON now.';
+  if (Store.status === 'error') return 'Last save attempt failed. Export JSON and check the saved slot.';
   return `${Store.idbOk ? 'Database + recovery copies' : 'Local browser storage'}${Store.lastSaved ? ' · Last saved '+Store.lastSaved.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : ' · No confirmed save this session'}`;
 }
 // A visible manual save must complete even if Safari leaves an autosave in flight.
@@ -8427,7 +8488,7 @@ async function verifyActiveSlot() {
 }
 function renderSaveCentre() {
   const slot=game.meta.slot||1;
-  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="exportSave()">Export JSON backup</button><button class="btn ghost" onclick="verifyActiveSlot()">Verify saved slot</button><button class="btn ghost" onclick="importSave()">Import backup</button></div><p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:12px 0 0;min-height:17px">Select Save career to save and check your progress.</p><p class="xs muted" style="margin-top:10px;line-height:1.5">Keep a separate JSON backup for important careers. Safari can remove browser data.</p></div></section>`;
+  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="exportSave()">Export JSON backup</button><button class="btn ghost" onclick="verifyActiveSlot()">Verify saved slot</button><button class="btn ghost" onclick="importSave()">Import backup</button></div><p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:12px 0 0;min-height:17px">Select Save career to save and check your progress.</p><p class="xs muted" style="margin-top:10px;line-height:1.5">Your career is saved in this browser, not on GitHub. Export a JSON backup regularly, especially before changing phones, clearing Safari data or replacing a slot.</p></div></section>`;
 }
 function renderOffice() {
   const t = ui.officeTab;
