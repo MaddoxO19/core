@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.69 Build 146', title: 'Government Grant Accounting and Traceability', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.70 Build 147', title: 'International White-Ball Competitive Balance', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -2416,9 +2416,42 @@ function ballContextC3(M, inn, batter, bowler, sc) {
   wts[5] *= trim;
   return { ...old, pW: hazard, weights: wts };
 }
+// Build 147: international white-ball matchup calibration.
+// C3.1 deliberately compresses skill gaps. In international ODIs/T20Is this
+// made an associate XI disproportionately able to bat through a world-class
+// attack. This is NOT a team or nationality handicap: each ball uses the
+// actual batter and bowler, so a talented associate player retains his edge.
+// No additional RNG calls or persistent fields; saved games remain compatible.
+function internationalWhiteBallMatch(M) {
+  return !!M && (M.fmt === 'OD' || M.fmt === 'T20') &&
+    (COMPS[M.comp]?.intl === true ||
+      (String(M.home).startsWith('X_') && String(M.away).startsWith('X_')));
+}
+function internationalWhiteBallEdge(M, inn, batter, bowler, context) {
+  if (!internationalWhiteBallMatch(M)) return context;
+  const b = batRating(batter, M.fmt) + formMod(batter);
+  const w = bowlerEffective(M, inn, bowler);
+  // Skill gap only: no boost based on a nation's name, rank or results.
+  // Smooth attenuation near parity; capped to prevent extreme edited ratings
+  // from giving deterministic wickets or boundaries.
+  const gap = clamp(b - w, -30, 30);
+  const edge = Math.tanh(gap / 22);
+  const wicketMul = Math.exp(-0.38 * edge);
+  const boundaryMul = Math.exp(0.29 * edge);
+  const singleMul = Math.exp(0.07 * edge);
+  const p = { ...context, weights: context.weights.slice() };
+  p.pW = clamp(p.pW * wicketMul,
+    M.fmt === 'OD' ? 0.009 : 0.014,
+    M.fmt === 'OD' ? 0.072 : 0.105);
+  p.weights[1] *= singleMul;
+  p.weights[4] *= boundaryMul;
+  p.weights[5] *= boundaryMul;
+  return p;
+}
 function ballContext(M, inn, batter, bowler, sc) {
   const base = ENGINE_EXPERIMENT_C3 ? ballContextC3(M, inn, batter, bowler, sc) : ballContextC23(M, inn, batter, bowler, sc);
-  return generationalBallEdge(M, inn, batter, bowler, sc, base);
+  const styled = generationalBallEdge(M, inn, batter, bowler, sc, base);
+  return internationalWhiteBallEdge(M, inn, batter, bowler, styled);
 }
 const RUN_VALUES = [0, 1, 2, 3, 4, 6];
 function sampleRuns(w) {
