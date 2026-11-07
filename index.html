@@ -1207,7 +1207,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.61 Build 138', title: 'Reliable International Series Recaps', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.63 Build 140', title: 'Simple Career Saves and Backup Recovery', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -1884,6 +1884,33 @@ const AUTHENTIC_ROSTERS = {"domestic":{"NSW":[{"name":"Sean Abbott","role":"PACE
 function U() { return game.gm.teamId; }
 function teamDef(id) { return TEAM_DEFS.find(t => t.id === id) || intlDef(id); }
 function teamName(id) { const t = teamDef(id); return t ? t.name : (id || 'TBC'); }
+// B139: Do not infer an international identity using domestic teamDef().
+// SA is South Australia domestically and South Africa internationally. The
+// caller MUST use the international namespace for international history.
+// These helpers are presentation-only: persisted match/team/player IDs stay intact.
+function internationalNationCode(id) {
+  if (typeof id !== 'string') return null;
+  if (id === 'AUS') return 'AUS';
+  const code = id.startsWith('X_') ? id.slice(2) : id;
+  return Object.prototype.hasOwnProperty.call(NATIONS, code) ? code : null;
+}
+function internationalTeamName(id) {
+  const code = internationalNationCode(id);
+  return code ? NATIONS[code] : 'TBC';
+}
+function internationalTeamShort(id) {
+  return internationalNationCode(id) || 'TBC';
+}
+function matchTeamShort(id, international) {
+  return international ? internationalTeamShort(id) : (teamDef(id)?.short || id || 'TBC');
+}
+// Read-time formatting of legacy results; only exact, recognised X_* tokens
+// become international short names. No stored save summaries are rewritten.
+function displayMatchSummary(summary) {
+  return String(summary || '').replace(/\bX_([A-Z]{2,3})\b/g,
+    (raw, code) => Object.prototype.hasOwnProperty.call(NATIONS, code) ? code : raw);
+}
+
 function squadOf(teamId) {
   if (teamId === 'AUS') { const w = activeWindow(); if (w && w.squad && w.squad.length >= 11) return w.squad.map(P).filter(p => p && !p.retired); const pool = Object.values(game.players).filter(p => !p.retired && p.nat === 'AUS' && p.teamId && !p.teamId.startsWith('X_') && !p.injury); return pool.sort((a,b)=>peakOvr(b)-peakOvr(a)).slice(0,20); }
   return Object.values(game.players).filter(p => p.teamId === teamId && !p.retired);
@@ -2927,7 +2954,7 @@ function inningsLine(inn, fmt) {
 function matchSummary(M) {
   const parts = {};
   M.innings.forEach(inn => { (parts[inn.bat] = parts[inn.bat] || []).push(inningsLine(inn, M.fmt)); });
-  return [M.home, M.away].map(t => `${t} ${parts[t] ? parts[t].join(' & ') : 'DNB'}`).join(' · ');
+  return [M.home, M.away].map(t => `${matchTeamShort(t, !!COMPS[M.comp]?.intl)} ${parts[t] ? parts[t].join(' & ') : 'DNB'}`).join(' · ');
 }
 // §8b CONDITIONS, BOWLING PLANS, SCOUTING ------------------------------------------
 // Pitch and weather are rolled per match. Bowling plans (line + length) are set per
@@ -4000,7 +4027,7 @@ function archiveWtcFinal(fx) {
   game.wtcHistory.unshift({start:w.start,end:game.year,home:fx.home,away:fx.away,winner,
     rows:wtcRows().map(r=>({nat:r.nat,p:r.p,pts:r.pts,max:r.max,pct:Math.round(r.pct*10)/10}))});
   game.wtcHistory=game.wtcHistory.slice(0,12);
-  addNews('World','World Test Championship completed',winner?`${teamDef(winner).name} win the championship.`:'WTC final ends without a winner.');
+  addNews('World','World Test Championship completed',winner?`${internationalTeamName(winner)} win the championship.`:'WTC final ends without a winner.');
 }
 function rolloverWtc(year) {
   ensureWtc();
@@ -4144,17 +4171,17 @@ function recordInternationalSeriesReview(fx) {
     const p=P(playerOfSeries.id);p.seriesHonours=p.seriesHonours||[];
     if(!p.seriesHonours.some(x=>x.id===id))p.seriesHonours.push({id,year:game.year,format:fmt,opponent:home==='AUS'?away:home});
   }
-  addNews('National','International series completed',`${teamName(home)} v ${teamName(away)}: ${hw}–${aw}${draws?' · '+draws+' draws':''}. ${winner?teamName(winner)+' win the series.':'Series drawn.'}`);
+  addNews('National','International series completed',`${internationalTeamName(home)} v ${internationalTeamName(away)}: ${hw}–${aw}${draws?' · '+draws+' draws':''}. ${winner?internationalTeamName(winner)+' win the series.':'Series drawn.'}`);
   return review;
 }
 function seriesReviewHtml(r) {
   const fmt=r.fmt==='TEST'?'Test':r.fmt==='ODI'?'ODI':'T20I';
   const score=`${r.hw}–${r.aw}`;
-  const headline=r.winner?`${teamName(r.winner)} win the series`:'Series drawn';
+  const headline=r.winner?`${internationalTeamName(r.winner)} win the series`:'Series drawn';
   const pos=r.playerOfSeries;
   const f=n=>Number.isFinite(n)?n.toFixed(2):'–';
   const leaderboard=(rows,type)=>rows.length?rows.map((p,i)=>`<div class="kv"><span><b>${i+1}.</b> <span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> <span class="xs dim">${esc(p.nat)}</span></span><span><b>${type==='bat'?p.runs+' runs':p.wickets+' wkts'}</b><span class="xs dim"> · avg ${f(type==='bat'?p.batAverage:p.bowlAverage)}</span></span></div>`).join(''):'<div class="xs muted">No scorecard statistics retained.</div>';
-  return `<div class="series-review-head"><div class="xs muted">${esc(fmt)} SERIES · ${r.total} MATCH${r.total===1?'':'ES'}</div><div class="series-review-nations">${esc(teamName(r.home))} v ${esc(teamName(r.away))}</div><div class="series-review-score">${score}</div><div class="s"><b>${esc(headline)}</b></div>${r.draws||r.noResults?`<div class="xs muted">${r.draws?`${r.draws} drawn`:''}${r.draws&&r.noResults?' · ':''}${r.noResults?`${r.noResults} no result`:''}</div>`:''}</div><div class="series-review-star"><div class="xs muted">PLAYER OF THE SERIES</div>${pos?`<div class="series-review-name link" onclick="closeModal();showPlayer('${pos.id}')">${esc(pos.name)}</div><div class="xs muted">${esc(pos.nat)} · ${pos.runs} runs · ${pos.wickets} wickets</div>`:'<div class="s muted">Not awarded · insufficient saved scorecards</div>'}</div><div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${leaderboard(r.batting||[],'bat')}</div></div><div class="panel"><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${leaderboard(r.bowling||[],'bowl')}</div></div>${r.covered<r.total?`<div class="xs muted" style="margin-top:8px">Statistics cover ${r.covered} of ${r.total} match scorecards; missing data are not estimated.</div>`:''}${r.matches?.length?`<div class="panel" style="margin-top:12px"><div class="ph"><h3>Match-by-match results</h3></div><div class="rows">${r.matches.map(m=>`<div class="row"><div class="stack"><div class="main-t">${esc(fmt)} ${m.number} · ${esc(teamName(m.home))} v ${esc(teamName(m.away))}</div><div class="sub-t" style="white-space:normal">${esc(m.summary|| (m.winner?teamName(m.winner)+' won':m.noResult?'No result':'Drawn'))}</div></div></div>`).join('')}</div></div>`:''}`;
+  return `<div class="series-review-head"><div class="xs muted">${esc(fmt)} SERIES · ${r.total} MATCH${r.total===1?'':'ES'}</div><div class="series-review-nations">${esc(internationalTeamName(r.home))} v ${esc(internationalTeamName(r.away))}</div><div class="series-review-score">${score}</div><div class="s"><b>${esc(headline)}</b></div>${r.draws||r.noResults?`<div class="xs muted">${r.draws?`${r.draws} drawn`:''}${r.draws&&r.noResults?' · ':''}${r.noResults?`${r.noResults} no result`:''}</div>`:''}</div><div class="series-review-star"><div class="xs muted">PLAYER OF THE SERIES</div>${pos?`<div class="series-review-name link" onclick="closeModal();showPlayer('${pos.id}')">${esc(pos.name)}</div><div class="xs muted">${esc(pos.nat)} · ${pos.runs} runs · ${pos.wickets} wickets</div>`:'<div class="s muted">Not awarded · insufficient saved scorecards</div>'}</div><div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${leaderboard(r.batting||[],'bat')}</div></div><div class="panel"><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${leaderboard(r.bowling||[],'bowl')}</div></div>${r.covered<r.total?`<div class="xs muted" style="margin-top:8px">Statistics cover ${r.covered} of ${r.total} match scorecards; missing data are not estimated.</div>`:''}${r.matches?.length?`<div class="panel" style="margin-top:12px"><div class="ph"><h3>Match-by-match results</h3></div><div class="rows">${r.matches.map(m=>`<div class="row"><div class="stack"><div class="main-t">${esc(fmt)} ${m.number} · ${esc(internationalTeamName(m.home))} v ${esc(internationalTeamName(m.away))}</div><div class="sub-t" style="white-space:normal">${esc(displayMatchSummary(m.summary|| (m.winner?internationalTeamName(m.winner)+' won':m.noResult?'No result':'Drawn')))}</div></div></div>`).join('')}</div></div>`:''}`;
 }
 function openInternationalSeriesReview(id) {
   const r=ensureSeriesReviewStore().find(x=>x.id===id);if(!r)return;
@@ -4221,7 +4248,7 @@ function internationalMatchRecapHtml(fx){
   const losses=played.filter(f=>f.result.winner && f.result.winner!=='AUS').length;
   const draws=played.length-wins-losses;
   const progress=fixtures.length>1?`<div class="note" style="margin-top:10px">Series: Australia ${wins}–${losses}${draws?` · ${draws} drawn`:''} · ${played.length} of ${fixtures.length} completed</div>`:'';
-  return `<div class="series-review-head"><div class="xs muted">${esc(fx.comp==='TEST'?'TEST MATCH':fx.comp==='ODI'?'ONE-DAY INTERNATIONAL':'T20 INTERNATIONAL')} · ${esc(fx.round||'')}</div><div class="series-review-nations">${esc(teamName(fx.home))} v ${esc(teamName(fx.away))}</div><div class="s" style="margin-top:8px"><b>${esc(displayInternationalSummary(r.text||r.summary||''))}</b></div></div><div class="panel" style="margin-top:12px"><div class="ph"><h3>Match result</h3></div><div class="rows">${scores}${potm}<div class="kv"><span>Summary</span><span style="text-align:right">${esc(r.summary||r.text||'')}</span></div></div></div>${progress}`;
+  return `<div class="series-review-head"><div class="xs muted">${esc(fx.comp==='TEST'?'TEST MATCH':fx.comp==='ODI'?'ONE-DAY INTERNATIONAL':'T20 INTERNATIONAL')} · ${esc(fx.round||'')}</div><div class="series-review-nations">${esc(internationalTeamName(fx.home))} v ${esc(internationalTeamName(fx.away))}</div><div class="s" style="margin-top:8px"><b>${esc(displayInternationalSummary(r.text||r.summary||''))}</b></div></div><div class="panel" style="margin-top:12px"><div class="ph"><h3>Match result</h3></div><div class="rows">${scores}${potm}<div class="kv"><span>Summary</span><span style="text-align:right">${esc(displayMatchSummary(r.summary||r.text||''))}</span></div></div></div>${progress}`;
 }
 function showPendingInternationalMatchRecap(){
   if(!game || document.querySelector('#modalRoot .sheet'))return false;
@@ -4281,8 +4308,8 @@ function currentAustraliaSeriesProgress(){
     const other=first.home==='AUS'?first.away:first.home;
     const done=played.length===a.length;
     const review=ensureSeriesReviewStore().find(r=>r.id===key);
-    const lines=a.map((f,i)=>`<div class="kv"><span>${esc(f.comp==='TEST'?'Test '+(i+1):f.comp+' '+(i+1))}</span><span style="text-align:right">${f.result?esc(f.result.summary||f.result.text||'Played'):'Upcoming · '+esc(dateStr(f.day))}</span></div>`).join('');
-    panels.push(panel(`${esc(teamName(other))} · ${a.length}-${first.comp==='TEST'?'Test':first.comp} series`,
+    const lines=a.map((f,i)=>`<div class="kv"><span>${esc(f.comp==='TEST'?'Test '+(i+1):f.comp+' '+(i+1))}</span><span style="text-align:right">${f.result?esc(displayMatchSummary(f.result.summary||f.result.text||'Played')):'Upcoming · '+esc(dateStr(f.day))}</span></div>`).join('');
+    panels.push(panel(`${esc(internationalTeamName(other))} · ${a.length}-${first.comp==='TEST'?'Test':first.comp} series`,
       `<div class="pb"><div class="s"><b>Australia ${us}–${op}</b> · ${played.length}/${a.length} played${done?' · Complete':''}</div></div><div class="rows">${lines}</div>${done&&review?`<div class="pb"><button class="btn sm" onclick="openInternationalSeriesReview('${review.id}')">Full series recap</button></div>`:''}`,{flush:true}));
   }
   return panels.length?panels.join('<div style="height:9px"></div>'):'';
@@ -4335,10 +4362,8 @@ function createWorldCupPreview(info){
 // which must never be resolved through the domestic team lookup (SA = South Australia).
 // Also accepts international fixture IDs (X_SA), including older stored previews.
 function worldCupChampionNation(id){
-  if(!id)return null;
-  if(id==='AUS')return 'AUS';
-  const nat=typeof id==='string'&&id.startsWith('X_')?id.slice(2):id;
-  return Object.prototype.hasOwnProperty.call(NATIONS,nat)?nat:null;
+  // Legacy historical champions may use bare SA; this is always an international context.
+  return internationalNationCode(id);
 }
 function worldCupChampionHtml(id){
   const nat=worldCupChampionNation(id);
@@ -4565,7 +4590,7 @@ function updateGlobalTournament(){
     game.globalTournamentHistory.unshift({year:game.year,event,host:tournamentHost(event,game.year),winner,runnerUp:winner===fin.home?fin.away:fin.home});
     game.globalTournamentHistory=game.globalTournamentHistory.slice(0,24);
     if(event==='ODIWC'||event==='CT')recordWorldCupReview(event);
-    addNews('World',(event==='ODIWC'?'ODI World Cup':'Champions Trophy')+' champions',teamDef(winner).name+' lift the trophy.');
+    addNews('World',(event==='ODIWC'?'ODI World Cup':'Champions Trophy')+' champions',internationalTeamName(winner)+' lift the trophy.');
   }
 }
 
@@ -4692,7 +4717,7 @@ function updateWorldCup(){
     game.worldHistory.unshift({year:game.year,event:'T20 World Cup',winner:teamNat(w.champion),
       runnerUp:teamNat(w.champion===fin.home?fin.away:fin.home)});
     archiveWorldCup(w);recordWorldCupReview('T20WC');
-    addNews('World',`${teamDef(w.champion).name} win the T20 World Cup`,fin.result.text+'.');}
+    addNews('World',`${internationalTeamName(w.champion)} win the T20 World Cup`,fin.result.text+'.');}
 }
 // Tournament stats: runs and wickets for every player across the World Cup.
 // B113 tournament recaps, persisted independently from transient fixtures.
@@ -4823,7 +4848,7 @@ function wcLeaders(w, n) {
 // Snapshot of a finished World Cup, kept after the season rolls over.
 function archiveWorldCup(w) {
   const fx = game.season.fixtures.filter(f => f.comp === 'WC');
-  const name = id => teamDef(id) ? teamDef(id).name : id;
+  const name = id => internationalTeamName(id);
   const L = wcLeaders(w, 5);
   const entry = {
     year: game.year, label: game.season.label, champion: w.champion, host:tournamentHost('T20WC',game.year),
@@ -6101,7 +6126,7 @@ function applyIntlMatch(M) {
   recordInternationalSeriesReview(fx);
   queueInternationalMatchRecap(fx);
   const potm = M.potm ? P(M.potm) : null;
-  if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
+  if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${displayMatchSummary(fx.result.text)}. ${displayMatchSummary(fx.result.summary)}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
 }
 function matchWear(M, inXI) {
   const fmt = M.fmt;
@@ -6191,7 +6216,7 @@ function applyMatch(M) {
     else if (fx.result.winner) { game.gm.losses++; game.season.userLosses++; }
     else game.gm.draws++;
     const potm = M.potm ? P(M.potm) : null;
-    addNews(COMPS[M.comp].short, `${fx.result.winner === U() ? 'Win' : fx.result.winner ? 'Loss' : fx.result.tie ? 'Tie' : 'Draw'} vs ${teamName(opp)}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
+    addNews(COMPS[M.comp].short, `${fx.result.winner === U() ? 'Win' : fx.result.winner ? 'Loss' : fx.result.tie ? 'Tie' : 'Draw'} vs ${teamName(opp)}`, `${displayMatchSummary(fx.result.text)}. ${displayMatchSummary(fx.result.summary)}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
   }
   updateFinals(M.comp);
 }
@@ -7454,7 +7479,7 @@ const Store = {
         } catch(e) { this.lastError=String(e); }
       }
     }
-    this.lastError=this.lastError||'Neither browser storage system verified this save. Export JSON.';
+    this.lastError=this.lastError||'Browser storage is unavailable or full. The career file itself may still be valid.';
     this.status='error';
     return false;
   },
@@ -7546,7 +7571,22 @@ function writeLocalSaveMirror(slot, str, meta) {
   // potentially exhausting Safari's quota and blocking the actual current save.
   // localStorage.setItem is atomic; a quota error preserves the old primary.
   let ok=false;
-  try { localStorage.setItem(localRawKey(slot),str); ok=localStorage.getItem(localRawKey(slot))===str; } catch(e) { Store.lastError=String(e); }
+  try { localStorage.setItem(localRawKey(slot),str); ok=localStorage.getItem(localRawKey(slot))===str; } catch(e) {
+    Store.lastError=String(e);
+    // An older recovery copy can consume the quota needed for the current save.
+    // Only remove a same-slot recovery when a separately readable PRIMARY exists
+    // and is at least as recent. Never discard the sole remaining career copy.
+    const quota = e?.name==='QuotaExceededError' || /quota|storage full/i.test(String(e));
+    if(quota && curInfo && bakInfo && curInfo.created===bakInfo.created &&
+       compareSaveSnapshots(curInfo,bakInfo)>=0) {
+      try {
+        localStorage.removeItem(backupRawKey(slot));
+        localStorage.removeItem(backupMetaKey(slot));
+        localStorage.setItem(localRawKey(slot),str);
+        ok=localStorage.getItem(localRawKey(slot))===str;
+      } catch(retryError) { Store.lastError=String(retryError); }
+    }
+  }
   if (ok) {
     if (curInfo && compareSaveSnapshots(incoming,curInfo)>0 &&
         (!bakInfo || compareSaveSnapshots(curInfo,bakInfo)>0)) {
@@ -7710,34 +7750,85 @@ function exportSave() {
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   flash('Backup download requested. Check Safari Downloads or Files.');
 }
+// Build 140: One restore action. A valid JSON backup is never labelled corrupt
+// solely because Safari refuses persistent browser storage. The original file
+// remains untouched and the user can explicitly open it in memory as a fallback.
+let _pendingImportedBackup = null;
 function importSave() {
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = '.json,application/json';
-  inp.onchange = () => {
-    const f = inp.files[0]; if (!f) return;
-    const rd = new FileReader();
-    rd.onload = async () => {
-      try {
-        const source=saveSnapshotInfo(rd.result);
-        if (!source) throw new Error('Invalid backup');
-        const metas = await Store.list();
-        const empty=metas.findIndex(m=>!m);
-        if (empty<0) { flash('All five slots are occupied. Export and delete a career before importing.'); return; }
-        const slot=empty+1;
-        // Save the original payload first; do not replace the running career on failure.
-        const g=source.data;
-        g.meta.slot=slot;
-        const payload=JSON.stringify(g);
-        const ok=await Store.put(slot,payload,metaOf(g));
-        const saved=saveSnapshotInfo(await Store.get(slot));
-        if(!ok || !saved || saved.created!==source.created) { flash('Import not verified. Your current career is unchanged.'); return; }
-        loadFromString(payload,slot);
-        flash(`Backup restored and verified in slot ${slot}.`);
-      } catch(e) { Store.lastError=String(e); flash('This backup could not be restored.'); }
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.json,application/json';
+  inp.onchange=()=>{
+    const f=inp.files?.[0]; if(!f)return;
+    const rd=new FileReader();
+    rd.onerror=()=>flash('Could not read that file. Try selecting it again.');
+    rd.onload=async()=>{
+      let source;
+      try { source=saveSnapshotInfo(rd.result); }
+      catch(e) { source=null; }
+      if(!source) { flash('This file is not a valid Legacy Cricket career.'); return; }
+      _pendingImportedBackup=rd.result;
+      try { await restoreCareerFile(rd.result); }
+      catch(e) { Store.lastError=String(e); showRestoreStorageProblem(String(e)); }
     };
     rd.readAsText(f);
   };
   inp.click();
+}
+function showRestoreStorageProblem(reason) {
+  const msg=reason ? `<p class="xs" style="color:var(--bad);overflow-wrap:anywhere">${esc(reason)}</p>` : '';
+  sheet('Restore backup','Career file is valid',
+    `<p class="s">Your career backup has been read successfully, but Safari could not store it in a save slot.</p>${msg}<p class="s muted">You can still open the career now. If browser storage remains unavailable, export a JSON backup before leaving the game.</p>`,
+    {foot:`<button class="btn pri" onclick="openImportedCareerWithoutStorage()">Open this career</button><button class="btn ghost" onclick="closeModal()">Cancel</button>`});
+}
+function openImportedCareerWithoutStorage() {
+  if(!_pendingImportedBackup)return;
+  const raw=_pendingImportedBackup;
+  _pendingImportedBackup=null;
+  try {
+    const backup=saveSnapshotInfo(raw);
+    if(!backup) throw new Error('Backup cannot be read.');
+    const slot=Number(backup.data.meta?.slot)||1;
+    loadFromString(raw,slot);
+    Store.status='error';
+    Store.lastError='This imported career is open, but has NOT been verified in browser storage. Export JSON before leaving.';
+    flash('Career opened. Browser save unverified; keep your JSON backup.');
+  } catch(e) { Store.lastError=String(e); flash('Could not open the imported career.'); }
+}
+async function restoreCareerFile(raw) {
+  const source=saveSnapshotInfo(raw);
+  if(!source) throw new Error('Invalid career backup.');
+  // Always select an empty slot; never overwrite a different career implicitly.
+  // Prefer local metadata, avoiding an IndexedDB timeout for each empty slot.
+  let slot=0;
+  const occupied=[];
+  for(let i=1;i<=SAVE_SLOTS;i++) {
+    const local=Store.localCandidates(i);
+    if(local.length) { occupied.push(i);continue; }
+    // If IndexedDB is working, check it too. Its first timeout disables subsequent queries.
+    const dbRows=Store.idbOk?await Store.candidates(i,true):[];
+    if(dbRows.length) { occupied.push(i);continue; }
+    slot=i; break;
+  }
+  if(!slot) {
+    throw new Error('All save slots are occupied. Export or remove an existing career first.');
+  }
+  const imported=source.data;
+  imported.meta.slot=slot;
+  const payload=JSON.stringify(imported);
+  const ok=await Store.put(slot,payload,metaOf(imported));
+  // Verify the local copy first. The IndexedDB fallback is only needed when
+  // localStorage cannot hold this (potentially very large) career file.
+  let checked=Store.localCandidates(slot).find(c=>c.info.created===source.created && c.info.revision===source.revision && c.raw===payload);
+  if(!checked && Store.idbOk) {
+    const rows=await Store.candidates(slot,true);
+    checked=rows.find(c=>c.info.created===source.created && c.info.revision===source.revision && c.raw===payload);
+  }
+  if(!ok || !checked) {
+    throw new Error(Store.lastError || 'Browser storage could not verify the imported career.');
+  }
+  _pendingImportedBackup=null;
+  loadFromString(payload,slot);
+  flash(`Career restored to slot ${slot}.`);
 }
 window.addEventListener('pagehide', () => { if (game) { emergencySaveSnapshot(); autosave(); } });
 window.addEventListener('beforeunload', () => { if (game) emergencySaveSnapshot(); });
@@ -8001,11 +8092,10 @@ async function startCareer() {
 }
 async function openLoadCareer() {
   const metas=await Store.list();
-  const cards=metas.map((g,k)=>{
-    const i=k+1;
-    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name)+' · '+esc(teamName(g.team)):'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label, g.saved ? 'Saved '+new Date(g.saved).toLocaleString('en-AU') : 'Save time unknown', 'Revision '+g.revision].filter(Boolean).join(' · ')):'No career saved'}</p>${g ? `<button class="cw-primary" onclick="loadGame(${i})">Load Career</button><button class="cw-secondary cw-wide" onclick="exportSlotBackup(${i})">Export backup</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete Save</button>`:''}</section>`;
-  }).join('');
-  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage unavailable. Restore from a backup file.</div>':''}${cards}<button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button>`,'careerBackToMenu()');
+  const occupied=metas.map((g,k)=>({g,i:k+1})).filter(x=>x.g);
+  const cards=occupied.map(({g,i})=>`<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${esc(g.name)} · ${esc(teamName(g.team))}</h3><p class="cw-muted">${esc([g.label,g.saved?'Saved '+new Date(g.saved).toLocaleString('en-AU'):'Save time unknown'].filter(Boolean).join(' · '))}</p><button class="cw-primary" onclick="loadGame(${i})">Continue Career</button><details class="cw-muted" style="margin-top:12px"><summary style="cursor:pointer;padding:6px">Manage slot</summary><button class="cw-secondary cw-wide" onclick="exportSlotBackup(${i})">Download backup</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete career</button></details></section>`).join('');
+  const empty=occupied.length?cards:'<div class="cw-slot" style="text-align:center"><h3>No careers saved in this browser</h3><p class="cw-muted">Restore a JSON backup to continue your existing career.</p></div>';
+  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage unavailable. You can open a backup, but progress may not persist.</div>':''}<button class="cw-primary cw-wide" onclick="importSave()">Restore from JSON backup</button>${empty}`,'careerBackToMenu()');
 }
 async function exportSlotBackup(i) {
   const raw=await Store.get(i);
@@ -8114,7 +8204,7 @@ function nextUserFx() { return game.season.fixtures.find(f => !f.result && f.hom
 function recentForm(n, team = U()) {
   return game.season.fixtures.filter(f => f.result && (f.home === team || f.away === team)).sort((a,b) => a.day-b.day).slice(-n).map(f => {
     const r = f.result.winner === team ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D';
-    return `<span class="res ${r}" title="${esc(f.result.text)}">${r}</span>`;
+    return `<span class="res ${r}" title="${esc(displayMatchSummary(f.result.text))}">${r}</span>`;
   }).join('');
 }
 // Dashboard notifications are UI-only: dismissing one never resolves the underlying
@@ -8579,7 +8669,7 @@ function renderFixturesBody() {
   return `${tools}<div style="height:8px"></div>${panel('', `<div class="rows">${rows || '<div class="empty">No fixtures.</div>'}</div>`, { flush: true })}`;
 }
 function setFxMine(v) { ui.fxMine = v === '1'; render(); }
-function displayInternationalSummary(s) { return String(s || '').replace(/\bX_([A-Z]{2,3})\b/g, (all, nat) => NATIONS[nat] || all); }
+function displayInternationalSummary(s) { return displayMatchSummary(s); }
 // Build 114: competition identities in fixture lists use text, not outlined pills.
 // Preserve tournament stages and domestic rounds without duplicating the format.
 function fixtureCompetitionText(f) {
@@ -8603,7 +8693,8 @@ function fixtureRow(f, isNext) {
     if (mine) { const r = f.result.winner === me ? 'W' : f.result.winner ? 'L' : f.result.noResult ? 'N' : f.result.tie ? 'T' : 'D'; end = `<span class="res ${r}">${r}</span>`; }
     else end = f.result.winner ? `<span class="xs">${tdot(f.result.winner)}</span>` : '<span class="xs dim">Draw</span>';
   } else if (isNext) end = chip('warn', 'Next');
-  const teams = f.home ? (mine && ui.fxMine ? `${f.stage === 'intl' ? 'AUS ' : ''}${me === f.home ? 'v' : '@'} ${teamName(me === f.home ? f.away : f.home)}` : `${teamDef(f.home).nick} v ${teamDef(f.away).nick}`) : 'Teams to be decided';
+  const intl = !!COMPS[f.comp]?.intl || !!f.event || f.stage === 'intl' || f.stage === 'world';
+  const teams = f.home ? (mine && ui.fxMine ? `${f.stage === 'intl' ? 'AUS ' : ''}${me === f.home ? 'v' : '@'} ${intl ? internationalTeamName(me === f.home ? f.away : f.home) : teamName(me === f.home ? f.away : f.home)}` : `${intl ? internationalTeamName(f.home) : teamDef(f.home).nick} v ${intl ? internationalTeamName(f.away) : teamDef(f.away).nick}`) : 'Teams to be decided';
   const sub = f.result ? esc(displayInternationalSummary(f.result.summary)) : f.home ? teamDef(f.venue || f.home).ground : '';
   const card = f.result && game.scorecards[f.id];
   return `<div class="row ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}')"` : ''}><div class="center" style="width:34px;flex:none"><div class="b" style="line-height:1">${d.getUTCDate()}</div><div class="xs dim">${d.toLocaleDateString('en-AU', { month:'short', timeZone:'UTC' })}</div></div>
@@ -8694,7 +8785,7 @@ function scorecardHtml(S, k, fnName, noWorm) {
       ${bw.filter(b => b.balls || b.r).map(b => `<tr><td class="l"><div class="nm">${plink(P(b.id), pshort(P(b.id)))}</div></td><td>${oversStr(b.balls)}</td><td>${b.m}</td><td>${b.r}</td><td class="b">${b.w}</td><td class="dim hide-xs">${b.balls ? (b.r / (b.balls / 6)).toFixed(2) : '–'}</td></tr>`).join('') || '<tr><td class="l dim" colspan="6">Bowling figures appear after the first delivery.</td></tr>'}</tbody></table></div>
     ${!noWorm && shots.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Wagon wheel</h3></div><div class="pb center">${wagonSvg(shots, 'R')}</div></div>` : ''}
     ${!noWorm && S.fmt !== 'FC' ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Run progression</h3></div><div class="pb">${wormSvg(S.innings, S.fmt)}</div></div>` : ''}
-    <div class="panel" style="margin-top:8px"><div class="rows">${S.potm ? `<div class="kv"><span>Player of the match</span><span>${plink(P(S.potm))}</span></div>` : ''}<div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}${S.crowd ? `<div class="kv"><span>Crowd</span><span>${S.crowd.toLocaleString('en-AU')}</span></div>` : ''}</div></div>`;
+    <div class="panel" style="margin-top:8px"><div class="rows">${S.potm ? `<div class="kv"><span>Player of the match</span><span>${plink(P(S.potm))}</span></div>` : ''}<div class="kv"><span>Venue</span><span>${esc(teamDef(S.venue).ground)}</span></div>${S.toss && S.toss.decision ? `<div class="kv"><span>Toss</span><span>${esc(S.comp && COMPS[S.comp]?.intl ? internationalTeamName(S.toss.winner) : teamDef(S.toss.winner).nick)}, chose to ${S.toss.decision}</span></div>` : ''}${S.condText ? `<div class="kv"><span>Conditions</span><span style="text-align:right">${esc(S.condText)}</span></div>` : ''}${S.overs ? `<div class="kv"><span>Reduced</span><span>${S.overs} overs a side</span></div>` : ''}${S.crowd ? `<div class="kv"><span>Crowd</span><span>${S.crowd.toLocaleString('en-AU')}</span></div>` : ''}</div></div>`;
 }
 let _scFx = null;
 function showScorecard(fxId, k) {
@@ -8702,7 +8793,7 @@ function showScorecard(fxId, k) {
   if (!S) { flash('Scorecard not available.'); return; }
   _scFx = fxId;
   const f = fixtureById(fxId);
-  sheet(`${fixtureContextLabel(f) || COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(S.result.text)}</span>` : '' });
+  sheet(`${fixtureContextLabel(f) || COMPS[S.comp].name}${f ? ' · ' + (f.stage === 'league' ? 'Round ' + f.round : f.round) : ''}`, `${teamDef(S.home).nick} v ${teamDef(S.away).nick}`, scorecardHtml(S, k == null ? 0 : +k, 'scInn'), { wide: true, sub: S.result ? `<span class="${S.result.winner && isUserTeam(S.result.winner) ? 'win' : S.result.winner && (isUserTeam(S.home) || isUserTeam(S.away)) ? 'loss' : ''}">${esc(displayMatchSummary(S.result.text))}</span>` : '' });
 }
 function scInn(k) { showScorecard(_scFx, k); }
 
@@ -8836,7 +8927,7 @@ async function verifyActiveSlot() {
 }
 function renderSaveCentre() {
   const slot=game.meta.slot||1;
-  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="exportSave()">Export JSON backup</button><button class="btn ghost" onclick="verifyActiveSlot()">Verify saved slot</button><button class="btn ghost" onclick="importSave()">Import backup</button><button class="btn ghost" onclick="showUnverifiedExitOptions()">Backup / exit options</button></div><p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:12px 0 0;min-height:17px">Select Save career to save and check your progress.</p><p class="xs muted" style="margin-top:10px;line-height:1.5">Your career is saved in this browser, not on GitHub. Export a JSON backup regularly, especially before changing phones, clearing Safari data or replacing a slot.</p></div></section>`;
+  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions" style="display:grid;grid-template-columns:1fr"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="importSave()">Restore a backup</button></div><details style="margin-top:12px"><summary class="xs muted" style="cursor:pointer;padding:9px 0">Backup and recovery</summary><button class="btn ghost block" onclick="exportSave()">Download JSON backup</button></details><p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:12px 0 0;min-height:17px">Select Save career to save and check your progress.</p><p class="xs muted" style="margin-top:10px;line-height:1.5">Your career is saved in this browser, not on GitHub. Export a JSON backup regularly, especially before changing phones, clearing Safari data or replacing a slot.</p></div></section>`;
 }
 function renderOffice() {
   const t = ui.officeTab;
@@ -9122,7 +9213,7 @@ function australiaSeriesRecords() {
  }
  const rows=Object.keys(table).sort((a,b)=>(NATIONS[a]||a).localeCompare(NATIONS[b]||b));
  const reviews=(game.internationalSeriesReviews||[]).filter(r=>r.home==='AUS'||r.away==='AUS');
- const summary=reviews.length?panel('Series reviews',`<div class="rows">${reviews.map(r=>`<div class="kv"><span>${r.year} · ${esc(r.fmt)} · ${esc(teamName(r.home==='AUS'?r.away:r.home))}</span><button class="btn sm" onclick="openInternationalSeriesReview('${r.id}')">Review · ${r.hw}–${r.aw}</button></div>`).join('')}</div>`,{flush:true}):'';
+ const summary=reviews.length?panel('Series reviews',`<div class="rows">${reviews.map(r=>`<div class="kv"><span>${r.year} · ${esc(r.fmt)} · ${esc(internationalTeamName(r.home==='AUS'?r.away:r.home))}</span><button class="btn sm" onclick="openInternationalSeriesReview('${r.id}')">Review · ${r.hw}–${r.aw}</button></div>`).join('')}</div>`,{flush:true}):'';
  return `${currentAustraliaSeriesProgress()}${summary}${panel('Completed series by opponent',`<div class="rows">${rows.map(n=>`<div class="kv"><span>${nationTag(n)} ${esc(NATIONS[n]||n)}</span><span class="s">${table[n].won} W · ${table[n].drawn} D · ${table[n].lost} L</span></div>`).join('')||'<div class="empty">No completed Australia series found in the retained series history.</div>'}</div><div class="pb xs muted">Counts completed series, not individual matches. Only series retained in this save are included.</div>`,{flush:true})}`;
 }
 function renderNational(){
@@ -9277,7 +9368,7 @@ function bilateralSeriesInfo(fx) {
   let status = '';
   if (played) {
     if (aWins === bWins) status = `Series tied ${aWins}–${bWins}`;
-    else status = `${teamDef(aWins > bWins ? a : b).name} ${played === total || Math.max(aWins,bWins) > Math.min(aWins,bWins) + (total-played) ? 'win' : 'lead'}${played === total || Math.max(aWins,bWins) > Math.min(aWins,bWins) + (total-played) ? 's series' : ' series'} ${Math.max(aWins,bWins)}–${Math.min(aWins,bWins)}`;
+    else status = `${internationalTeamName(aWins > bWins ? a : b)} ${played === total || Math.max(aWins,bWins) > Math.min(aWins,bWins) + (total-played) ? 'win' : 'lead'}${played === total || Math.max(aWins,bWins) > Math.min(aWins,bWins) + (total-played) ? 's series' : ' series'} ${Math.max(aWins,bWins)}–${Math.min(aWins,bWins)}`;
     if (drawn || nr) status += ` · ${drawn ? `${drawn} draw${drawn===1?'':'s'}` : ''}${drawn && nr ? ' · ' : ''}${nr ? `${nr} no result${nr===1?'':'s'}` : ''}`;
     if (!fx.result && index === total-1 && aWins === bWins && (total-played) === 1) status = `Series decider · ${aWins}–${bWins}`;
   }
@@ -9633,10 +9724,10 @@ function sendGMMessage(key) {
 // Team IDs are typed identities, not nationality abbreviations. In particular,
 // domestic SA (South Australia) must never resolve as X_SA (South Africa).
 function broadcastNation(id) {
+  // A broadcast can contain both domestic and international games: only the
+  // explicitly-prefixed nation IDs (plus AUS) are treated as international.
   if (id === 'AUS') return 'AUS';
-  if (typeof id !== 'string' || !id.startsWith('X_')) return null;
-  const nat = id.slice(2);
-  return Object.prototype.hasOwnProperty.call(NATIONS, nat) && teamDef(id)?.intl ? nat : null;
+  return typeof id === 'string' && id.startsWith('X_') ? internationalNationCode(id) : null;
 }
 function broadcastBadge(id) { const nat = broadcastNation(id); return nat ? nationTag(nat) : badge(id); }
 function broadcastScore(M, compact) {
@@ -9779,7 +9870,7 @@ function renderLive() {
   if (M.done) {
     const over = inn.thisOver && inn.thisOver.length ? inn.thisOver : inn.lastOver && inn.lastOver.syms || [];
     const lastOver = `<div class="broadcast-recent match-final-over"><span class="broadcast-label">FINAL OVER · ${oversStr(inn.balls)} OVERS BOWLED</span><div>${over.map(ballSym).join('') || '<span class="dim xs">Innings complete</span>'}</div></div>`;
-    const result = `<div class="broadcast-result match-final-result">${esc(M.result && M.result.text || 'Match complete')}</div>`;
+    const result = `<div class="broadcast-result match-final-result">${esc(displayMatchSummary(M.result && M.result.text || 'Match complete'))}</div>`;
     return `<div class="grid"><section class="panel broadcast-panel"><div class="pb">${broadcast}${result}${lastOver}</div></section>
       ${seg([['comm','Commentary'],['card','Scorecard'],['batter','Batter'],['bowler','Bowler']], liveTab, 'setLiveTab')}${body}
     </div><div class="livebar three">${bar}</div>`;
@@ -10268,7 +10359,7 @@ function doTalk(id, kind) { const r = talkToPlayer(id, kind); closeModal(); flas
 function setWorldNat(n) { ui.worldNat = n; render(); }
 function setIntlRecFmt(f) { ui.intlRecFmt = f; render(); }
 // ---- World Cup hub ----
-function wcName(id) { return teamDef(id) ? teamDef(id).name : 'TBC'; }
+function wcName(id) { return internationalTeamName(id); }
 // The number of teams progressing is a property of the tournament stage,
 // not the table renderer. These cutoffs must match updateGlobalTournament()
 // and updateWorldCup(), including legacy eight-team World Cup careers.
@@ -10311,7 +10402,7 @@ function renderTournaments(){
    ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures</div>'}</div>`,{flush:true})}
    ${panel('Tournament fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
  return `${tabs}<div style="height:10px"></div>${currentWorldCupPreviewButton('ODIWC')}${worldCupReviewButton('ODIWC')}${current}${!group.length?'<div class="note">No ODI World Cup scheduled this season.</div>':''}
-   ${history.length?panel('Past champions',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]):'Host not recorded'}</span><b>${esc(teamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):''}`;
+   ${history.length?panel('Past champions',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]):'Host not recorded'}</span><b>${esc(internationalTeamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):''}`;
 }
 function renderIntlLegacyRecords(){const n=ui.intlRecNat||'AUS',f=ui.intlRecFmt||'FC';return `<div class="tool-row">${sel(Object.keys(NATIONS).map(k=>[k,NATIONS[k]]),n,'ui.intlRecNat=this.value;render()')}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],f,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(n,f)}`;}
 // B120: Full Champions Trophy hub, works with an already active or completed CT save.
@@ -10325,7 +10416,7 @@ function renderChampionsTrophy(){
  ${panel('Knockouts',`<div class="bracket">${ko.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
  ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">Australia has no scheduled matches in this tournament.</div>'}</div>`,{flush:true})}
  ${panel('Fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
- const historyPanel=history.length?panel('Past Champions Trophy winners',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]||h.host):'Host not recorded'}</span><b>${esc(teamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):'';
+ const historyPanel=history.length?panel('Past Champions Trophy winners',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]||h.host):'Host not recorded'}</span><b>${esc(internationalTeamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):'';
  const nextYear=game.year+( (1-game.year%4+4)%4||4 );
  return `${currentWorldCupPreviewButton('CT')}${worldCupReviewButton('CT')}${current||`<div class="note">No Champions Trophy scheduled this season. Next cycle: ${nextYear}.</div>`}${historyPanel}`;
 }
@@ -10378,11 +10469,11 @@ function globalTournamentPanel() {
  if(!fxs.length && !hist.length)return '';
  let sections='';
  if(fxs.length){const ev=fxs[0].event, title=ev==='ODIWC'?'ODI World Cup':'Champions Trophy';
-  const table=g=>globalTournamentTable(ev,g).map(r=>`<div class="row" style="padding:7px 10px"><div class="grow s">${tdot(r.t)} ${esc(teamDef(r.t).name)}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('');
+  const table=g=>globalTournamentTable(ev,g).map(r=>`<div class="row" style="padding:7px 10px"><div class="grow s">${tdot(r.t)} ${esc(internationalTeamName(r.t))}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('');
   const knock=fxs.filter(f=>f.stage==='globalsuper'||f.stage.startsWith('globalsemi')||f.stage==='globalfinal');
-  sections=currentWorldCupPreviewButton(ev)+panel(title,`<div class="note">${ev==='ODIWC'?'14 teams · Super Six · Knockouts':'8 teams · Knockouts'}</div><div class="grid g2"><div><div class="lbl">Group A</div>${table('A')}</div><div><div class="lbl">Group B</div>${table('B')}</div></div><div class="lbl" style="padding-top:10px">Knockouts</div>${knock.map(f=>`<div class="kv"><span>${esc(f.round)}: ${f.home?esc(teamDef(f.home).name):'TBC'} v ${f.away?esc(teamDef(f.away).name):'TBC'}</span><span>${f.result?esc(displayInternationalSummary(f.result.text)):'–'}</span></div>`).join('')}`,{flush:true});
+  sections=currentWorldCupPreviewButton(ev)+panel(title,`<div class="note">${ev==='ODIWC'?'14 teams · Super Six · Knockouts':'8 teams · Knockouts'}</div><div class="grid g2"><div><div class="lbl">Group A</div>${table('A')}</div><div><div class="lbl">Group B</div>${table('B')}</div></div><div class="lbl" style="padding-top:10px">Knockouts</div>${knock.map(f=>`<div class="kv"><span>${esc(f.round)}: ${f.home?esc(internationalTeamName(f.home)):'TBC'} v ${f.away?esc(internationalTeamName(f.away)):'TBC'}</span><span>${f.result?esc(displayInternationalSummary(f.result.text)):'–'}</span></div>`).join('')}`,{flush:true});
  }
- return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(teamDef(h.winner).name)}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
+ return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(internationalTeamName(h.winner))}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
 }
 function renderWorld(){
   const mode=ui.worldView||'rankings';
@@ -10614,7 +10705,7 @@ function showTeam(id) {
           const line = (lbl, p, v) => p ? `<div class="lead-row"><span class="lbl-s">${lbl}</span><span class="nm ell">${plink(p)}</span><b>${v}</b></div>` : '';
           return `<div class="lead-blk"><div class="lead-h">${compName(f)}</div>${line('Runs', r, r && r.stats.season[f].r)}${line('Wickets', w, w && w.stats.season[f].w)}</div>`; }).join('');
         return blocks ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Season leaders</h3></div><div class="pb">${blocks}</div></div>` : ''; })()}
-      ${recent.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Recent results</h3></div><div class="rows">${recent.map(f => { const r = f.result.winner === id ? 'W' : f.result.winner ? 'L' : 'D'; const opp = f.home === id ? f.away : f.home; return `<div class="row ${game.scorecards[f.id] ? 'tap' : ''}" ${game.scorecards[f.id] ? `onclick="showScorecard('${f.id}')"` : ''}><span class="res ${r}">${r}</span><div class="stack"><div class="main-t ell s">v ${teamDef(opp).nick}</div><div class="sub-t ell">${fixtureCompetitionMarkup(f)} · ${esc(f.result.summary)}</div></div></div>`; }).join('')}</div></div>` : ''}`;
+      ${recent.length ? `<div class="panel" style="margin-top:8px"><div class="ph"><h3>Recent results</h3></div><div class="rows">${recent.map(f => { const r = f.result.winner === id ? 'W' : f.result.winner ? 'L' : 'D'; const opp = f.home === id ? f.away : f.home; return `<div class="row ${game.scorecards[f.id] ? 'tap' : ''}" ${game.scorecards[f.id] ? `onclick="showScorecard('${f.id}')"` : ''}><span class="res ${r}">${r}</span><div class="stack"><div class="main-t ell s">v ${teamDef(opp).nick}</div><div class="sub-t ell">${fixtureCompetitionMarkup(f)} · ${esc(displayMatchSummary(f.result.summary))}</div></div></div>`; }).join('')}</div></div>` : ''}`;
   } else {
     const n = teamNat(id), R = game.nation.rankings, rk = Object.keys(R).sort((a, b) => R[b] - R[a]).indexOf(n) + 1;
     body += `<div class="kpis" style="grid-template-columns:repeat(4,1fr);margin-top:10px"><div class="kpi"><div class="v">${ordinal(rk)}</div><div class="l">World ranking</div></div>${FMT_LIST.map(f => `<div class="kpi"><div class="v">${fmtR(f)}</div><div class="l">${{ FC:'Test', OD:'ODI', T20:'T20I' }[f]} XI</div></div>`).join('')}</div>`;
