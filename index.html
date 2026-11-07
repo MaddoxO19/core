@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.70 Build 147', title: 'International White-Ball Competitive Balance', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.71 Build 148', title: 'Facility Progression and Value Rebalance', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -5128,11 +5128,19 @@ function whereFits(p) {
 // §8e CLUB BUSINESS: FINANCES, FACILITIES, INBOX, NEGOTIATION, ACADEMY -------------------
 // Money is tracked for the user's club only; AI clubs are assumed solvent.
 
+// B148: Facilities provide real incremental value at every level. Keep the
+// existing 1–5 level schema so historical careers and grant credits still load.
+const FACILITY_ACADEMY_INTAKE = [0, 1, 1, 2, 3, 4];
+const FACILITY_TRAINING_STEP = 0.07; // only positive annual player growth, before potential ceiling
+const FACILITY_MEDICAL_RISK_STEP = 0.07;
+const FACILITY_MEDICAL_RECOVERY_STEP = 0.05;
+function academyGraduateCount(l) { return FACILITY_ACADEMY_INTAKE[clamp(Math.round(l || 1), 1, 5)]; }
+function academyPotentialBoost(l) { return (l - 1) * 2 + (l >= 5 ? 2 : 0); }
 const FACILITIES = {
-  training: { label:'High performance centre', desc:'Faster player development.', eff: l => `+${(l - 1) * 5}% development` },
-  medical:  { label:'Medical and recovery',    desc:'Fewer injuries and quicker recovery.', eff: l => `−${(l - 1) * 6}% injury risk` },
-  academy:  { label:'Youth academy',           desc:'More and better homegrown graduates each off-season.', eff: l => `${1 + Math.floor(l / 2)} graduate${1 + Math.floor(l / 2) > 1 ? 's' : ''} a year` },
-  stadium:  { label:'Stadium and members',     desc:'Bigger crowds and gate takings.', eff: l => `${(12 + (l - 1) * 6)}k capacity` }
+  training: { label:'High performance centre', desc:'Improves annual skill growth for developing players; cannot exceed their potential.', eff: l => `+${Math.round((l - 1) * FACILITY_TRAINING_STEP * 100)}% positive development` },
+  medical:  { label:'Medical and recovery', desc:'Reduces match injuries and improves daily fitness recovery.', eff: l => `−${Math.round((l - 1) * FACILITY_MEDICAL_RISK_STEP * 100)}% injury risk · +${Math.round((l - 1) * FACILITY_MEDICAL_RECOVERY_STEP * 100)}% recovery` },
+  academy:  { label:'Youth academy', desc:'More graduates and higher starting ability and potential each off-season.', eff: l => `${academyGraduateCount(l)} graduate${academyGraduateCount(l) === 1 ? '' : 's'}/year · +${academyPotentialBoost(l)} potential` },
+  stadium:  { label:'Stadium and members', desc:'Larger matchday capacity and attendance-driven gate income.', eff: l => `${(12 + (l - 1) * 6)}k capacity · bigger crowds` }
 };
 const TICKET = { low:{ label:'Low prices', demand:1.15, price:0.75, fans:+1 }, standard:{ label:'Standard', demand:1, price:1, fans:0 }, premium:{ label:'Premium', demand:0.85, price:1.35, fans:-1 } };
 const FIN = { tv: 1100000, sponsorBase: 700000, upkeep: 60000, prize: { SHIELD:300000, T20C:250000, ODC:150000 }, finalBonus: 50000 };
@@ -5503,7 +5511,7 @@ function closeNegotiation() {
 
 // ---- Youth academy ----
 function academyIntake() {
-  const lvl = facLevel('academy'), n = 1 + Math.floor(lvl / 2) + (investmentActive('pathways') ? 1 : 0);
+  const lvl = facLevel('academy'), n = academyGraduateCount(lvl) + (investmentActive('pathways') ? 1 : 0);
   const ids = [];
   for (let i = 0; i < n; i++) {
     const needs=groupNeeds(U());
@@ -5511,7 +5519,7 @@ function academyIntake() {
     const roleOptions=typeof FA_INTAKE_ROLES!=='undefined'?FA_INTAKE_ROLES[roleGroup]:null;
     const p = makeProspect(roleOptions?pick(roleOptions):undefined);
     p.prospect = false; p.academy = true;
-    const boost = (lvl - 1) * 2;
+    const boost = academyPotentialBoost(lvl);
     Object.keys(p.sk).forEach(k => p.sk[k] = clamp(p.sk[k] + boost * 0.5, 15, 99));
     p.pot = clamp(p.pot + boost, 61, 97);
     ids.push(p.id);
@@ -6220,7 +6228,7 @@ function matchWear(M, inXI) {
     // Keep workload, physio and medical facilities meaningful while moderating incidence.
     risk *= 0.65;
     risk *= 1.3 - staffEff(p.teamId, 'physio') / 200;
-    if (p.teamId === U()) risk *= 1 - (facLevel('medical') - 1) * 0.06;
+    if (p.teamId === U()) risk *= 1 - (facLevel('medical') - 1) * FACILITY_MEDICAL_RISK_STEP;
     if (!p.injury && rand() < risk) injure(p);
     p.form = clamp(Math.round(p.form * 0.75 + matchPerformance(M, id) * 0.25), 15, 92);
   });
@@ -6376,7 +6384,7 @@ function nextDay() {
   let stop = false;
   const rec = game.training === 'fitness' ? 1.25 : 1;
   const phys = {}; TEAM_DEFS.forEach(t => phys[t.id] = 0.85 + staffEff(t.id, 'physio') / 300);
-  phys[U()] *= 1 + (facLevel('medical') - 1) * 0.04;
+  phys[U()] *= 1 + (facLevel('medical') - 1) * FACILITY_MEDICAL_RECOVERY_STEP;
   for (const p of Object.values(game.players)) {
     if (p.retired) continue;
     if (p.injury) {
@@ -7234,7 +7242,7 @@ function developPlayer(p) {
   if (g > 0 && played >= 12) g += 0.6;
   if (p.age <= 22 && rand() < 0.06) g += 4;
   if (g > 0) g = head <= 0 ? 0 : Math.min(g, Math.max(0.3, head * 0.5));
-  if (g > 0 && p.teamId === U()) g *= 1 + (facLevel('training') - 1) * 0.05;
+  if (g > 0 && p.teamId === U()) g *= 1 + (facLevel('training') - 1) * FACILITY_TRAINING_STEP;
   let batM = 1, bowlM = 1;
   if (p.teamId && teamDef(p.teamId) && !teamDef(p.teamId).intl) {
     const hm = 0.9 + staffEff(p.teamId, 'head') / 500;
@@ -10821,7 +10829,7 @@ function renderFacilities() {
       <div class="fac-now"><span>Now: ${F.eff(lv)}</span>${max ? `<span class="muted">Condition ${facilityCondition(k)}% · Level 5</span>` : `<span class="muted">Next: ${F.eff(lv + 1)}</span>`}</div>
       ${credit && !max ? `<div class="note" style="margin:8px 0"><div class="b" style="color:var(--gold)">Government funded upgrade</div><div class="kv"><span>Full upgrade cost</span><b>${money(cost)}</b></div><div class="kv"><span>Reserved funding (government + club)</span><b>${money(credit)}</b></div><div class="kv"><span>Remaining payable</span><b>${money(due)}</b></div></div>` : ''}
       ${max ? `<div class="xs muted" style="margin:8px 0 4px">Annual maintenance policy</div>${sel(Object.entries(FAC_POLICIES).map(([id,v])=>[id,v.name]),(f.facPolicy||{})[k]||'standard',`facilityPolicy('${k}',this.value)`,'full')}` : `<button class="btn block" onclick="doUpgrade('${k}')" ${f.cash < due ? 'disabled' : ''}>Upgrade to level ${lv + 1} · ${money(due)}${credit ? ' remaining' : ''}</button>`}</div>`; }).join('');
-  return `<div class="note" style="margin-bottom:8px">Bank <b>${money(f.cash)}</b>${can.length ? ` · enough for ${can.length === 1 ? 'one upgrade' : `any one of ${can.length} upgrades`} with a buffer left` : ''}.</div><div class="fac-grid">${rows}</div>`;
+  return `<div class="note" style="margin-bottom:8px">Bank <b>${money(f.cash)}</b>${can.length ? ` · enough for ${can.length === 1 ? 'one upgrade' : `any one of ${can.length} upgrades`} with a buffer left` : ''}.<div class="xs muted" style="margin-top:6px">Training benefits developing players, not fixed annual rating increases. Medical reduces risk but cannot prevent every injury. Academy graduates must still be signed and fit within the salary cap. Stadium revenue depends on actual attendance.</div></div><div class="fac-grid">${rows}</div>`;
 }
 function renderClub() {
   const f = game.fin, L = f.ledger, prof = income(L) - spend(L);
