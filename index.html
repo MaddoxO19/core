@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.68 Build 145', title: 'Global International Statistics and Awards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.69 Build 146', title: 'Government Grant Accounting and Traceability', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -5203,6 +5203,51 @@ function facilityGrantCredit(k) {
   return Number.isFinite(credit) ? Math.max(0, credit) : 0;
 }
 function facilityNetCost(k) { return Math.max(0, upgradeCost(k) - facilityGrantCredit(k)); }
+// Audit trail is informational and does not itself move cash. Older saves that
+// only have facilityGrantCredits retain that credit without a second payment.
+function facilityGrantHistory() {
+  const f=game.fin;
+  if (!f) return [];
+  if (!Array.isArray(f.facilityGrantHistory)) f.facilityGrantHistory=[];
+  // Historical credits predate the itemised audit trail. Mark unknown
+  // contributions explicitly instead of fabricating another cash receipt.
+  Object.entries(f.facilityGrantCredits||{}).forEach(([k,amount])=>{
+    if (!Object.hasOwn(FACILITIES,k) || !(Number(amount)>0)) return;
+    const active=f.facilityGrantHistory.some(r=>r.facility===k && r.status==='reserved');
+    if (!active) f.facilityGrantHistory.push({id:'legacy-'+k+'-'+String(game.year),facility:k,year:null,day:null,government:null,club:null,total:Number(amount),status:'reserved',legacy:true,level:null});
+  });
+  // A legacy credit can be spent by an older version with no audit entry.
+  f.facilityGrantHistory.forEach(r=>{
+    if (r.status==='reserved' && !facilityGrantCredit(r.facility)) {
+      r.status='historical';r.legacy=true;
+    }
+  });
+  return f.facilityGrantHistory;
+}
+function recordFacilityGrant(k) {
+  const f=game.fin;
+  const r={id:'grant-'+String(game.year)+'-'+String(game.day)+'-'+k,facility:k,year:game.year,day:game.day,
+    government:GOVERNMENT_FACILITY_GRANT,club:GOVERNMENT_CLUB_MATCH,
+    total:GOVERNMENT_FACILITY_GRANT+GOVERNMENT_CLUB_MATCH,level:f.fac[k]+1,status:'reserved',legacy:false};
+  facilityGrantHistory().push(r);
+  return r;
+}
+function renderGovernmentGrants() {
+  const f=game.fin, entries=facilityGrantHistory().slice().reverse();
+  if (!entries.length) return `<div class="pb xs dim">No government infrastructure grants are recorded in this career. Grants accepted in an earlier build may not have an itemised history.</div>`;
+  const active=entries.filter(r=>r.status==='reserved');
+  const head=active.length ? `<div class="note" style="margin-bottom:10px">Reserved towards facility upgrades: <b>${money(active.reduce((sum,r)=>sum+facilityGrantCredit(r.facility),0))}</b>. This amount is already committed, not available bank cash.</div>` : '';
+  return `${head}<div class="rows">${entries.slice(0,16).map(r=>{
+     const label=FACILITIES[r.facility]?.label||r.facility;
+     const active=r.status==='reserved'&&facilityGrantCredit(r.facility)>0;
+     const original=r.total||0;
+     const applied=r.status==='used';
+     const subtitle=r.legacy ? 'Older saved grant credit; original payment breakdown unavailable' :
+       `Government ${money(r.government)} · Club ${money(r.club)} · Committed ${money(original)}`;
+     const state=active ? `Reserved ${money(facilityGrantCredit(r.facility))} · Remaining to pay ${money(facilityNetCost(r.facility))}` : applied ? `Applied to upgrade · ${money(r.due||0)} paid at completion` : 'Historical record (funding no longer reserved)';
+     return `<div class="row"><div class="stack"><div class="main-t">${esc(label)} · ${r.year===null?'earlier season':r.year}</div><div class="sub-t">${esc(subtitle)}</div><div class="sub-t">${esc(state)}</div></div></div>`;
+   }).join('')}</div><div class="pb xs dim">Grant receipts are included in Other income and the committed project funding in Upgrades spending. These amounts are shown here for clarity, not added to the totals again.</div>`;
+}
 function upgradeFacility(k) {
   const f = game.fin;
   if (!f || !Object.hasOwn(FACILITIES, k)) return { ok: false, reason: 'Unknown facility.' };
@@ -5212,6 +5257,8 @@ function upgradeFacility(k) {
   if (f.cash < due) return { ok: false, reason: `You need ${money(due)} in the bank.` };
   finBook('upgrades', due);
   if (credit) {
+    const entry=facilityGrantHistory().slice().reverse().find(r=>r.facility===k && r.status==='reserved');
+    if(entry){entry.status='used';entry.yearUsed=game.year;entry.dayUsed=game.day;entry.cost=cost;entry.due=due;}
     delete f.facilityGrantCredits[k];
     if (!Object.keys(f.facilityGrantCredits).length) delete f.facilityGrantCredits;
   }
@@ -5307,12 +5354,15 @@ function resolveEvent(id, idx) {
   if (grantFacility) {
     const f = game.fin;
     f.facilityGrantCredits = f.facilityGrantCredits || {};
+    // Reconcile any older reserved credits before booking a new award.
+    facilityGrantHistory();
     // Receive the government contribution, then commit all $450k to the
     // facility project. Net cash movement is -$150k and the finance ledger
     // reconciles with the complete upgrade cost when it is finished.
     finBook('other', GOVERNMENT_FACILITY_GRANT);
     finBook('upgrades', GOVERNMENT_FACILITY_GRANT + GOVERNMENT_CLUB_MATCH);
     f.facilityGrantCredits[grantFacility] = GOVERNMENT_FACILITY_GRANT + GOVERNMENT_CLUB_MATCH;
+    recordFacilityGrant(grantFacility);
     logTx(`Government grant for ${FACILITIES[grantFacility].label.toLowerCase()}: ${money(GOVERNMENT_FACILITY_GRANT)} public funding and ${money(GOVERNMENT_CLUB_MATCH)} club matching contribution committed; ${money(f.facilityGrantCredits[grantFacility])} credit reserved for next upgrade.`);
     addNews('Club', 'Government facility grant secured', `${money(f.facilityGrantCredits[grantFacility])} reserved toward the next ${FACILITIES[grantFacility].label.toLowerCase()} upgrade. ${money(facilityNetCost(grantFacility))} remains payable.`);
   }
@@ -10736,7 +10786,7 @@ function renderFacilities() {
     return `<div class="fac-row ${can.includes(k) ? 'can' : ''}"><div class="fac-top"><div><div class="main-t">${F.label}</div><div class="sub-t">${F.desc}</div></div><div class="fac-lv">${lv}<span>/5</span></div></div>
       <div class="fac-pips">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('')}</div>
       <div class="fac-now"><span>Now: ${F.eff(lv)}</span>${max ? `<span class="muted">Condition ${facilityCondition(k)}% · Level 5</span>` : `<span class="muted">Next: ${F.eff(lv + 1)}</span>`}</div>
-      ${credit && !max ? `<div class="xs" style="margin:8px 0;color:var(--gold)">Government grant project: ${money(credit)} already funded · full upgrade ${money(cost)}</div>` : ''}
+      ${credit && !max ? `<div class="note" style="margin:8px 0"><div class="b" style="color:var(--gold)">Government funded upgrade</div><div class="kv"><span>Full upgrade cost</span><b>${money(cost)}</b></div><div class="kv"><span>Reserved funding (government + club)</span><b>${money(credit)}</b></div><div class="kv"><span>Remaining payable</span><b>${money(due)}</b></div></div>` : ''}
       ${max ? `<div class="xs muted" style="margin:8px 0 4px">Annual maintenance policy</div>${sel(Object.entries(FAC_POLICIES).map(([id,v])=>[id,v.name]),(f.facPolicy||{})[k]||'standard',`facilityPolicy('${k}',this.value)`,'full')}` : `<button class="btn block" onclick="doUpgrade('${k}')" ${f.cash < due ? 'disabled' : ''}>Upgrade to level ${lv + 1} · ${money(due)}${credit ? ' remaining' : ''}</button>`}</div>`; }).join('');
   return `<div class="note" style="margin-bottom:8px">Bank <b>${money(f.cash)}</b>${can.length ? ` · enough for ${can.length === 1 ? 'one upgrade' : `any one of ${can.length} upgrades`} with a buffer left` : ''}.</div><div class="fac-grid">${rows}</div>`;
 }
@@ -10746,9 +10796,10 @@ function renderClub() {
   const avgCrowd = homeGames.length ? Math.round(mean(homeGames.map(x => game.scorecards[x.id].crowd)) ) : 0;
   const row = (l, v, neg) => Math.round(v) ? `<div class="kv"><span>${l}</span><span class="${neg ? 'loss' : ''}">${neg ? '−' : ''}${money(Math.round(v))}</span></div>` : '';
   return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v ${f.cash < 0 ? 'loss' : ''}">${money(f.cash)}</div><div class="l">Bank</div></div><div class="kpi"><div class="v ${prof < 0 ? 'loss' : 'win'}">${prof >= 0 ? '+' : ''}${money(Math.round(prof))}</div><div class="l">Season to date</div></div><div class="kpi"><div class="v">${f.fans}</div><div class="l">Fan support</div></div><div class="kpi"><div class="v">${avgCrowd ? (avgCrowd / 1000).toFixed(1) + 'k' : '–'}</div><div class="l">Avg crowd / day</div></div></div><div style="height:8px"></div>
-    <div class="grid g2">${panel('Income', `<div class="rows">${row('Gate takings', L.gate)}${row('Sponsorship', L.sponsor)}${row('Broadcast share', L.tv)}${row('Prize money', L.prize)}${row('Other', L.other)}<div class="kv b"><span>Total</span><span>${money(Math.round(income(L)))}</span></div></div>`, { flush: true })}
-      ${panel('Spending', `<div class="rows">${row('Player wages', L.wages, 1)}${row('Staff wages', L.staff, 1)}${row('Facility upkeep', L.upkeep, 1)}${row('Upgrades', L.upgrades, 1)}${row('Other', L.events, 1)}<div class="kv b"><span>Total</span><span class="loss">${spend(L) ? '−' : ''}${money(Math.round(spend(L)))}</span></div></div><div class="pb xs dim">Wages are paid monthly. Upkeep is charged at season end.</div>`, { flush: true })}
+    <div class="grid g2">${panel('Income', `<div class="rows">${row('Gate takings', L.gate)}${row('Sponsorship', L.sponsor)}${row('Broadcast share', L.tv)}${row('Prize money', L.prize)}${row('Other', L.other)}${(()=>{const v=facilityGrantHistory().filter(x=>x.year===game.year&&!x.legacy).reduce((a,x)=>a+(x.government||0),0);return v?`<div class="pb xs dim">Includes ${money(v)} government facility grants in Other income.</div>`:''})()}<div class="kv b"><span>Total</span><span>${money(Math.round(income(L)))}</span></div></div>`, { flush: true })}
+      ${panel('Spending', `<div class="rows">${row('Player wages', L.wages, 1)}${row('Staff wages', L.staff, 1)}${row('Facility upkeep', L.upkeep, 1)}${row('Upgrades', L.upgrades, 1)}${(()=>{const v=facilityGrantHistory().filter(x=>x.year===game.year&&!x.legacy).reduce((a,x)=>a+(x.total||0),0);return v?`<div class="pb xs dim">Includes ${money(v)} reserved grant-project funding in Upgrades.</div>`:''})()}${row('Other', L.events, 1)}<div class="kv b"><span>Total</span><span class="loss">${spend(L) ? '−' : ''}${money(Math.round(spend(L)))}</span></div></div><div class="pb xs dim">Wages are paid monthly. Upkeep is charged at season end.</div>`, { flush: true })}
       ${panel('Ticketing', `<div class="rows">${Object.keys(TICKET).map(k => `<div class="row tap ${f.ticket === k ? 'me' : ''}" onclick="game.fin.ticket='${k}';autosave();render()"><div class="stack"><div class="main-t">${TICKET[k].label}</div><div class="sub-t">${k === 'low' ? 'Bigger crowds, lower takings per head, fans warm to the club' : k === 'premium' ? 'Higher takings per head, smaller crowds, fans cool off' : 'Middle of the road'}</div></div><div class="end">${f.ticket === k ? '<span class="tag good">Active</span>' : ''}</div></div>`).join('')}</div>`, { flush: true })}
+      ${panel('Government infrastructure grants', renderGovernmentGrants(), {cls:'span2'})}
       ${panel('Annual investments', renderClubInvestments(), {cls:'span2'})}
       ${f.history.length ? panel('Past seasons', `<table class="tbl clean"><thead><tr><th>Season</th><th>Income</th><th>Spend</th><th>Profit</th><th>Bank</th></tr></thead><tbody>${f.history.map(h => `<tr><td>${h.year}</td><td>${money(h.income)}</td><td>${money(h.spend)}</td><td class="${h.profit < 0 ? 'loss' : 'win'}">${money(h.profit)}</td><td>${money(h.cash)}</td></tr>`).join('')}</tbody></table>`, { flush: true, cls: 'span2' }) : ''}</div>
     <div class="xs dim" style="margin-top:6px">The board judges profit, debt and results.</div>`;
