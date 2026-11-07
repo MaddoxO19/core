@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.66 Build 143', title: 'Contract Manager Delegation and Series Results', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.67 Build 144', title: 'Government Grant Accounting and Facility Credits', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -5192,13 +5192,32 @@ function weeklyFans() {
   const stars = squadOf(U()).filter(p => peakOvr(p) >= 80 + RATING_SHIFT).length;
   f.fans = clamp(Math.round(f.fans + (w - l) * 1.5 + TICKET[f.ticket].fans + (stars - 2) * 0.3 + (60 - f.fans) * 0.03), 5, 100);
 }
+// Government facility funding is held as a ring-fenced credit, not free cash.
+// Grant receipt and club matching funds are both booked when accepted. The full
+// face value of the credit is booked as committed upgrade spending at that point,
+// and only the remaining amount is charged when the upgrade is completed.
+const GOVERNMENT_FACILITY_GRANT = 300000;
+const GOVERNMENT_CLUB_MATCH = 150000;
+function facilityGrantCredit(k) {
+  const credit = Number(game.fin?.facilityGrantCredits?.[k] || 0);
+  return Number.isFinite(credit) ? Math.max(0, credit) : 0;
+}
+function facilityNetCost(k) { return Math.max(0, upgradeCost(k) - facilityGrantCredit(k)); }
 function upgradeFacility(k) {
-  const f = game.fin, cost = upgradeCost(k);
+  const f = game.fin;
+  if (!f || !Object.hasOwn(FACILITIES, k)) return { ok: false, reason: 'Unknown facility.' };
   if (f.fac[k] >= 5) return { ok: false, reason: 'Already at the highest level.' };
-  if (f.cash < cost) return { ok: false, reason: `You need ${money(cost)} in the bank.` };
-  finBook('upgrades', cost); f.fac[k]++;
+  const cost = upgradeCost(k), credit = Math.min(cost, facilityGrantCredit(k));
+  const due = cost - credit;
+  if (f.cash < due) return { ok: false, reason: `You need ${money(due)} in the bank.` };
+  finBook('upgrades', due);
+  if (credit) {
+    delete f.facilityGrantCredits[k];
+    if (!Object.keys(f.facilityGrantCredits).length) delete f.facilityGrantCredits;
+  }
+  f.fac[k]++;
   addNews('Club', `${FACILITIES[k].label} upgraded`, `Now level ${f.fac[k]}: ${FACILITIES[k].eff(f.fac[k])}.`);
-  logTx(`Upgraded ${FACILITIES[k].label.toLowerCase()} to level ${f.fac[k]} (${money(cost)}).`);
+  logTx(`Upgraded ${FACILITIES[k].label.toLowerCase()} to level ${f.fac[k]} (${money(cost)} total${credit ? `, ${money(credit)} previously funded, ${money(due)} paid today` : ''}).`);
   return { ok: true };
 }
 
@@ -5234,8 +5253,10 @@ const EVENTS = {
       choices: [['Fund the tour', { cash: -60000, fans: 6 }], ['Not this year', { fans: -1 }]] };
   },
   grant() {
-    return { title: 'Government infrastructure grant', body: 'The state government will put $300k toward one facility if you match half of it ($150k).',
-      choices: [['Stadium', { cash: -150000, fac: 'stadium' }], ['Academy', { cash: -150000, fac: 'academy' }], ['Decline', {}]] };
+    const eligible = ['stadium', 'academy'].filter(k => game.fin && game.fin.fac[k] < 5 && !facilityGrantCredit(k));
+    if (!eligible.length) return null;
+    return { title: 'Government infrastructure grant', body: 'The government offers $300k toward an upgrade if your club commits $150k now. Together, $450k will be reserved for the chosen facility. The remaining upgrade cost is payable when you upgrade it.',
+      choices: [...eligible.map(k => [k === 'stadium' ? 'Stadium' : 'Academy', { grantFacility: k }]), ['Decline', {}]] };
   },
   rival() {
     const p = squadOf(U()).filter(x => x.age <= 24 && x.pot >= 78 + RATING_SHIFT && x.contract && x.contract.years <= 1)[0];
@@ -5271,18 +5292,40 @@ function maybeEvent() {
   return false;
 }
 function resolveEvent(id, idx) {
-  const m = (game.inbox || []).find(x => x.id === id); if (!m || m.done) return null;
-  const [label, eff] = m.choices[idx]; m.done = true; m.choice = label;
-  if (eff.cash) { if (eff.cash > 0) finBook('other', eff.cash); else finBook('events', -eff.cash); }
+  const m = (game.inbox || []).find(x => x.id === id); if (!m || m.done || !m.choices?.[idx]) return null;
+  const [label, eff] = m.choices[idx];
+  // Reject a grant that cannot be funded without consuming the inbox decision.
+  // This also protects older saved grant offers using the previous 'fac' field.
+  const grantFacility = eff.grantFacility || (m.kind === 'grant' ? eff.fac : null);
+  if (grantFacility) {
+    if (!game.fin || !Object.hasOwn(FACILITIES, grantFacility) || game.fin.fac[grantFacility] >= 5 || facilityGrantCredit(grantFacility))
+      return { ok: false, reason: 'This facility is not eligible for another grant.' };
+    if (game.fin.cash < GOVERNMENT_CLUB_MATCH)
+      return { ok: false, reason: `You need ${money(GOVERNMENT_CLUB_MATCH)} in the bank to accept this grant.` };
+  }
+  m.done = true; m.choice = label;
+  if (grantFacility) {
+    const f = game.fin;
+    f.facilityGrantCredits = f.facilityGrantCredits || {};
+    // Receive the government contribution, then commit all $450k to the
+    // facility project. Net cash movement is -$150k and the finance ledger
+    // reconciles with the complete upgrade cost when it is finished.
+    finBook('other', GOVERNMENT_FACILITY_GRANT);
+    finBook('upgrades', GOVERNMENT_FACILITY_GRANT + GOVERNMENT_CLUB_MATCH);
+    f.facilityGrantCredits[grantFacility] = GOVERNMENT_FACILITY_GRANT + GOVERNMENT_CLUB_MATCH;
+    logTx(`Government grant for ${FACILITIES[grantFacility].label.toLowerCase()}: ${money(GOVERNMENT_FACILITY_GRANT)} public funding and ${money(GOVERNMENT_CLUB_MATCH)} club matching contribution committed; ${money(f.facilityGrantCredits[grantFacility])} credit reserved for next upgrade.`);
+    addNews('Club', 'Government facility grant secured', `${money(f.facilityGrantCredits[grantFacility])} reserved toward the next ${FACILITIES[grantFacility].label.toLowerCase()} upgrade. ${money(facilityNetCost(grantFacility))} remains payable.`);
+  }
+  if (eff.cash && !grantFacility) { if (eff.cash > 0) finBook('other', eff.cash); else finBook('events', -eff.cash); }
   if (eff.fans) game.fin.fans = clamp(game.fin.fans + eff.fans, 5, 100);
   if (eff.morale && P(eff.morale.id)) P(eff.morale.id).morale = clamp(P(eff.morale.id).morale + eff.morale.v, 5, 100);
   if (eff.form && P(eff.form.id)) P(eff.form.id).form = clamp(P(eff.form.id).form + eff.form.v, 15, 92);
   if (eff.fitness && P(eff.fitness.id)) P(eff.fitness.id).fitness = clamp(P(eff.fitness.id).fitness + eff.fitness.v, 35, 100);
   if (eff.team) squadOf(U()).forEach(p => p.morale = clamp(p.morale + eff.team, 5, 100));
   if (eff.rest && P(eff.rest)) P(eff.rest).rest = true;
-  if (eff.fac) { game.fin.fac[eff.fac] = Math.min(5, game.fin.fac[eff.fac] + 1); addNews('Club', `${FACILITIES[eff.fac].label} upgraded with grant funding`, `Now level ${game.fin.fac[eff.fac]}.`); }
+  // A government grant no longer bypasses normal facility upgrade costs.
   logTx(`Inbox: ${m.title} · ${label}.`);
-  return eff;
+  return { ...eff, ok: true };
 }
 function expireInbox() { (game.inbox || []).forEach(m => { if (!m.done && game.day > m.expires) { m.done = true; m.choice = 'No response (default)'; } }); }
 
@@ -10632,16 +10675,17 @@ function renderInbox() {
       <div class="flex wrap">${m.choices.map((c, i) => `<button class="btn ${i === 0 ? 'pri' : ''} sm" onclick="doEvent('${m.id}',${i})">${esc(c[0])}</button>`).join('')}${m.pid ? `<button class="btn ghost sm" onclick="showPlayer('${m.pid}')">View player</button>` : ''}</div></div></section>`).join('<div style="height:8px"></div>') : '<div class="empty">Nothing needs a decision right now.</div>'}
     ${done.length ? `<div style="height:10px"></div>${panel('Recent decisions', `<div class="rows">${done.map(m => `<div class="kv"><span style="color:var(--text)">${esc(m.title)}</span><span>${esc(m.choice || '')}</span></div>`).join('')}</div>`, { flush: true })}` : ''}`;
 }
-function doEvent(id, i) { const eff = resolveEvent(id, i); if (eff && eff.negotiate) { negotiate(eff.negotiate, 'extend'); } else flash('Done.'); autosave(); render(); }
+function doEvent(id, i) { const eff = resolveEvent(id, i); if (!eff) return; if (eff.ok === false) { flash(eff.reason); render(); return; } if (eff.negotiate) { negotiate(eff.negotiate, 'extend'); } else flash(eff.grantFacility || eff.fac ? 'Grant reserved for facility upgrade.' : 'Done.'); autosave(); render(); }
 // Facilities: what each one does now, what the next level adds, and whether you can afford it.
-function affordableUpgrades() { return game.fin ? Object.keys(FACILITIES).filter(k => facLevel(k) < 5 && game.fin.cash - upgradeCost(k) >= 250000) : []; }
+function affordableUpgrades() { return game.fin ? Object.keys(FACILITIES).filter(k => facLevel(k) < 5 && game.fin.cash - facilityNetCost(k) >= 250000) : []; }
 function renderFacilities() {
   const f = game.fin, can = affordableUpgrades();
-  const rows = Object.keys(FACILITIES).map(k => { const lv = f.fac[k], F = FACILITIES[k], max = lv >= 5, cost = upgradeCost(k);
+  const rows = Object.keys(FACILITIES).map(k => { const lv = f.fac[k], F = FACILITIES[k], max = lv >= 5, cost = upgradeCost(k), credit = facilityGrantCredit(k), due = facilityNetCost(k);
     return `<div class="fac-row ${can.includes(k) ? 'can' : ''}"><div class="fac-top"><div><div class="main-t">${F.label}</div><div class="sub-t">${F.desc}</div></div><div class="fac-lv">${lv}<span>/5</span></div></div>
       <div class="fac-pips">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= lv ? 'on' : ''}"></i>`).join('')}</div>
       <div class="fac-now"><span>Now: ${F.eff(lv)}</span>${max ? `<span class="muted">Condition ${facilityCondition(k)}% · Level 5</span>` : `<span class="muted">Next: ${F.eff(lv + 1)}</span>`}</div>
-      ${max ? `<div class="xs muted" style="margin:8px 0 4px">Annual maintenance policy</div>${sel(Object.entries(FAC_POLICIES).map(([id,v])=>[id,v.name]),(f.facPolicy||{})[k]||'standard',`facilityPolicy('${k}',this.value)`,'full')}` : `<button class="btn block" onclick="doUpgrade('${k}')" ${f.cash < cost ? 'disabled' : ''}>Upgrade to level ${lv + 1} · ${money(cost)}</button>`}</div>`; }).join('');
+      ${credit && !max ? `<div class="xs" style="margin:8px 0;color:var(--gold)">Government grant project: ${money(credit)} already funded · full upgrade ${money(cost)}</div>` : ''}
+      ${max ? `<div class="xs muted" style="margin:8px 0 4px">Annual maintenance policy</div>${sel(Object.entries(FAC_POLICIES).map(([id,v])=>[id,v.name]),(f.facPolicy||{})[k]||'standard',`facilityPolicy('${k}',this.value)`,'full')}` : `<button class="btn block" onclick="doUpgrade('${k}')" ${f.cash < due ? 'disabled' : ''}>Upgrade to level ${lv + 1} · ${money(due)}${credit ? ' remaining' : ''}</button>`}</div>`; }).join('');
   return `<div class="note" style="margin-bottom:8px">Bank <b>${money(f.cash)}</b>${can.length ? ` · enough for ${can.length === 1 ? 'one upgrade' : `any one of ${can.length} upgrades`} with a buffer left` : ''}.</div><div class="fac-grid">${rows}</div>`;
 }
 function renderClub() {
@@ -10657,7 +10701,7 @@ function renderClub() {
       ${f.history.length ? panel('Past seasons', `<table class="tbl clean"><thead><tr><th>Season</th><th>Income</th><th>Spend</th><th>Profit</th><th>Bank</th></tr></thead><tbody>${f.history.map(h => `<tr><td>${h.year}</td><td>${money(h.income)}</td><td>${money(h.spend)}</td><td class="${h.profit < 0 ? 'loss' : 'win'}">${money(h.profit)}</td><td>${money(h.cash)}</td></tr>`).join('')}</tbody></table>`, { flush: true, cls: 'span2' }) : ''}</div>
     <div class="xs dim" style="margin-top:6px">The board judges profit, debt and results.</div>`;
 }
-function doUpgrade(k) { confirmSheet('Upgrade facility', `Upgrade the ${FACILITIES[k].label.toLowerCase()} to level ${facLevel(k) + 1} for ${money(upgradeCost(k))}?`, 'Upgrade', `const r=upgradeFacility('${k}');flash(r.ok?'Upgraded.':r.reason);autosave();render()`); }
+function doUpgrade(k) { const credit=facilityGrantCredit(k), total=upgradeCost(k), due=facilityNetCost(k); confirmSheet('Upgrade facility', `Upgrade the ${FACILITIES[k].label.toLowerCase()} to level ${facLevel(k) + 1}? Full cost ${money(total)}${credit ? `, funded grant project ${money(credit)}, remaining payable now ${money(due)}` : ''}.`, 'Upgrade', `const r=upgradeFacility('${k}');flash(r.ok?'Upgraded.':r.reason);autosave();render()`); }
 
 // Contract talks with the player's agent.
 function negotiationReconciliationSheet(id, mode) {
