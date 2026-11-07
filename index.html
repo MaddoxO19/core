@@ -1207,7 +1207,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.58 Build 135', title: 'Save Reliability Overhaul', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.61 Build 138', title: 'Reliable International Series Recaps', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -1732,6 +1732,17 @@ function makeProspect(forcedRole) {
   return p;
 }
 
+// Build 136: Australia Test tour lengths are determined by the opposition, not
+// by a fixed five-match calendar. Used only while constructing a NEW season:
+// never rewrite a saved season or its historical results.
+const AUS_TEST_TOUR_LENGTH = Object.freeze({
+  ENG:5, IND:4, SA:3, NZ:3, PAK:3,
+  SL:2, WI:2, BAN:2, IRE:1, ZIM:1, AFG:1
+});
+function australiaTestSeriesLength(opponent) {
+  return AUS_TEST_TOUR_LENGTH[opponent] || 1;
+}
+
 // §5 SEASON BUILDER ---------------------------------------------------------
 function roundRobin(ids) {
   const t = ids.slice(), n = t.length, rounds = [];
@@ -1777,7 +1788,17 @@ function buildSeason(year) {
   const windows = CAL.WINDOWS.map((w, i) => Object.assign({}, w, { opp: opps[i], squad: [], result: null, fx: [] }));
   windows.forEach(w => {
     const venues = shuffle(ids);
-    const plan = w.id === 'TEST' ? [[52,'TEST'],[62,'TEST'],[72,'TEST'],[82,'TEST'],[93,'TEST']] : [[121,'ODI'],[125,'ODI'],[129,'ODI'],[134,'T20I'],[137,'T20I'],[140,'T20I']];
+    const testDates = [52,62,72,82,93];
+    const count = australiaTestSeriesLength(w.opp);
+    const plan = w.id === 'TEST'
+      ? testDates.slice(0, count).map(day => [day,'TEST'])
+      : [[121,'ODI'],[125,'ODI'],[129,'ODI'],[134,'T20I'],[137,'T20I'],[140,'T20I']];
+    if (w.id === 'TEST') {
+      w.matches = count;
+      // Keep national players on duty until the final scheduled Test finishes,
+      // rather than for the unused remainder of the old five-Test window.
+      w.end = Math.min(w.end, plan[plan.length - 1][0] + 5);
+    }
     plan.forEach(([d, c], i) => { const id = year + '-i' + (n++); w.fx.push(id); fixtures.push({ id, comp: c, round: `${COMPS[c].short} ${plan.filter((x, j) => j <= i && x[1] === c).length}`, day: d, home: 'AUS', away: 'X_' + w.opp, venue: venues[i % venues.length], stage: 'intl', win: w.id, result: null }); });
   });
   const worldTours = addWorldFixtures(year, fixtures, windows, () => n++);
@@ -4041,11 +4062,23 @@ function archiveWorldSeries() {
 function seriesReviewKey(fx) {
   if (!fx || !['TEST','ODI','T20I'].includes(fx.comp)) return null;
   if (fx.seriesId && fx.stage === 'world') return fx.seriesId;
-  if (fx.stage === 'intl' && fx.win) return fx.win + '-' + fx.comp;
+  // Include the season: TEST-TEST was reused in every career year, so a past
+  // viewed review could suppress the current year's completed series.
+  if (fx.stage === 'intl' && fx.win) return game.year + '-' + fx.win + '-' + fx.comp;
   return null;
 }
 function ensureSeriesReviewStore() {
   if (!Array.isArray(game.internationalSeriesReviews)) game.internationalSeriesReviews=[];
+  // Migrate historical review identities in place without altering their
+  // scores, awards, acknowledgement status or the underlying fixture records.
+  for(const r of game.internationalSeriesReviews){
+    if(r && r.fmt && r.year && typeof r.id==='string' &&
+       !r.id.startsWith(String(r.year)+'-') &&
+       (r.id==='TEST-TEST'||r.id==='WHITE-ODI'||r.id==='WHITE-T20I'||
+        /^[A-Za-z0-9_-]+-(TEST|ODI|T20I)$/.test(r.id))){
+      r.id=String(r.year)+'-'+r.id;
+    }
+  }
   return game.internationalSeriesReviews;
 }
 function recordInternationalSeriesReview(fx) {
@@ -4125,18 +4158,97 @@ function seriesReviewHtml(r) {
 }
 function openInternationalSeriesReview(id) {
   const r=ensureSeriesReviewStore().find(x=>x.id===id);if(!r)return;
+  ui.openSeriesReviewId=r.id;
   sheet('International series review','Series completed',seriesReviewHtml(r),{center:true,key:'series-review',foot:`<button class="btn pri block" onclick="dismissInternationalSeriesReview('${r.id}')">Continue to Home</button>`});
 }
 function dismissInternationalSeriesReview(id){
   const r=ensureSeriesReviewStore().find(x=>x.id===id);if(r)r.viewed=true;
-  closeModal();autosave();
+  closeModal();autosave();showPendingPostMatchReports();
 }
 function showPendingInternationalSeriesReview(){
   if(!game||document.querySelector('#modalRoot .sheet'))return false;
+  // Recover any completed current-season series not yet recorded, including
+  // final Tests processed through fast simulation or older build pathways.
+  reconcileInternationalSeriesReviews();
   const r=ensureSeriesReviewStore().find(x=>!x.viewed);
   if(!r)return false;
   openInternationalSeriesReview(r.id);
   return true;
+}
+// Recaps are a single ordered handover: individual match, completed series,
+// then domestic matches handled by staff. Never allow the domestic summary
+// to obscure a pending series review.
+function showPendingPostMatchReports(){
+  if(showPendingInternationalMatchRecap())return true;
+  if(showPendingInternationalSeriesReview())return true;
+  if(game?.awayLog?.length){showAwaySummary();return true;}
+  return false;
+}
+// Build 137 — every Australia international has an individually acknowledged
+// post-match recap. Series reviews are distinct and only appear after the
+// final match. Persist the queue so a missed popup survives a save/reload.
+function internationalMatchRecapQueue(){
+  if(!Array.isArray(game.pendingInternationalMatchRecaps)) game.pendingInternationalMatchRecaps=[];
+  return game.pendingInternationalMatchRecaps;
+}
+function queueInternationalMatchRecap(fx){
+  if(!game?.nation?.gm || !fx?.result || (fx.home!=='AUS' && fx.away!=='AUS')) return;
+  if(!['TEST','ODI','T20I','WC','CWC'].includes(fx.comp) && !fx.event) return;
+  const queue=internationalMatchRecapQueue();
+  if(!queue.some(x=>x.id===fx.id)) queue.push({id:fx.id,year:game.year});
+  if(queue.length>12)queue.splice(0,queue.length-12);
+}
+// Recover one recently completed Test when moving from an older build that
+// never queued individual recaps. Once per career, never replay an old season.
+function restoreRecentInternationalMatchRecap(){
+  if(!game || game.intlMatchRecapMigrationV>=1)return;
+  game.intlMatchRecapMigrationV=1;
+  if(!game.nation?.gm || !game.season?.fixtures)return;
+  const latest=game.season.fixtures.filter(f=>f.comp==='TEST' && f.result &&
+    (f.home==='AUS'||f.away==='AUS') && f.day<=game.day &&
+    game.day-f.day<=12).sort((a,b)=>b.day-a.day)[0];
+  if(latest)queueInternationalMatchRecap(latest);
+}
+function internationalMatchRecapHtml(fx){
+  const r=fx.result, sc=(game.scorecards||{})[fx.id];
+  const all=sc?.innings?.length ? sc.innings : (r.inns||[]);
+  const scores=all.map((inn,i)=>`<div class="kv"><span>${esc(teamName(inn.bat))} · Innings ${i+1}</span><b>${inn.runs}/${inn.wkts==null?'–':inn.wkts}${inn.declared?' dec':''}</b></div>`).join('');
+  const potm=r.potm&&P(r.potm)?`<div class="kv"><span>Player of the match</span><b>${esc(pname(P(r.potm)))}</b></div>`:'';
+  const seriesKey=seriesReviewKey(fx);
+  const fixtures=seriesKey?(game.season?.fixtures||[]).filter(f=>seriesReviewKey(f)===seriesKey):[];
+  const played=fixtures.filter(f=>f.result);
+  const wins=played.filter(f=>f.result.winner==='AUS').length;
+  const losses=played.filter(f=>f.result.winner && f.result.winner!=='AUS').length;
+  const draws=played.length-wins-losses;
+  const progress=fixtures.length>1?`<div class="note" style="margin-top:10px">Series: Australia ${wins}–${losses}${draws?` · ${draws} drawn`:''} · ${played.length} of ${fixtures.length} completed</div>`:'';
+  return `<div class="series-review-head"><div class="xs muted">${esc(fx.comp==='TEST'?'TEST MATCH':fx.comp==='ODI'?'ONE-DAY INTERNATIONAL':'T20 INTERNATIONAL')} · ${esc(fx.round||'')}</div><div class="series-review-nations">${esc(teamName(fx.home))} v ${esc(teamName(fx.away))}</div><div class="s" style="margin-top:8px"><b>${esc(displayInternationalSummary(r.text||r.summary||''))}</b></div></div><div class="panel" style="margin-top:12px"><div class="ph"><h3>Match result</h3></div><div class="rows">${scores}${potm}<div class="kv"><span>Summary</span><span style="text-align:right">${esc(r.summary||r.text||'')}</span></div></div></div>${progress}`;
+}
+function showPendingInternationalMatchRecap(){
+  if(!game || document.querySelector('#modalRoot .sheet'))return false;
+  const q=internationalMatchRecapQueue();
+  while(q.length){
+    const item=q[0], fx=item.year===game.year?fixtureById(item.id):null;
+    if(!fx?.result){q.shift();continue;}
+    const foot=`${game.scorecards?.[fx.id]?`<button class="btn" onclick="showInternationalRecapScorecard('${fx.id}')">Scorecard</button>`:''}<button class="btn pri" onclick="dismissInternationalMatchRecap('${fx.id}')">Continue</button>`;
+    sheet('International match recap',fx.comp==='TEST'?'Test completed':'Match completed',internationalMatchRecapHtml(fx),{key:'intl-match-recap',foot});
+    return true;
+  }
+  return false;
+}
+function showInternationalRecapScorecard(id){
+  const S=game.scorecards?.[id];if(!S)return;
+  _scFx=id;
+  sheet('International scorecard',`${esc(teamName(S.home))} v ${esc(teamName(S.away))}`,scorecardHtml(S,0,'scInn',true),{wide:true,key:'intl-recap-scorecard',foot:`<button class="btn pri" onclick="closeModal();showPendingInternationalMatchRecap()">Back to recap</button>`});
+}
+function dismissInternationalMatchRecap(id){
+  const q=internationalMatchRecapQueue();
+  const i=q.findIndex(x=>x.id===id);if(i>=0)q.splice(i,1);
+  closeModal();autosave();
+  // The international result always comes before domestic staff results.
+  if(showPendingInternationalMatchRecap())return;
+  if(showPendingInternationalSeriesReview())return;
+  if(game.awayLog?.length){showAwaySummary();return;}
+  if(typeof showPendingWorldCupReview==='function')showPendingWorldCupReview();
 }
 // B131: recover a completed current-season review missed by a quick sim,
 // interrupted navigation or a save loaded after the final Test. Never
@@ -5987,6 +6099,7 @@ function applyIntlMatch(M) {
   if (fx.event==='ODIWC'||fx.event==='CT')recordODIWorldCupStats(M,fx.event);
   if (fx.event) updateGlobalTournament();
   recordInternationalSeriesReview(fx);
+  queueInternationalMatchRecap(fx);
   const potm = M.potm ? P(M.potm) : null;
   if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${fx.result.text}. ${fx.result.summary}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
 }
@@ -6240,9 +6353,10 @@ function intlReason(fx) { const f = clashesWith(fx).find(x => x.stage === 'intl'
 // Main "Continue": sims forward to the next thing that needs the GM.
 function continueGame() {
   if (!game) return;
-  // B131: completed series reviews are decision points, not background news.
-  // Present them before advancing the date so five-Test tours cannot be skipped.
-  if (showPendingInternationalSeriesReview()) return;
+  // B137: each completed international match is acknowledged before domestic
+  // delegation reports or the series-completion review.
+  // B138: match recap, full series recap, then delegated domestic results.
+  if (showPendingPostMatchReports()) return;
   if (game.live) { go('live'); return; }
   if (game.phase !== 'season') { offseasonContinue(); return; }
   if (showPendingWorldCupReview()) { go('home'); return; }
@@ -6253,7 +6367,7 @@ function continueGame() {
   else if (pend && !pend.result && yieldsToIntl(pend)) { staffPlay(pend, intlReason(pend)); game.pendingFx = null; }
   else if (pend && !pend.result) { go('matchday'); return; }
   game.pendingFx = null;
-  const done = page => { autosave(); go(page); showAwaySummary(); if(!showPendingWorldCupReview()&&!showPendingChampionsTrophyBrief())showPendingInternationalSeriesReview(); };
+  const done = page => { autosave(); go(page); if(showPendingPostMatchReports())return; if(!showPendingWorldCupReview())showPendingChampionsTrophyBrief(); };
   for (let i = 0; i < 400; i++) {
     if (game.busy && game.day > game.busy.until) game.busy = null;
     if(showPendingWorldCupPreview()||showPendingChampionsTrophyBrief()) { autosave();go('home');return; }
@@ -6277,7 +6391,7 @@ function showAwaySummary() {
   const rows = log.map(e => { const f = fixtureById(e.fx), opp = e.team === f.home ? f.away : f.home, won = f.result && f.result.winner === e.team;
     const lad = game.season.standings[e.comp] ? ` · now ${ordinal(ladderPos(e.comp, e.team))} on the ${COMPS[e.comp].short} ladder` : '';
     return `<div class="row tap" onclick="${game.scorecards[e.fx] ? `showScorecard('${e.fx}',0)` : ''}"><div class="stack"><div class="main-t">${esc(teamDef(e.team).nick)} v ${esc(teamDef(opp).nick)} · ${dateStr(f.day)}</div><div class="sub-t" style="white-space:normal">${fixtureCompetitionMarkup(f)} · <span class="${won ? 'win' : f.result.winner ? 'loss' : ''}">${esc(e.text)}</span>${e.potm ? ` · player of the match ${esc(pname(P(e.potm)))}` : ''}${lad}</div>${e.why ? `<div class="xs dim" style="margin-top:2px">${esc(e.why)}</div>` : ''}</div></div>`; }).join('');
-  sheet('Your staff ran these matches', 'While you were away', `<div class="rows">${rows}</div>`, { flush: true, foot: '<button class="btn pri" onclick="closeModal();showPendingInternationalSeriesReview()">Done</button>' });
+  sheet('Your staff ran these matches', 'While you were away', `<div class="rows">${rows}</div>`, { flush: true, foot: '<button class="btn pri" onclick="closeModal();showPendingPostMatchReports()">Done</button>' });
 }
 // Sim several days, auto-playing the user's matches.
 function simDays(n, untilEnd) {
@@ -7732,7 +7846,7 @@ function sheetSwipe(el) {
   const end = () => { if (y0 == null) return; y0 = null; el.style.transition = 'transform .15s'; if (dy > 90) closeModal(); else el.style.transform = ''; };
   [head, bodyEl].forEach(t => { if (!t) return; t.addEventListener('touchstart', start, { passive: true }); t.addEventListener('touchmove', move, { passive: false }); t.addEventListener('touchend', end); t.addEventListener('touchcancel', end); });
 }
-function closeModal() { const m=$('modalRoot');if(m.querySelector('.sheet[data-key="wc-review"]')&&game){const r=(game.worldCupReviews||[]).find(x=>!x.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="wc-preview"]')&&game){const r=(game.worldCupPreviews||[]).find(p=>!p.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="series-review"]') && game) { const pending=(game.internationalSeriesReviews||[]).find(r=>!r.viewed); if(pending){pending.viewed=true;autosave();} } m.innerHTML = ''; }
+function closeModal() { const m=$('modalRoot');if(m.querySelector('.sheet[data-key="wc-review"]')&&game){const r=(game.worldCupReviews||[]).find(x=>!x.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="wc-preview"]')&&game){const r=(game.worldCupPreviews||[]).find(p=>!p.viewed);if(r){r.viewed=true;autosave();}} if(m.querySelector('.sheet[data-key="series-review"]') && game) { const review=ensureSeriesReviewStore().find(r=>r.id===ui.openSeriesReviewId); if(review && !review.viewed){review.viewed=true;autosave();} ui.openSeriesReviewId=null; } m.innerHTML = ''; }
 function confirmSheet(title, text, yesLabel, yesJs) { sheet('Confirm', title, `<p class="s" style="margin:0">${text}</p>`, { foot: `<button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="closeModal();${yesJs}">${yesLabel}</button>` }); }
 
 const ICONS = {
@@ -7800,7 +7914,7 @@ function render() {
   tc.classList.add('hidden');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
-function enterApp() { reconcileInternationalSeriesReviews(); $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page === 'home' && homeNotices().some(n=>!noticeDismissed(n))) setTimeout(()=>{if(ui.page==='home' && !$('modalRoot').innerHTML)attentionSheet();},250); if(ui.page==='home')setTimeout(()=>{if(!showPendingWorldCupReview()&&!showPendingWorldCupPreview()&&!showPendingChampionsTrophyBrief())showPendingInternationalSeriesReview();},500); }
+function enterApp() { reconcileInternationalSeriesReviews(); restoreRecentInternationalMatchRecap(); $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page==='home')setTimeout(()=>{if(showPendingPostMatchReports())return; if(showPendingWorldCupReview()||showPendingWorldCupPreview()||showPendingChampionsTrophyBrief())return; if(homeNotices().some(n=>!noticeDismissed(n)) && !$('modalRoot').innerHTML)attentionSheet();},250); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
@@ -9373,6 +9487,7 @@ function quickSimUser() {
   setBusy(fx, M);
   game.pendingFx = null;
   autosave(); go('home');
+  if(showPendingInternationalMatchRecap())return;
   if (game.scorecards[fx.id]) showScorecard(fx.id, 0); else flash(M.result.text);
 }
 // Build 087: weather interruptions are acknowledged once; they never change the score.
@@ -9471,7 +9586,7 @@ function finishLive() {
   applyMatch(M);
   const fxId = M.fxId;
   game.live = null; game.pendingFx = null; ui.matchReview = false;
-  autosave(); go('home'); showAwaySummary(); showPendingInternationalSeriesReview();
+  autosave(); go('home'); showPendingPostMatchReports();
 }
 function setLiveTab(t) { ui.liveTab = t; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
 function setLiveInn(k) { ui.liveInn = +k; const y = window.scrollY || 0; render(); window.scrollTo(0,y); }
