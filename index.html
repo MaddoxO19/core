@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.67 Build 144', title: 'Government Grant Accounting and Facility Credits', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.68 Build 145', title: 'Global International Statistics and Awards', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -6104,6 +6104,7 @@ function applyIntlMatch(M) {
   fx.result = { winner: M.result.winner, draw: !!M.result.draw, tie: !!M.result.tie, noResult: !!M.result.noResult, text: M.result.text, summary: M.abandoned ? 'No play' : matchSummary(M), potm: M.potm, cond: condSummary(M), milestones: (M.milestones || []).slice() };
   fx.result.inns = M.innings.map(i => ({ bat: i.bat, bowl: i.bowl, runs: i.runs, balls: i.allOut ? mOvers(M) * 6 : i.balls }));
   if(M.superOvers?.length){fx.result.superOvers=M.superOvers;fx.result.tie=true;}
+  ledgerAddInternational(fx,M);
   if (M.home === 'AUS' || M.away === 'AUS' || /^(wc(semi|final)|global(semi|final))/.test(fx.stage)) game.scorecards[fx.id] = compactScorecard(M);
   if (!fx.result.noResult) {
     rankPair(M.home, M.away, fx.result.winner === M.home ? 1 : fx.result.winner ? 0 : 0.5, fmt);
@@ -6554,46 +6555,97 @@ function computeAwards() {
 
 // International season awards are scored from recorded scorecards only (not cumulative
 // career totals or ratings). Background fixtures without scorecards are excluded.
-function computeIntlSeasonAwards() {
-  const tracked = {};
-  let sampled = 0;
-  for (const fx of game.season.fixtures) {
-    if (!fx.result || !(fx.stage === 'intl' || fx.stage === 'world' || fx.stage === 'wtcfinal' || fx.comp === 'WC' || fx.event)) continue;
-    const card = game.scorecards[fx.id];
-    if (!card || !Array.isArray(card.innings) || !card.innings.length) continue;
-    sampled++;
-    const fmt = card.fmt;
-    if (!['FC','OD','T20'].includes(fmt)) continue;
-    const appearances = new Set();
-    for (const inn of card.innings) {
-      for (const b of (inn.card || [])) if (b.in && P(b.id)) {
-        appearances.add(b.id);
-        const r = tracked[b.id] || (tracked[b.id] = { id:b.id, m:0, runs:0, wickets:0, per:{} });
-        const f = r.per[fmt] || (r.per[fmt] = {m:0,runs:0,wickets:0});
-        r.runs += b.r || 0; f.runs += b.r || 0;
-      }
-      for (const b of (inn.bw || [])) if (P(b.id) && b.balls) {
-        appearances.add(b.id);
-        const r = tracked[b.id] || (tracked[b.id] = { id:b.id, m:0, runs:0, wickets:0, per:{} });
-        const f = r.per[fmt] || (r.per[fmt] = {m:0,runs:0,wickets:0});
-        r.wickets += b.w || 0; f.wickets += b.w || 0;
-      }
+// B145: Every played international contributes to a compact, save-friendly season
+// ledger. Detailed scorecards are still only retained for the GM's matches/finals.
+// This fixes the old Australian-only award sample without inflating browser storage.
+function intlSeasonLedger() {
+  if (!game.season.intlLedger || game.season.intlLedger.year !== game.year)
+    game.season.intlLedger={year:game.year,fixtures:{},players:{}};
+  return game.season.intlLedger;
+}
+function ledgerAddInternational(fx,match) {
+  if(!fx || !match || !['TEST','ODI','T20I','WC'].includes(fx.comp) && !COMPS[fx.comp]?.intl || !Array.isArray(match.innings))return false;
+  if(match.abandoned || match.result?.noResult || !match.innings.length)return false;
+  const ledger=intlSeasonLedger();
+  if(ledger.fixtures[fx.id])return false;
+  const fmt=match.fmt||COMPS[fx.comp].fmt;
+  if(!['FC','OD','T20'].includes(fmt))return false;
+  const played=new Set();
+  for(const ids of Object.values(match.xi||{}))if(Array.isArray(ids))for(const id of ids)if(P(id))played.add(id);
+  const entry=id=>{
+    if(!P(id))return null;
+    const x=ledger.players[id]||(ledger.players[id]={id,m:0,runs:0,wickets:0,per:{}});
+    const f=x.per[fmt]||(x.per[fmt]={m:0,inn:0,no:0,runs:0,wickets:0,rc:0,bb:0,c100:0});
+    return [x,f];
+  };
+  for(const inn of match.innings){
+    for(const b of inn.card||[]){
+      if(!b.in)continue;
+      const pair=entry(b.id);if(!pair)continue;
+      played.add(b.id);
+      const [x,f]=pair,r=Number(b.r)||0;
+      x.runs+=r;f.runs+=r;f.inn++;
+      if(!b.out)f.no++;
+      if(r>=100)f.c100++;
     }
-    for (const id of appearances) { const r = tracked[id]; r.m++; r.per[fmt] = r.per[fmt] || {m:0,runs:0,wickets:0}; r.per[fmt].m++; }
+    const bw=Array.isArray(inn.bw)?inn.bw:Object.entries(inn.bw||{}).map(([id,b])=>({id,...b}));
+    for(const b of bw){
+      const pair=entry(b.id);if(!pair)continue;
+      played.add(b.id);
+      const [x,f]=pair,w=Number(b.w)||0;
+      x.wickets+=w;f.wickets+=w;
+      f.rc+=Number(b.r)||0;f.bb+=Number(b.balls)||0;
+    }
   }
-  const rows = Object.values(tracked), eligible = rows.filter(x => x.m >= 2);
-  const best = (arr, fn) => arr.length ? arr.slice().sort((a,b) => fn(b) - fn(a))[0] : null;
-  const byFmt = f => eligible.filter(x => x.per[f] && x.per[f].m >= 2);
-  const impact = x => x.runs + x.wickets * 27;
-  const winners = { overall:best(eligible,impact),young:best(eligible.filter(x => P(x.id).age <= 23),impact),bat:best(eligible,x=>x.runs),bowl:best(eligible,x=>x.wickets) };
-  for (const f of ['FC','OD','T20']) winners[f] = best(byFmt(f),x=>x.per[f].runs+x.per[f].wickets*27);
-  const leaders = {};
-  for (const f of ['FC','OD','T20']) {
-    const relevant=rows.filter(x=>x.per[f] && x.per[f].m);
-    const r=best(relevant,x=>x.per[f].runs), w=best(relevant,x=>x.per[f].wickets);
-    leaders[f]={runs:r?{id:r.id,value:r.per[f].runs}:null,wickets:w?{id:w.id,value:w.per[f].wickets}:null};
+  for(const id of played){const pair=entry(id);if(pair){pair[0].m++;pair[1].m++;}}
+  ledger.fixtures[fx.id]=fmt;
+  return true;
+}
+// Older saves can contribute their actually retained scorecards to the new ledger.
+// Historical non-retained matches are deliberately not estimated or invented.
+function recoverIntlAwardLedger(){
+  if(!game?.season?.fixtures || !game.scorecards)return;
+  const ledger=intlSeasonLedger();
+  for(const f of game.season.fixtures){
+    if(!f.result || ledger.fixtures[f.id] || !COMPS[f.comp]?.intl)continue;
+    const card=game.scorecards[f.id];
+    if(card?.innings?.length)ledgerAddInternational(f,{...card,result:f.result,abandoned:!!f.result.noResult});
   }
-  return {year:game.year,sampled,winners:Object.fromEntries(Object.entries(winners).map(([k,v])=>[k,v?{id:v.id}:null])),leaders};
+}
+function computeIntlSeasonAwards() {
+  recoverIntlAwardLedger();
+  const ledger=intlSeasonLedger();
+  const rows=Object.values(ledger.players).filter(x=>P(x.id));
+  const best=(arr,score)=>arr.length?arr.slice().sort((a,b)=>score(b)-score(a)||String(a.id).localeCompare(String(b.id)))[0]:null;
+  const per=(x,f)=>x.per?.[f]||{m:0,inn:0,no:0,runs:0,wickets:0,rc:0,bb:0};
+  const eligible=rows.filter(x=>x.m>=2);
+  const battingImpact=x=>['FC','OD','T20'].reduce((n,f)=>{
+    const st=per(x,f),dismissals=Math.max(0,st.inn-st.no);
+    const avg=dismissals?st.runs/dismissals:st.runs;
+    return n+st.runs*(0.8+Math.min(0.35,avg/160));
+  },0);
+  const bowlImpact=x=>['FC','OD','T20'].reduce((n,f)=>{
+    const st=per(x,f),avg=st.wickets?st.rc/st.wickets:50;
+    return n+st.wickets*(f==='FC'?27:f==='OD'?25:22)*(1+Math.max(-0.18,Math.min(0.20,(30-avg)/130)));
+  },0);
+  const impact=x=>battingImpact(x)+bowlImpact(x);
+  const bestFmt=f=>best(eligible.filter(x=>per(x,f).m>=2),x=>{
+    const st=per(x,f),avg=st.wickets?st.rc/st.wickets:50;
+    return st.runs+st.wickets*(f==='FC'?27:f==='OD'?25:22)*(1+Math.max(-0.18,Math.min(0.2,(30-avg)/130)));
+  });
+  const winners={overall:best(eligible,impact),young:best(eligible.filter(x=>P(x.id).age<=23),impact),
+    bat:best(eligible,battingImpact),bowl:best(eligible,bowlImpact),
+    FC:bestFmt('FC'),OD:bestFmt('OD'),T20:bestFmt('T20')};
+  const leaders={};
+  for(const f of ['FC','OD','T20']){
+    const active=rows.filter(x=>per(x,f).m>0);
+    const runs=best(active,x=>per(x,f).runs),wickets=best(active,x=>per(x,f).wickets);
+    leaders[f]={runs:runs?{id:runs.id,value:per(runs,f).runs}:null,
+      wickets:wickets?{id:wickets.id,value:per(wickets,f).wickets}:null};
+  }
+  const scheduled=game.season.fixtures.filter(f=>COMPS[f.comp]?.intl&&f.result&&!f.result.noResult&&!String(f.result.text||'').includes('Not played')).length;
+  return {year:game.year,sampled:Object.keys(ledger.fixtures).length,scheduled,global:true,
+    winners:Object.fromEntries(Object.entries(winners).map(([k,v])=>[k,v?{id:v.id}:null])),leaders};
 }
 
 // §12 TRADES, CONTRACTS, FREE AGENCY ---------------------------------------------
@@ -8507,14 +8559,14 @@ function playerRow(p, o) {
 
 function intlSeasonAwardSections(a) {
   if (!a || !a.sampled) return [panel('International awards', '<div class="empty">No retained international match scorecards this season.</div>', {flush:true})];
-  const recipient=item=>item&&P(item.id)?`${nationTag(P(item.id).nat)} ${plink(P(item.id),pname(P(item.id)))}`:'<span class="dim">Insufficient data</span>';
+  const recipient=item=>item&&P(item.id)?`${nationTag(P(item.id).nat)} ${plink(P(item.id),pname(P(item.id)))}`:'<span class="dim">Not awarded</span>';
   const awardLabels=[['overall','International player of the year'],['FC','Test player of the year'],['OD','ODI player of the year'],['T20','T20I player of the year'],['young','Young international player'],['bat','International batter'],['bowl','International bowler']];
   const awards=awardLabels.map(([k,label])=>`<div class="kv"><span>${label}</span><span class="intl-award-recipient">${recipient(a.winners[k])}</span></div>`).join('');
   const leaders=['FC','OD','T20'].map(fmt=>[['runs','runs'],['wickets','wickets']].map(([k,label])=>{
     const item=a.leaders[fmt]&&a.leaders[fmt][k];
     return `<div class="kv"><span>${fmt==='FC'?'Test':fmt==='OD'?'ODI':'T20I'} ${label}</span><span class="intl-award-recipient">${recipient(item)}${item?' · '+item.value:''}</span></div>`;
   }).join('')).join('');
-  const note=`<div class="xs muted pb">Based on ${a.sampled} completed international scorecards retained this season. Awards require at least two recorded appearances; these are not necessarily world-wide season totals.</div>`;
+  const note=a.global?`<div class="xs muted pb">Based on ${a.sampled} international matches recorded across all nations this season.${a.scheduled>a.sampled?' '+(a.scheduled-a.sampled)+' earlier matches lacked recoverable scorecards.':''} Award eligibility requires two appearances.</div>`:`<div class="xs muted pb">Historical award based on ${a.sampled} retained international scorecards; not a complete global sample.</div>`;
   return [panel('International awards',`<div class="rows">${awards}</div>${note}`,{flush:true}),panel('International stat leaders',`<div class="rows">${leaders}</div>${note}`,{flush:true})];
 }
 // §18 OFF-SEASON ------------------------------------------------------------------
