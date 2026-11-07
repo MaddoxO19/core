@@ -934,6 +934,15 @@ body.live-mode .actbar{display:none}
 .cw-muted{font-size:15px;line-height:1.6;color:#a2afc0;margin:0 0 22px}.cw-slot .cw-muted{margin-bottom:22px}
 .cw-primary,.cw-secondary{display:block;background:#f5a43e;color:#15120c;border:0;border-radius:18px;min-height:64px;width:100%;font-weight:900;font-size:17px;cursor:pointer;padding:12px 18px}
 .cw-secondary{background:#1b222d;color:#f4f6fa;border:1px solid #344254}.cw-wide{margin-top:14px}.cw-delete{background:none;border:0;color:#a5adba;font-size:13px;margin-top:13px;cursor:pointer}
+.cw-compact-slot{padding:17px 18px 15px;margin-bottom:12px;border-radius:18px}
+.cw-compact-slot h3{font-size:21px;margin:7px 0 3px}
+.cw-compact-slot .cw-muted{font-size:13px;margin:0 0 13px;line-height:1.4}
+.cw-compact-slot .cw-kicker{font-size:10px}
+.cw-slot-actions{display:flex;align-items:center;gap:12px}
+.cw-slot-actions .cw-primary{flex:1;min-height:46px;border-radius:12px;font-size:14px;padding:10px}
+.cw-slot-actions .cw-delete{flex:0 0 auto;margin:0;padding:10px 6px;color:#b5bdc9;font-size:12px;min-height:46px}
+.cw-restore-foot{text-align:center;padding:10px 0 22px}
+.cw-restore-link{background:none;border:0;color:#9ba9ba;text-decoration:underline;text-underline-offset:3px;padding:12px;font-size:13px;cursor:pointer}
 .cw-footnote{text-align:center;color:#9da8b8;font-size:12px;margin:12px 0}
 .cw-label{font-size:12px;color:#aab5c5;font-weight:800;display:block;margin:18px 0 10px}.cw-input{display:block;width:100%;font-size:20px;border:1px solid #344254;border-radius:17px;background:#090f17;color:#fff;padding:16px;margin-bottom:20px;min-height:60px}
 .cw-teams{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:19px 0 24px}.cw-team{display:flex;gap:12px;align-items:center;text-align:left;background:#1b222d;border:1px solid #354254;border-radius:16px;color:#f4f6fa;padding:14px;min-height:86px;cursor:pointer;min-width:0}.cw-team.active{border:2px solid #f5a43e}.cw-team-symbol{width:45px;height:48px;border-radius:14px;border:2px solid;display:grid;place-items:center;font-weight:900;flex:none}.cw-team strong{display:block;font-size:14px}.cw-team small{display:block;margin-top:4px;font-size:11px;color:#9da8b8;line-height:1.35}.cw-check{margin-left:auto;color:#f5a43e}
@@ -1207,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.63 Build 140', title: 'Simple Career Saves and Backup Recovery', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.64 Build 141', title: 'Streamlined Career Browser', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -8093,9 +8102,9 @@ async function startCareer() {
 async function openLoadCareer() {
   const metas=await Store.list();
   const occupied=metas.map((g,k)=>({g,i:k+1})).filter(x=>x.g);
-  const cards=occupied.map(({g,i})=>`<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${esc(g.name)} · ${esc(teamName(g.team))}</h3><p class="cw-muted">${esc([g.label,g.saved?'Saved '+new Date(g.saved).toLocaleString('en-AU'):'Save time unknown'].filter(Boolean).join(' · '))}</p><button class="cw-primary" onclick="loadGame(${i})">Continue Career</button><details class="cw-muted" style="margin-top:12px"><summary style="cursor:pointer;padding:6px">Manage slot</summary><button class="cw-secondary cw-wide" onclick="exportSlotBackup(${i})">Download backup</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete career</button></details></section>`).join('');
-  const empty=occupied.length?cards:'<div class="cw-slot" style="text-align:center"><h3>No careers saved in this browser</h3><p class="cw-muted">Restore a JSON backup to continue your existing career.</p></div>';
-  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage unavailable. You can open a backup, but progress may not persist.</div>':''}<button class="cw-primary cw-wide" onclick="importSave()">Restore from JSON backup</button>${empty}`,'careerBackToMenu()');
+  const cards=occupied.map(({g,i})=>`<section class="cw-slot cw-compact-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${esc(g.name)} · ${esc(teamName(g.team))}</h3><p class="cw-muted">${esc([g.label,g.saved?'Saved '+new Date(g.saved).toLocaleString('en-AU'):'Save time unknown'].filter(Boolean).join(' · '))}</p><div class="cw-slot-actions"><button class="cw-primary" onclick="loadGame(${i})">Continue Career</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete Career</button></div></section>`).join('');
+  const empty=occupied.length?cards:'<div class="cw-slot cw-compact-slot" style="text-align:center"><h3>No careers saved in this browser</h3><p class="cw-muted">You can restore a previously exported career below.</p></div>';
+  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage is unavailable. A restored career may not be saved automatically.</div>':''}${empty}<div class="cw-restore-foot"><button class="cw-restore-link" onclick="importSave()">Restore from JSON backup</button></div>`,'careerBackToMenu()');
 }
 async function exportSlotBackup(i) {
   const raw=await Store.get(i);
@@ -8108,7 +8117,7 @@ function downloadCareerJson(str,filename) {
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
 }
 async function deleteSlot(i) {
-  if(!confirm(`Delete save slot ${i}? Export a JSON backup first if you want to keep this career.`))return;
+  if(!confirm(`Permanently delete career in slot ${i}? This cannot be undone unless you already have a separate backup.`))return;
   await Store.del(i);openLoadCareer();
 }
 function openMenu() {
