@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.64 Build 141', title: 'Streamlined Career Browser', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.65 Build 142', title: 'Simplified International Results', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4211,80 +4211,18 @@ function showPendingInternationalSeriesReview(){
   openInternationalSeriesReview(r.id);
   return true;
 }
-// Recaps are a single ordered handover: individual match, completed series,
-// then domestic matches handled by staff. Never allow the domestic summary
-// to obscure a pending series review.
+// B142: Individual international match results already use the normal result
+// and scorecard flow. Only completed SERIES reviews and delegated domestic
+// results generate subsequent popups. Drop legacy Build 137 pending recaps
+// from older career saves without replaying them after loading.
 function showPendingPostMatchReports(){
-  if(showPendingInternationalMatchRecap())return true;
-  if(showPendingInternationalSeriesReview())return true;
-  if(game?.awayLog?.length){showAwaySummary();return true;}
-  return false;
-}
-// Build 137 — every Australia international has an individually acknowledged
-// post-match recap. Series reviews are distinct and only appear after the
-// final match. Persist the queue so a missed popup survives a save/reload.
-function internationalMatchRecapQueue(){
-  if(!Array.isArray(game.pendingInternationalMatchRecaps)) game.pendingInternationalMatchRecaps=[];
-  return game.pendingInternationalMatchRecaps;
-}
-function queueInternationalMatchRecap(fx){
-  if(!game?.nation?.gm || !fx?.result || (fx.home!=='AUS' && fx.away!=='AUS')) return;
-  if(!['TEST','ODI','T20I','WC','CWC'].includes(fx.comp) && !fx.event) return;
-  const queue=internationalMatchRecapQueue();
-  if(!queue.some(x=>x.id===fx.id)) queue.push({id:fx.id,year:game.year});
-  if(queue.length>12)queue.splice(0,queue.length-12);
-}
-// Recover one recently completed Test when moving from an older build that
-// never queued individual recaps. Once per career, never replay an old season.
-function restoreRecentInternationalMatchRecap(){
-  if(!game || game.intlMatchRecapMigrationV>=1)return;
-  game.intlMatchRecapMigrationV=1;
-  if(!game.nation?.gm || !game.season?.fixtures)return;
-  const latest=game.season.fixtures.filter(f=>f.comp==='TEST' && f.result &&
-    (f.home==='AUS'||f.away==='AUS') && f.day<=game.day &&
-    game.day-f.day<=12).sort((a,b)=>b.day-a.day)[0];
-  if(latest)queueInternationalMatchRecap(latest);
-}
-function internationalMatchRecapHtml(fx){
-  const r=fx.result, sc=(game.scorecards||{})[fx.id];
-  const all=sc?.innings?.length ? sc.innings : (r.inns||[]);
-  const scores=all.map((inn,i)=>`<div class="kv"><span>${esc(teamName(inn.bat))} · Innings ${i+1}</span><b>${inn.runs}/${inn.wkts==null?'–':inn.wkts}${inn.declared?' dec':''}</b></div>`).join('');
-  const potm=r.potm&&P(r.potm)?`<div class="kv"><span>Player of the match</span><b>${esc(pname(P(r.potm)))}</b></div>`:'';
-  const seriesKey=seriesReviewKey(fx);
-  const fixtures=seriesKey?(game.season?.fixtures||[]).filter(f=>seriesReviewKey(f)===seriesKey):[];
-  const played=fixtures.filter(f=>f.result);
-  const wins=played.filter(f=>f.result.winner==='AUS').length;
-  const losses=played.filter(f=>f.result.winner && f.result.winner!=='AUS').length;
-  const draws=played.length-wins-losses;
-  const progress=fixtures.length>1?`<div class="note" style="margin-top:10px">Series: Australia ${wins}–${losses}${draws?` · ${draws} drawn`:''} · ${played.length} of ${fixtures.length} completed</div>`:'';
-  return `<div class="series-review-head"><div class="xs muted">${esc(fx.comp==='TEST'?'TEST MATCH':fx.comp==='ODI'?'ONE-DAY INTERNATIONAL':'T20 INTERNATIONAL')} · ${esc(fx.round||'')}</div><div class="series-review-nations">${esc(internationalTeamName(fx.home))} v ${esc(internationalTeamName(fx.away))}</div><div class="s" style="margin-top:8px"><b>${esc(displayInternationalSummary(r.text||r.summary||''))}</b></div></div><div class="panel" style="margin-top:12px"><div class="ph"><h3>Match result</h3></div><div class="rows">${scores}${potm}<div class="kv"><span>Summary</span><span style="text-align:right">${esc(displayMatchSummary(r.summary||r.text||''))}</span></div></div></div>${progress}`;
-}
-function showPendingInternationalMatchRecap(){
-  if(!game || document.querySelector('#modalRoot .sheet'))return false;
-  const q=internationalMatchRecapQueue();
-  while(q.length){
-    const item=q[0], fx=item.year===game.year?fixtureById(item.id):null;
-    if(!fx?.result){q.shift();continue;}
-    const foot=`${game.scorecards?.[fx.id]?`<button class="btn" onclick="showInternationalRecapScorecard('${fx.id}')">Scorecard</button>`:''}<button class="btn pri" onclick="dismissInternationalMatchRecap('${fx.id}')">Continue</button>`;
-    sheet('International match recap',fx.comp==='TEST'?'Test completed':'Match completed',internationalMatchRecapHtml(fx),{key:'intl-match-recap',foot});
-    return true;
+  if(!game)return false;
+  if(Array.isArray(game.pendingInternationalMatchRecaps) && game.pendingInternationalMatchRecaps.length){
+    game.pendingInternationalMatchRecaps=[];
   }
+  if(showPendingInternationalSeriesReview())return true;
+  if(game.awayLog?.length){showAwaySummary();return true;}
   return false;
-}
-function showInternationalRecapScorecard(id){
-  const S=game.scorecards?.[id];if(!S)return;
-  _scFx=id;
-  sheet('International scorecard',`${esc(teamName(S.home))} v ${esc(teamName(S.away))}`,scorecardHtml(S,0,'scInn',true),{wide:true,key:'intl-recap-scorecard',foot:`<button class="btn pri" onclick="closeModal();showPendingInternationalMatchRecap()">Back to recap</button>`});
-}
-function dismissInternationalMatchRecap(id){
-  const q=internationalMatchRecapQueue();
-  const i=q.findIndex(x=>x.id===id);if(i>=0)q.splice(i,1);
-  closeModal();autosave();
-  // The international result always comes before domestic staff results.
-  if(showPendingInternationalMatchRecap())return;
-  if(showPendingInternationalSeriesReview())return;
-  if(game.awayLog?.length){showAwaySummary();return;}
-  if(typeof showPendingWorldCupReview==='function')showPendingWorldCupReview();
 }
 // B131: recover a completed current-season review missed by a quick sim,
 // interrupted navigation or a save loaded after the final Test. Never
@@ -6133,7 +6071,6 @@ function applyIntlMatch(M) {
   if (fx.event==='ODIWC'||fx.event==='CT')recordODIWorldCupStats(M,fx.event);
   if (fx.event) updateGlobalTournament();
   recordInternationalSeriesReview(fx);
-  queueInternationalMatchRecap(fx);
   const potm = M.potm ? P(M.potm) : null;
   if (M.home === 'AUS' || M.away === 'AUS') addNews('National', `${fx.round}: ${fx.result.winner === 'AUS' ? 'Australia win' : fx.result.winner ? NATIONS[teamNat(fx.result.winner)] + ' win' : 'Drawn'}`, `${displayMatchSummary(fx.result.text)}. ${displayMatchSummary(fx.result.summary)}.${potm ? ' Player of the match: ' + pname(potm) + '.' : ''}`);
 }
@@ -6387,9 +6324,8 @@ function intlReason(fx) { const f = clashesWith(fx).find(x => x.stage === 'intl'
 // Main "Continue": sims forward to the next thing that needs the GM.
 function continueGame() {
   if (!game) return;
-  // B137: each completed international match is acknowledged before domestic
-  // delegation reports or the series-completion review.
-  // B138: match recap, full series recap, then delegated domestic results.
+  // B142: completed series review first, then delegated domestic results.
+  // Individual internationals use their normal match result/scorecard.
   if (showPendingPostMatchReports()) return;
   if (game.live) { go('live'); return; }
   if (game.phase !== 'season') { offseasonContinue(); return; }
@@ -8014,7 +7950,7 @@ function render() {
   tc.classList.add('hidden');
   tc.textContent = game.live ? 'Match ▸' : game.phase !== 'season' ? 'Next ▸' : game.pendingFx ? 'Match day ▸' : 'Continue ▸';
 }
-function enterApp() { reconcileInternationalSeriesReviews(); restoreRecentInternationalMatchRecap(); $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page==='home')setTimeout(()=>{if(showPendingPostMatchReports())return; if(showPendingWorldCupReview()||showPendingWorldCupPreview()||showPendingChampionsTrophyBrief())return; if(homeNotices().some(n=>!noticeDismissed(n)) && !$('modalRoot').innerHTML)attentionSheet();},250); }
+function enterApp() { reconcileInternationalSeriesReviews(); $('launch').classList.add('hidden'); $('app').classList.remove('hidden'); ui.page = game.live ? 'live' : 'home'; startAutosaveTicker(); render(); if(ui.page==='home')setTimeout(()=>{if(showPendingPostMatchReports())return; if(showPendingWorldCupReview()||showPendingWorldCupPreview()||showPendingChampionsTrophyBrief())return; if(homeNotices().some(n=>!noticeDismissed(n)) && !$('modalRoot').innerHTML)attentionSheet();},250); }
 
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
@@ -9587,7 +9523,6 @@ function quickSimUser() {
   setBusy(fx, M);
   game.pendingFx = null;
   autosave(); go('home');
-  if(showPendingInternationalMatchRecap())return;
   if (game.scorecards[fx.id]) showScorecard(fx.id, 0); else flash(M.result.text);
 }
 // Build 087: weather interruptions are acknowledged once; they never change the score.
