@@ -1216,7 +1216,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.65 Build 142', title: 'Simplified International Results', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.66 Build 143', title: 'Contract Manager Delegation and Series Results', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -3351,9 +3351,10 @@ const STAFF_ROLES = {
   bowl:    { label:'Bowling coach',       short:'Bowling',    desc:'Speeds up bowling development and sharpens plan execution.' },
   analyst: { label:'Performance analyst', short:'Analyst',    desc:'Builds bowling plans against each batter and learns opposition weaknesses faster.' },
   physio:  { label:'Physio',              short:'Physio',     desc:'Faster recovery between matches, fewer and shorter injuries.' },
-  scout:   { label:'Talent scout',        short:'Scout',      desc:'More accurate potential grades for prospects and free agents.' }
+  scout:   { label:'Talent scout',        short:'Scout',      desc:'More accurate potential grades for prospects and free agents.' },
+  contract:{ label:'Contract manager',    short:'Contracts',  desc:'Negotiates renewals under your delegation policy. Optional and available during existing careers.' }
 };
-const STAFF_ORDER = ['head','bat','bowl','analyst','physio','scout'];
+const STAFF_ORDER = ['head','bat','bowl','analyst','physio','scout','contract'];
 const COACH_STYLES = { aggressive:'Attacking', balanced:'Balanced', cautious:'Patient' }; // Preserve persisted style keys and their tactical lean.
 const STAFF_BUDGET = 1200000; // B123: separate staff budget for every domestic club.
 
@@ -3386,7 +3387,7 @@ function staffPayroll(teamId) { return staffOf(teamId).reduce((a, s) => a + s.sa
 function staffMarket() { return Object.values(game.staff || {}).filter(s => !s.teamId); }
 function ensureStaff() {
   game.staff = game.staff || {};
-  TEAM_DEFS.forEach(t => STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) makeStaff(r, 58 + STAFF_SHIFT + randInt(-8, 10), t.id); }));
+  TEAM_DEFS.forEach(t => STAFF_ORDER.filter(r=>r!=='contract').forEach(r => { if (!staffIn(t.id, r)) makeStaff(r, 58 + STAFF_SHIFT + randInt(-8, 10), t.id); }));
   ensureNationCoach();
   // National squads do not develop like domestic players, so re-level them once a year.
   Object.keys(NATION_STRENGTH).forEach(n => { ensureIntlSquad(n); normaliseIntlSquad(n); });
@@ -3452,7 +3453,7 @@ function staffOffseason() {
     if (rand() < 0.75 && s.age < 66) { s.salary = staffAsk(s); s.years = randInt(1, 3); } else s.teamId = null;
   });
   Object.values(game.staff).filter(s => !s.teamId && s.age >= 68).forEach(s => delete game.staff[s.id]);
-  TEAM_DEFS.forEach(t => { if (t.id === U()) return; STAFF_ORDER.forEach(r => { if (!staffIn(t.id, r)) { const c = staffMarket().filter(s => s.role === r).sort((a, b) => b.rating - a.rating)[randInt(0, 1)]; if (c) { c.teamId = t.id; c.years = randInt(1, 3); } else makeStaff(r, 58 + STAFF_SHIFT, t.id); } }); });
+  TEAM_DEFS.forEach(t => { if (t.id === U()) return; STAFF_ORDER.filter(r=>r!=='contract').forEach(r => { if (!staffIn(t.id, r)) { const c = staffMarket().filter(s => s.role === r).sort((a, b) => b.rating - a.rating)[randInt(0, 1)]; if (c) { c.teamId = t.id; c.years = randInt(1, 3); } else makeStaff(r, 58 + STAFF_SHIFT, t.id); } }); });
   ensureNationCoach();
   // National squads do not develop like domestic players, so re-level them once a year.
   Object.keys(NATION_STRENGTH).forEach(n => { ensureIntlSquad(n); normaliseIntlSquad(n); });
@@ -4185,12 +4186,13 @@ function recordInternationalSeriesReview(fx) {
 }
 function seriesReviewHtml(r) {
   const fmt=r.fmt==='TEST'?'Test':r.fmt==='ODI'?'ODI':'T20I';
+  const outcomeBadge=m=>{const status=m.noResult?'A':m.draw||m.tie?'D':m.winner==='AUS'?'W':m.winner?'L':'A';const color=status==='W'?'win':status==='L'?'loss':status==='A'?'warn':'muted';return `<span class="tag ${color}" style="font-weight:800;margin-left:8px;flex-shrink:0">${status}</span>`;};
   const score=`${r.hw}–${r.aw}`;
   const headline=r.winner?`${internationalTeamName(r.winner)} win the series`:'Series drawn';
   const pos=r.playerOfSeries;
   const f=n=>Number.isFinite(n)?n.toFixed(2):'–';
   const leaderboard=(rows,type)=>rows.length?rows.map((p,i)=>`<div class="kv"><span><b>${i+1}.</b> <span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> <span class="xs dim">${esc(p.nat)}</span></span><span><b>${type==='bat'?p.runs+' runs':p.wickets+' wkts'}</b><span class="xs dim"> · avg ${f(type==='bat'?p.batAverage:p.bowlAverage)}</span></span></div>`).join(''):'<div class="xs muted">No scorecard statistics retained.</div>';
-  return `<div class="series-review-head"><div class="xs muted">${esc(fmt)} SERIES · ${r.total} MATCH${r.total===1?'':'ES'}</div><div class="series-review-nations">${esc(internationalTeamName(r.home))} v ${esc(internationalTeamName(r.away))}</div><div class="series-review-score">${score}</div><div class="s"><b>${esc(headline)}</b></div>${r.draws||r.noResults?`<div class="xs muted">${r.draws?`${r.draws} drawn`:''}${r.draws&&r.noResults?' · ':''}${r.noResults?`${r.noResults} no result`:''}</div>`:''}</div><div class="series-review-star"><div class="xs muted">PLAYER OF THE SERIES</div>${pos?`<div class="series-review-name link" onclick="closeModal();showPlayer('${pos.id}')">${esc(pos.name)}</div><div class="xs muted">${esc(pos.nat)} · ${pos.runs} runs · ${pos.wickets} wickets</div>`:'<div class="s muted">Not awarded · insufficient saved scorecards</div>'}</div><div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${leaderboard(r.batting||[],'bat')}</div></div><div class="panel"><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${leaderboard(r.bowling||[],'bowl')}</div></div>${r.covered<r.total?`<div class="xs muted" style="margin-top:8px">Statistics cover ${r.covered} of ${r.total} match scorecards; missing data are not estimated.</div>`:''}${r.matches?.length?`<div class="panel" style="margin-top:12px"><div class="ph"><h3>Match-by-match results</h3></div><div class="rows">${r.matches.map(m=>`<div class="row"><div class="stack"><div class="main-t">${esc(fmt)} ${m.number} · ${esc(internationalTeamName(m.home))} v ${esc(internationalTeamName(m.away))}</div><div class="sub-t" style="white-space:normal">${esc(displayMatchSummary(m.summary|| (m.winner?internationalTeamName(m.winner)+' won':m.noResult?'No result':'Drawn')))}</div></div></div>`).join('')}</div></div>`:''}`;
+  return `<div class="series-review-head"><div class="xs muted">${esc(fmt)} SERIES · ${r.total} MATCH${r.total===1?'':'ES'}</div><div class="series-review-nations">${esc(internationalTeamName(r.home))} v ${esc(internationalTeamName(r.away))}</div><div class="series-review-score">${score}</div><div class="s"><b>${esc(headline)}</b></div>${r.draws||r.noResults?`<div class="xs muted">${r.draws?`${r.draws} drawn`:''}${r.draws&&r.noResults?' · ':''}${r.noResults?`${r.noResults} no result`:''}</div>`:''}</div><div class="series-review-star"><div class="xs muted">PLAYER OF THE SERIES</div>${pos?`<div class="series-review-name link" onclick="closeModal();showPlayer('${pos.id}')">${esc(pos.name)}</div><div class="xs muted">${esc(pos.nat)} · ${pos.runs} runs · ${pos.wickets} wickets</div>`:'<div class="s muted">Not awarded · insufficient saved scorecards</div>'}</div><div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Top three batters</h3></div><div class="rows">${leaderboard(r.batting||[],'bat')}</div></div><div class="panel"><div class="ph"><h3>Top three bowlers</h3></div><div class="rows">${leaderboard(r.bowling||[],'bowl')}</div></div>${r.covered<r.total?`<div class="xs muted" style="margin-top:8px">Statistics cover ${r.covered} of ${r.total} match scorecards; missing data are not estimated.</div>`:''}${r.matches?.length?`<div class="panel" style="margin-top:12px"><div class="ph"><h3>Match-by-match results</h3></div><div class="rows">${r.matches.map(m=>`<div class="row"><div class="stack"><div class="main-t">${esc(fmt)} ${m.number} · ${esc(internationalTeamName(m.home))} v ${esc(internationalTeamName(m.away))}</div><div class="sub-t" style="white-space:normal">${esc(displayMatchSummary(m.summary|| (m.winner?internationalTeamName(m.winner)+' won':m.noResult?'No result':'Drawn')))}</div></div><div class="end">${outcomeBadge(m)}</div></div>`).join('')}</div></div>`:''}`;
 }
 function openInternationalSeriesReview(id) {
   const r=ensureSeriesReviewStore().find(x=>x.id===id);if(!r)return;
@@ -5924,7 +5926,7 @@ function createGame(gmName, teamId, year, nationGm, rosterMode) {
     defaultPlan: { FC: Object.assign({}, DEFAULT_PLAN), OD: Object.assign({}, DEFAULT_PLAN), T20: Object.assign({}, DEFAULT_PLAN) },
     board: { confidence: 60, objectives: [] },
     history: [], live: null, pendingFx: null, offseason: null, rng: 0, staff: {}, nextSid: 1, scaleV: SCALE_VERSION, realCareersV: REAL_CAREERS_VERSION,
-    philosophy: { FC:'balanced', OD:'balanced', T20:'balanced' }, coachRel: 60, matchOverride: null, clashMode: 'intl',
+    contractManager: { mode:'manual', doNotRenew:[] }, philosophy: { FC:'balanced', OD:'balanced', T20:'balanced' }, coachRel: 60, matchOverride: null, clashMode: 'intl',
     nation: { gm: !!nationGm, conf: 60, rankings: null, history: [] }
   };
   game.nation.rankings = initRankings();
@@ -7120,6 +7122,78 @@ function runDevelopment() {
   const mine = rep.retired.filter(r => r.mine).map(r => pname(P(r.id)));
   addNews('League', `${rep.retired.length} players retire`, mine.length ? `From your squad: ${mine.join(', ')}.` : 'None from your squad.');
 }
+// B143 — Optional, save-compatible Contract Manager. No manager is hired automatically.
+function contractManagerState(){
+  if(!game.contractManager||typeof game.contractManager!=='object') game.contractManager={mode:'manual',doNotRenew:[]};
+  if(!['manual','assisted','automatic'].includes(game.contractManager.mode))game.contractManager.mode='manual';
+  if(!Array.isArray(game.contractManager.doNotRenew))game.contractManager.doNotRenew=[];
+  return game.contractManager;
+}
+function contractManagerMode(){return contractManagerState().mode;}
+function isDoNotRenew(id){return contractManagerState().doNotRenew.includes(id);}
+function toggleDoNotRenew(id){
+  const p=P(id);if(!p||p.teamId!==U())return;
+  const state=contractManagerState(), i=state.doNotRenew.indexOf(id);
+  if(i>=0)state.doNotRenew.splice(i,1);else state.doNotRenew.push(id);
+  autosave();render();flash(i>=0?'Player eligible for renewal.':'Marked: do not renew.');
+}
+function setContractManagerMode(mode){
+  if(!['manual','assisted','automatic'].includes(mode))return;
+  contractManagerState().mode=mode;
+  if(game.phase==='contracts')runContractManagerRenewals();
+  autosave();render();
+  if(!staffIn(U(),'contract')&&mode!=='manual')flash('Hire a Contract Manager under Office → Staff to activate delegation.');
+}
+function contractManagerSettingsPanel(){
+  const mode=contractManagerMode(),manager=staffIn(U(),'contract');
+  const choices=[['manual','Manual'],['assisted','Assisted'],['automatic','Automatic']];
+  return panel('Contract Manager',`<div class="flex wrap" style="gap:7px">${choices.map(([id,label])=>`<button class="btn sm ${mode===id?'pri':''}" onclick="setContractManagerMode('${id}')">${label}</button>`).join('')}</div><div class="xs muted" style="margin-top:8px">${manager?`${esc(manager.first+' '+manager.last)} · rated ${manager.rating}. `:'No manager appointed. Hire one under Office → Staff. '}${mode==='manual'?'You control all negotiations.':mode==='assisted'?'Your manager recommends renewal terms; you approve each agreement.':'Your manager completes affordable renewals; exceptions remain for your decision.'} Existing contracts are not reset.</div>${!manager&&mode!=='manual'?'<button class="btn sm" style="margin-top:9px" onclick="staffMarketSheet(&quot;contract&quot;)">Hire Contract Manager</button>':''}`);
+}
+function contractManagerOffer(e){
+  const p=P(e.id),manager=staffIn(U(),'contract');if(!p||!manager||isDoNotRenew(p.id)||p.wantsOut||negotiationSuspension(p))return null;
+  // A good negotiator narrows salary expectations, never promises a free or below-floor deal.
+  const saving=Math.max(0,Math.min(0.035,(manager.rating-55)*0.00075));
+  const salary=Math.max(MIN_SALARY,Math.round(e.ask*(1-saving)/5000)*5000);
+  const years=Math.max(1,Math.min(4,e.years||prefYears(p)));
+  return {salary,years};
+}
+function approveContractManagerOffer(id){
+  const e=game.offseason?.expiring?.find(x=>x.id===id),p=P(id);
+  if(!e||!p||e.status!=='pending'||!e.managerOffer)return;
+  if(isDoNotRenew(id)||p.wantsOut){flash('Player is excluded from delegated renewal.');return;}
+  const offer=e.managerOffer;
+  const committed=payroll(U())-(p.contract?.salary||0);
+  if(committed+offer.salary>SALARY_CAP){flash('Not enough salary cap space. Negotiate manually.');return;}
+  p.contract={salary:offer.salary,years:offer.years};e.status='signed';e.managerOffer=null;
+  p.negBreakdown=null;p.noTalksUntil=null;
+  logTx(`Contract Manager renewed ${pname(p)} (${money(offer.salary)} × ${offer.years} yr).`);
+  autosave();render();flash('Renewal approved.');
+}
+function runContractManagerRenewals(){
+  const o=game.offseason,mode=contractManagerMode(),manager=staffIn(U(),'contract');
+  if(!o||!Array.isArray(o.expiring)||mode==='manual'||!manager)return;
+  const candidates=o.expiring.filter(e=>e.status==='pending').sort((a,b)=>{
+    const pa=P(a.id),pb=P(b.id);return (pb?peakOvr(pb):0)-(pa?peakOvr(pa):0);
+  });
+  let signed=0,proposed=0;
+  for(const e of candidates){
+    if(isDoNotRenew(e.id)||P(e.id)?.wantsOut)continue;
+    const offer=e.managerOffer||contractManagerOffer(e);if(!offer)continue;
+    const p=P(e.id);
+    const other=payroll(U())-(p.contract?.salary||0);
+    if(other+offer.salary>SALARY_CAP)continue;
+    if(mode==='assisted'){e.managerOffer=offer;proposed++;continue;}
+    // Preserve budget headroom for the minimum number of required squad places.
+    const remaining=o.expiring.filter(x=>x.status==='pending'&&x.id!==e.id).length;
+    const futureSlots=Math.max(0,SQUAD_MIN-(squadOf(U()).length-remaining));
+    if(other+offer.salary+futureSlots*MIN_SALARY>SALARY_CAP)continue;
+    p.contract={salary:offer.salary,years:offer.years};e.status='signed';e.managerOffer=null;
+    p.negBreakdown=null;p.noTalksUntil=null;
+    logTx(`Contract Manager renewed ${pname(p)} (${money(offer.salary)} × ${offer.years} yr).`);
+    signed++;
+  }
+  if(signed||proposed)addNews('Contracts','Contract Manager update',`${signed} renewal${signed===1?'':'s'} completed; ${proposed} offer${proposed===1?'':'s'} awaiting approval. Unresolved players remain under your control.`);
+}
 function processContracts() {
   const expiring = [];
   Object.values(game.players).forEach(p => {
@@ -7242,7 +7316,7 @@ function offseasonContinue() {
       if (game.gm.fired) { flash('Choose your next job first.'); return; }
       coachPlanTraining(true); runDevelopment(); game.phase = 'development'; break;
     case 'development':
-      processContracts(); staffOffseason(); game.phase = 'contracts'; break;
+      processContracts(); staffOffseason(); game.phase = 'contracts'; runContractManagerRenewals(); break;
     case 'contracts':
       if ((game.offseason.expiring || []).some(e => e.status === 'pending')) { flash('Resolve every expiring player contract before continuing.'); return; }
       if ((game.offseason.expiringStaff || []).some(e => e.status === 'pending')) { flash('Resolve expiring staff contracts before continuing.'); return; }
@@ -7955,7 +8029,7 @@ function enterApp() { reconcileInternationalSeriesReviews(); $('launch').classLi
 // §16 LAUNCH, MENU, HELP -----------------------------------------------------------
 // Build 085: full-page Basketball-aligned career flow; existing save keys and data remain intact.
 const CAREER_STEPS = ['Create Your GM','Choose Your Team','National Team','Career Settings'];
-const careerDraft = { slot:1, name:'', team:'NSW', nation:false, mode:'fictional', editor:false, cap:true, injuries:true };
+const careerDraft = { slot:1, name:'', team:'NSW', nation:false, mode:'fictional', editor:false, cap:true, injuries:true, contractManager:'manual' };
 let careerLaunchOriginal = null;
 function ensureCareerLaunchOriginal() { if (careerLaunchOriginal == null) careerLaunchOriginal = $('launch').innerHTML; }
 function careerBackToMenu() {
@@ -8008,7 +8082,7 @@ function careerChooseNation() {
   careerScreen('National Team',2,`<section class="cw-card"><div class="cw-kicker">NATIONAL TEAM MANAGEMENT</div>${careerStepHeader('Manage Australia?','Manage the Australian national team alongside your state career. Select squads and compete in international series and tournaments.')}<button class="cw-primary" onclick="careerDraft.nation=true;careerSettings()">Manage Australia</button><button class="cw-secondary cw-wide" onclick="careerDraft.nation=false;careerSettings()">Not Now · Available Later in Intl</button></section>`,'careerChooseTeam()');
 }
 function careerSettings() {
-  careerScreen('Career Settings',3,`<section class="cw-card">${careerStepHeader('Set up your career','Choose your player database and optional editing tools.')}<div class="cw-setting"><div><strong>Player Database</strong><small>Authentic names or a fictional cricket world.</small></div><select id="cw-mode" onchange="careerDraft.mode=this.value;document.getElementById('cw-mode-summary').textContent=this.value==='authentic'?'Authentic':'Fictional'"><option value="fictional" ${careerDraft.mode==='fictional'?'selected':''}>Fictional World</option><option value="authentic" ${careerDraft.mode==='authentic'?'selected':''}>Authentic World</option></select></div><div class="cw-setting"><div><strong>Commissioner Tools</strong><small>Allow player editing, player creation and team renaming. Edited careers are marked accordingly. You can also enable these tools later from Career.</small></div><label class="cw-toggle"><input type="checkbox" id="cw-editor" ${careerDraft.editor?'checked':''} onchange="careerDraft.editor=this.checked"><span>Enable editor</span></label></div><div class="cw-summary"><div class="cw-kicker">CAREER SUMMARY</div><h3>${esc(careerDraft.name || 'FitzO')}</h3><p>${esc(teamName(careerDraft.team))} · ${careerDraft.nation?'Australia National Team GM':'Domestic GM'}</p><div class="cw-summary-grid"><span><b>Slot ${careerDraft.slot}</b><small>Save slot</small></span><span><b id="cw-mode-summary">${careerDraft.mode==='authentic'?'Authentic':'Fictional'}</b><small>World</small></span><span><b>${careerDraft.nation?'Yes':'No'}</b><small>Australia</small></span></div></div><button class="cw-primary" onclick="startCareer()">Start Career</button></section>`,'careerChooseNation()');
+  careerScreen('Career Settings',3,`<section class="cw-card">${careerStepHeader('Set up your career','Choose your player database and optional editing tools.')}<div class="cw-setting"><div><strong>Player Database</strong><small>Authentic names or a fictional cricket world.</small></div><select id="cw-mode" onchange="careerDraft.mode=this.value;document.getElementById('cw-mode-summary').textContent=this.value==='authentic'?'Authentic':'Fictional'"><option value="fictional" ${careerDraft.mode==='fictional'?'selected':''}>Fictional World</option><option value="authentic" ${careerDraft.mode==='authentic'?'selected':''}>Authentic World</option></select></div><div class="cw-setting"><div><strong>Commissioner Tools</strong><small>Allow player editing, player creation and team renaming. Edited careers are marked accordingly. You can also enable these tools later from Career.</small></div><label class="cw-toggle"><input type="checkbox" id="cw-editor" ${careerDraft.editor?'checked':''} onchange="careerDraft.editor=this.checked"><span>Enable editor</span></label></div><div class="cw-setting"><div><strong>Contract Manager</strong><small>Optional. Can be changed during any career; hire a manager under Office Staff to delegate negotiations.</small></div><select onchange="careerDraft.contractManager=this.value"><option value="manual" ${careerDraft.contractManager==='manual'?'selected':''}>Manual</option><option value="assisted" ${careerDraft.contractManager==='assisted'?'selected':''}>Assisted</option><option value="automatic" ${careerDraft.contractManager==='automatic'?'selected':''}>Automatic</option></select></div><div class="cw-summary"><div class="cw-kicker">CAREER SUMMARY</div><h3>${esc(careerDraft.name || 'FitzO')}</h3><p>${esc(teamName(careerDraft.team))} · ${careerDraft.nation?'Australia National Team GM':'Domestic GM'}</p><div class="cw-summary-grid"><span><b>Slot ${careerDraft.slot}</b><small>Save slot</small></span><span><b id="cw-mode-summary">${careerDraft.mode==='authentic'?'Authentic':'Fictional'}</b><small>World</small></span><span><b>${careerDraft.nation?'Yes':'No'}</b><small>Australia</small></span></div></div><button class="cw-primary" onclick="startCareer()">Start Career</button></section>`,'careerChooseNation()');
 }
 let _careerStarting=false;
 async function startCareer() {
@@ -8019,6 +8093,7 @@ async function startCareer() {
     if (metas[careerDraft.slot-1]) { flash('Slot occupied. Return and choose an empty slot.'); return; }
     createGame(careerDraft.name || 'FitzO',careerDraft.team,2026,careerDraft.nation,careerDraft.mode);
     game.meta.slot=careerDraft.slot;
+    game.contractManager.mode=careerDraft.contractManager||'manual';
     if (careerDraft.editor) { game.editor = true; game.edited = true; }
     const ok=await saveGame(careerDraft.slot,false);
     const checked=await verifiedCareerSnapshot(careerDraft.slot,Number(game.meta.saveRevision)||0,String(game.meta.created||''));
@@ -8066,6 +8141,8 @@ function openMenu() {
     <div class="kv"><span>Save slot · build</span><span>${game.meta.slot} · ${BUILD.version}</span></div>
     <div class="kv"><span>Storage</span><span class="${Store.status === 'none' ? 'loss' : 'win'}">${Store.status === 'none' ? 'Not being kept by this browser' : (Store.idbOk ? 'Browser database' : 'Browser storage') + (Store.lastSaved ? ' · saved ' + Store.lastSaved.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' }) : '')}</span></div></div>
     ${Store.status === 'none' ? '<div class="pb"><div class="note bad">This browser is not keeping saves (private browsing, or opened from a file preview). Export your career to a file and import it next time, or open the game in Safari or Chrome directly.</div></div>' : ''}
+    <div class="kv"><span>Contract Manager</span><span><select onchange="setContractManagerMode(this.value)"><option value="manual" ${contractManagerMode()==='manual'?'selected':''}>Manual</option><option value="assisted" ${contractManagerMode()==='assisted'?'selected':''}>Assisted</option><option value="automatic" ${contractManagerMode()==='automatic'?'selected':''}>Automatic</option></select></span></div>
+    <div class="xs muted" style="padding:0 12px 12px">Delegation requires an appointed Contract Manager in Office → Staff. You can change this at any time.</div>
     <div class="kv"><span>Editor mode</span><span><span class="switch ${game.editor ? 'on' : ''}" onclick="game.editor=!game.editor;if(game.editor)game.edited=true;autosave();openMenu()"><i></i>${game.editor ? 'On' : 'Off'}</span></span></div>
     ${game.editor ? '<div class="pb" style="padding-bottom:0"><div class="xs muted">Edit any player from their profile, create players from League · Players, and rename teams below. Careers that use the editor are marked as edited.</div><button class="btn sm" style="margin-top:6px" onclick="editTeamsSheet()">Edit teams</button></div>' : ''}
     <div class="pb"><button class="btn block" onclick="closeModal();ui.officeTab='saves';go('office')">Open Save Centre</button></div>
@@ -8168,7 +8245,7 @@ function homeNotices() {
   if (game.nation.gm && game.season.windows.some(w=>w.selecting)) add('national', 'Australia squad selection', 'Select the national squad for the upcoming window.', true, 'national');
   const myFinal = game.season.fixtures.find(f => isFinalFx(f) && !f.result && (f.home===U() || f.away===U()));
   if (myFinal) add('final', `${COMPS[myFinal.comp].short} final coming up`, `v ${teamDef(myFinal.home===U()?myFinal.away:myFinal.home).nick} · ${dateStr(myFinal.day)}`, true, `final:${myFinal.comp}`, myFinal.id);
-  const vacant = STAFF_ORDER.filter(r=>!staffIn(U(),r));
+  const vacant = STAFF_ORDER.filter(r=>r!=='contract'&&!staffIn(U(),r));
   if (vacant.length) add('staff', `${vacant.length} staff vacanc${vacant.length===1?'y':'ies'}`, 'Review club staffing.', true, 'staff', vacant.length);
   if (sq.length < SQUAD_MIN) add('short', `Squad short: ${sq.length}/${SQUAD_MIN}`, 'Review free agents and squad depth.', true, 'short', sq.length);
   const canUp = affordableUpgrades();
@@ -8437,8 +8514,8 @@ function renderOffseason() {
       <div class="kv"><span>Budget after minimum reserve</span><b>${money(forecast.discretionary)}</b></div>
       <div class="kv"><span>Pending renewal requests</span><b>${money(forecast.asks)}</b></div>
       </div><div class="pb xs muted">Forecast assumes unresolved contracts expire. Re-signing a player replaces their existing salary; it does not add the full request to current payroll. The squad reserve is guidance, not a forced signing decision.</div>`,{flush:true});
-    body = budgetPanel + '<div style="height:8px"></div>' + panel(`Expiring contracts · cap space ${money(capSpace(U()))}`, `<div class="rows">${ex.map(e => { const p = P(e.id); return playerRow(p, { sub: `${ROLES[p.role].short} · ${p.age} · asks ${money(e.ask)} × ${e.years} · current ${money(p.contract?.salary||0)}`,
-      end: e.status === 'pending' ? `${pill(peakOvr(p))}<button class="btn sm pri" onclick="event.stopPropagation();negotiate('${e.id}','resign')">Negotiate</button><button class="btn sm ghost" onclick="event.stopPropagation();letGoExpiring('${e.id}');render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving') }); }).join('') || '<div class="empty">No contracts expire this year.</div>'}</div>
+    body = budgetPanel + contractManagerSettingsPanel() + '<div style="height:8px"></div>' + panel(`Expiring contracts · cap space ${money(capSpace(U()))}`, `<div class="rows">${ex.map(e => { const p = P(e.id); return playerRow(p, { sub: `${ROLES[p.role].short} · ${p.age} · asks ${money(e.ask)} × ${e.years} · current ${money(p.contract?.salary||0)}`,
+      end: e.status === 'pending' ? `${pill(peakOvr(p))}${contractManagerMode()==='assisted' && e.managerOffer ? `<button class="btn sm pri" onclick="event.stopPropagation();approveContractManagerOffer('${e.id}')">Approve ${money(e.managerOffer.salary)}</button>` : ''}<button class="btn sm pri" onclick="event.stopPropagation();negotiate('${e.id}','resign')">Negotiate</button><button class="btn sm ghost" onclick="event.stopPropagation();letGoExpiring('${e.id}');render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving') }); }).join('') || '<div class="empty">No contracts expire this year.</div>'}</div>
       <div class="pb"><div class="note">Settle every pending decision first. Players marked Leaving go to free agency.</div></div>`, { flush: true }) +
       ((o.expiringStaff || []).length ? '<div style="height:8px"></div>' + panel('Expiring staff contracts', `<div class="rows">${o.expiringStaff.map(e => { const st = game.staff[e.id]; return `<div class="row"><div class="stack"><div class="main-t">${esc(st.first + ' ' + st.last)}</div><div class="sub-t">${STAFF_ROLES[st.role].label} · asks ${money(e.ask)} × 2</div></div><div class="end">${pill(st.rating)}${e.status === 'pending' ? `<button class="btn sm pri" onclick="resignStaff('${e.id}');render()">Re-sign</button><button class="btn sm ghost" onclick="(game.offseason.expiringStaff.find(x=>x.id==='${e.id}')||{}).status='released';render()">Let go</button>` : chip(e.status === 'signed' ? 'good' : 'bad', e.status === 'signed' ? 'Re-signed' : 'Leaving')}</div></div>`; }).join('')}</div>`, { flush: true }) : '');
     btn = 'Rookie draft ▸';
@@ -8580,10 +8657,10 @@ function renderContracts() {
   const requests = squadOf(U()).filter(p => p.wantsOut).length;
   const tools = `<div class="flex wrap" style="gap:6px;margin-bottom:8px">${sel(GROUP_OPTS, ui.conGroup || 'ALL', "ui.conGroup=this.value;render()")}${sel([['sal','Salary'],['yrs','Years left'],['val','Value vs pay'],['ovr','Rating'],['age','Age']], key, "ui.conSort=this.value;render()")}<span class="grow"></span>${expiring ? `<span class="xs muted">${expiring} expiring</span>` : ''}</div>`;
   return `<div class="kpis" style="grid-template-columns:repeat(4,1fr)"><div class="kpi"><div class="v">${money(payroll(U()))}</div><div class="l">Payroll</div></div><div class="kpi"><div class="v">${money(capSpace(U()))}</div><div class="l">Cap space</div></div><div class="kpi"><div class="v">${money(game.deadMoney)}</div><div class="l">Dead money</div></div><div class="kpi"><div class="v">${overseasCount(U())}/${OVERSEAS_MAX}</div><div class="l">Overseas</div></div></div><div style="height:8px"></div>
-    ${(expiring || requests) ? panel('GM decisions', `<div class="rows"><div class="kv"><span>Expiring this season</span><span class="${expiring?'loss':''}">${expiring}</span></div><div class="kv"><span>Transfer requests</span><span class="${requests?'loss':''}">${requests}</span></div></div><div class="pb xs muted">Renewals happen in the off-season.</div>`, {flush:true}) : ''}${tools}${panel('Contracts', `<div class="rows">${sq.map(p => { const ask = askingSalary(p), exp = p.contract.years <= 1; return `<div class="row tap con" onclick="showPlayer('${p.id}')">
+    ${contractManagerSettingsPanel()}${(expiring || requests) ? panel('GM decisions', `<div class="rows"><div class="kv"><span>Expiring this season</span><span class="${expiring?'loss':''}">${expiring}</span></div><div class="kv"><span>Transfer requests</span><span class="${requests?'loss':''}">${requests}</span></div></div><div class="pb xs muted">Renewals happen in the off-season.</div>`, {flush:true}) : ''}${tools}${panel('Contracts', `<div class="rows">${sq.map(p => { const ask = askingSalary(p), exp = p.contract.years <= 1; return `<div class="row tap con" onclick="showPlayer('${p.id}')">
       <div class="stack"><div class="main-t ell">${esc(pname(p))}${p.id === game.captain ? ' <span class="dim xs">(c)</span>' : ''}${p.nat !== 'AUS' ? ` <span class="dim xs">${p.nat}</span>` : ''}</div>
         <div class="sub-t ell">${identityLine(p)}</div>
-        <div class="sub-t ell">${money(p.contract.salary)} × ${p.contract.years} yr · value <span class="${ask > p.contract.salary * 1.15 ? 'win' : ask < p.contract.salary * 0.8 ? 'loss' : ''}">${money(ask)}</span></div></div>
+        <div class="sub-t ell">${isDoNotRenew(p.id)?'<span class="loss">Do not renew · </span>':''}${money(p.contract.salary)} × ${p.contract.years} yr · value <span class="${ask > p.contract.salary * 1.15 ? 'win' : ask < p.contract.salary * 0.8 ? 'loss' : ''}">${money(ask)}</span></div></div>
       <div class="end">${p.wantsOut ? '<span class="tag bad">Wants out</span>' : (exp ? '<span class="tag warn">Expiring</span>' : '')}${pill(peakOvr(p))}<button class="btn icon sm ghost" aria-label="Contract actions" onclick="event.stopPropagation();contractMenu('${p.id}')">⋯</button></div></div>`; }).join('') || '<div class="empty">No players in this group.</div>'}</div>`, { flush: true })}
     `;
 }
@@ -8595,6 +8672,7 @@ function contractMenu(id) {
     <div class="row tap" onclick="closeModal();showPlayer('${id}')"><div class="grow">View profile</div><span class="dim">›</span></div>
     ${p.wantsOut ? `<div class="row tap" onclick="closeModal();talkSheet('${id}')"><div class="grow">Handle transfer request</div><span class="dim">›</span></div>` : ''}
     ${canExt ? `<div class="row tap" onclick="closeModal();openContract('${id}','extend')"><div class="grow">Extend contract</div><span class="dim">›</span></div>` : `<div class="row"><div class="grow dim">Extend contract</div><span class="xs dim">${inSeason ? 'Final year only' : 'In the off-season contracts step'}</span></div>`}
+    <div class="row tap" onclick="closeModal();toggleDoNotRenew('${id}')"><div class="grow">${isDoNotRenew(id)?'Allow renewal':'Do not renew'}</div><span class="dim">›</span></div>
     <div class="row tap" onclick="closeModal();confirmRelease('${id}')"><div class="grow loss">Release</div><span class="dim">›</span></div></div>`, { flush: true });
 }
 function renderTraining() {
@@ -10202,11 +10280,12 @@ function natReset() { natStaffPicks(true); }
 function natConfirm() { const w = natWin(); w.locked = w.pick.slice(); w.selecting = false; addNews('National', `Squad confirmed for the ${w.label.toLowerCase()}`, `${w.locked.length} players named.`); autosave(); ui.officeTab = 'national'; go('office'); }
 
 function renderStaff() {
+  if (!staffMarket().some(s=>s.role==='contract')) refreshStaffMarket();
   const pay = staffPayroll(U());
   const rows = STAFF_ORDER.map(r => { const s = staffIn(U(), r);
     return `<div class="row tap" onclick="staffMarketSheet('${r}')"><div class="stack"><div class="main-t">${STAFF_ROLES[r].label}${s && s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t ell">${s ? `${esc(s.first + ' ' + s.last)} · ${s.age} · ${money(s.salary)} × ${s.years} yr` : '<span class="loss">Vacant</span>'} · ${STAFF_ROLES[r].desc}</div></div><div class="end">${s ? pill(s.rating)+(s.lastRatingChange?`<span class="xs ${s.lastRatingChange>0?'win':'loss'}">${s.lastRatingChange>0?'+':''}${s.lastRatingChange}</span>`:'') : chip('bad', 'Hire')}</div></div>`; }).join('');
-  return `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="v">${money(pay)}</div><div class="l">Staff spend</div></div><div class="kpi"><div class="v">${money(STAFF_BUDGET - pay)}</div><div class="l">Budget left</div></div><div class="kpi"><div class="v">${Math.round(mean(STAFF_ORDER.map(r => staffRating(U(), r))))}</div><div class="l">Avg rating</div></div></div><div style="height:8px"></div>
-    ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}
+  return `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="v">${money(pay)}</div><div class="l">Staff spend</div></div><div class="kpi"><div class="v">${money(STAFF_BUDGET - pay)}</div><div class="l">Budget left</div></div><div class="kpi"><div class="v">${Math.round(mean(STAFF_ORDER.filter(r=>r!=='contract').map(r => staffRating(U(), r))))}</div><div class="l">Avg rating</div></div></div><div style="height:8px"></div>
+    ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}${contractManagerSettingsPanel()}
     <div class="xs dim" style="margin-top:6px">Staff budget ${money(STAFF_BUDGET)}, separate from the salary cap.</div>`;
 }
 function coachFitLabel(s) {
@@ -10217,13 +10296,14 @@ function coachFitLabel(s) {
   return matches >= 2 ? ' · Philosophy fit: Strong' : matches === 1 ? ' · Philosophy fit: Moderate' : ' · Philosophy fit: Different';
 }
 function staffMarketSheet(role) {
+  if(role==='contract' && !staffMarket().some(s=>s.role==='contract'))refreshStaffMarket();
   const cur = staffIn(U(), role);
   const c = staffMarket().filter(s => s.role === role).sort((a, b) => b.rating - a.rating);
   sheet(STAFF_ROLES[role].label, cur ? `Current: ${esc(cur.first + ' ' + cur.last)} · ${cur.rating}` : 'Vacant', `<div class="xs muted" style="margin-bottom:8px">${STAFF_ROLES[role].desc} Budget left: ${money(STAFF_BUDGET - staffPayroll(U()) + (cur ? cur.salary : 0))} if you replace the current holder.</div>
     <div class="panel"><div class="rows">${c.map(s => `<div class="row"><div class="stack"><div class="main-t">${esc(s.first + ' ' + s.last)}${s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t">${s.age} · asks ${money(s.salary)} × ${s.years} yr${coachFitLabel(s)}</div></div><div class="end">${pill(s.rating)}<button class="btn sm pri" onclick="doHire('${s.id}','${role}')">Hire</button></div></div>`).join('') || '<div class="empty">No candidates right now.</div>'}</div></div>`,
     { foot: cur ? `<button class="btn ghost" onclick="releaseStaff('${cur.id}');closeModal();autosave();render()">Release ${esc(cur.last)}</button>` : '' });
 }
-function doHire(id, role) { const r = hireStaff(id); if (!r.ok) { flash(r.reason); return; } closeModal(); autosave(); render(); flash('Hired.'); }
+function doHire(id, role) { const r = hireStaff(id); if (!r.ok) { flash(r.reason); return; } if(role==='contract'&&game.phase==='contracts')runContractManagerRenewals(); closeModal(); autosave(); render(); flash('Hired.'); }
 
 // §24c DEVELOPMENT, DRESSING ROOM, WORLD, EDITOR -----------------------------------------
 function uiSetFocus(id, f) { if (f === 'coach') { const p = P(id); p.focusBy = null; p.focus = 'none'; coachPlanTraining(true); autosave(); render(); return; } const r = setFocus(id, f); if (r.ok) P(id).focusBy = 'gm'; if (!r.ok) { flash(r.reason); showPlayer(id); return; } autosave(); render(); }
