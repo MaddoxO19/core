@@ -1158,6 +1158,15 @@ body.live-mode .actbar{display:none}
 /* Build 127: plain generational talent label; no callout or pill. */
 .talent-mark{display:block;color:var(--accent);margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.01em}
 .sheet-f .exit-recovery-action{flex:1 1 100%;white-space:normal;min-height:40px}
+
+/* Build 149: single compact three-format squad ratings table */
+.squad-rating-head,.squad-rating-row{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,minmax(48px,61px));gap:5px;align-items:center;padding:10px 12px}
+.squad-rating-head{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.01em;border-bottom:1px solid var(--line2);padding-top:12px;padding-bottom:9px;text-align:center}
+.squad-rating-head>span:first-child{text-align:left}
+.squad-rating-row{min-height:64px;border-bottom:1px solid var(--line2)}.squad-rating-row:last-child{border-bottom:0}
+.squad-rating-player{min-width:0}.squad-rating-player .main-t{font-weight:750;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.squad-rating-player .sub-t{color:var(--muted);font-size:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.squad-rating-number{font-size:16px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;color:var(--text)}.squad-rating-number.elite{color:#fcd34d}
+@media(max-width:390px){.squad-rating-head,.squad-rating-row{grid-template-columns:minmax(0,1fr) repeat(3,48px);padding-left:9px;padding-right:9px;gap:2px}.squad-rating-head{font-size:9px}.squad-rating-player .main-t{font-size:13px}.squad-rating-number{font-size:15px}}
 </style>
 </head>
 <body>
@@ -1216,7 +1225,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.71 Build 148', title: 'Facility Progression and Value Rebalance', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.72 Build 149', title: 'Unified Squad Ratings Review', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -8738,7 +8747,7 @@ function sortPlayers(arr, key, fmt) {
   return arr.slice().sort((a, b) => f(a) - f(b));
 }
 function renderSquadList() {
-  const view = ui.squadView || 'depth';
+  const view = ui.squadView || 'list';
   const toggle = seg([['depth','Depth'],['list','List']], view, `(v=>{ui.squadView=v;render();})`);
   if (view === 'depth') return renderDepth(toggle);
   return `${toggle}<div style="height:8px"></div>${renderPlayerList()}`;
@@ -8766,13 +8775,22 @@ function renderDepth(toggle) {
     <div class="grid g2" style="margin-top:8px">${panel(`${compName(f)} XI`, `<div class="rows">${rows}</div>`, { flush: true })}${panel(`Reserves · ${ch.reserves.length}`, `<div class="rows">${res || '<div class="empty">No reserves.</div>'}</div>`, { flush: true })}</div>
     <div class="xs dim" style="margin-top:6px">Dimmed players are unavailable. A gold dot marks a thin area.</div>`;
 }
+// Build 149: one roster comparison across every format. Format-specific depth/XI
+// remain unchanged; ratings are derived from skills and never written to saves.
 function renderPlayerList() {
   let sq = squadOf(U());
   if (ui.squadGroup !== 'ALL') sq = sq.filter(p => group(p) === ui.squadGroup);
-  sq = sortPlayers(sq, ui.squadSort, ui.listFmt);
-  const tools = `<div class="flex wrap">${fmtSeg(ui.listFmt, 'setListFmt')}<span class="grow"></span>${sel(GROUP_OPTS, ui.squadGroup, "ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']], ui.squadSort, "ui.squadSort=this.value;render()")}</div>`;
-  const f = ui.listFmt;
-  return `${tools}<div style="height:8px"></div>${panel(`Players · ${sq.length}`, `<div class="rows">${sq.map(p => `<div class="row tap roster-compact" onclick="showPlayer('${p.id}')"><div class="stack"><div class="main-t">${esc(pname(p))}${p.id===game.captain?' <span class="dim xs">(c)</span>':''}</div><div class="sub-t">${identityLine(p)} ${cricketRoleIcon(p)}</div><div class="xs muted">Form ${formArrow(p.form)} · Fitness ${fitText(p)}${p.natDuty?' · National duty':''}</div></div><div class="end">${pill(overall(p,f))}</div></div>`).join('')}</div>`,{flush:true})}`;
+  const sortFmt = ui.squadRatingSort || 'BEST';
+  if (ui.squadSort === 'ovr') {
+    const score = p => sortFmt === 'BEST' ? peakOvr(p) : overall(p, sortFmt);
+    sq = sq.slice().sort((a,b) => score(b) - score(a) || pname(a).localeCompare(pname(b)));
+  } else sq = sortPlayers(sq, ui.squadSort, sortFmt === 'BEST' ? 'FC' : sortFmt);
+  const ratingHead = `<div class="squad-rating-head"><span>Player</span><span>Shield</span><span>One-Day</span><span>T20</span></div>`;
+  const ratingCells = p => FMT_LIST.map(f => `<span class="squad-rating-number ${overall(p,f)>=90?'elite':''}" title="${compName(f)} ${overall(p,f)}">${overall(p,f)}</span>`).join('');
+  const tools = `<div class="flex wrap" style="gap:6px">${sel([['BEST','Best format'],['FC','Shield'],['OD','One-Day'],['T20','T20']],sortFmt,"ui.squadRatingSort=this.value;render()")}${sel(GROUP_OPTS,ui.squadGroup,"ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']],ui.squadSort,"ui.squadSort=this.value;render()")}</div>`;
+  const rows = sq.map(p => `<div class="squad-rating-row tap" onclick="showPlayer('${p.id}')"><div class="squad-rating-player"><div class="main-t">${esc(pname(p))}${p.id===game.captain?' <span class="dim xs">(c)</span>':''}</div><div class="sub-t">${ROLES[p.role].short} · ${p.age}${p.natDuty?' · National duty':''}${p.injury?' · Injured':''}</div></div>${ratingCells(p)}</div>`).join('');
+  const count90 = FMT_LIST.map(f=>sq.filter(p=>overall(p,f)>=90).length);
+  return `${tools}<div style="height:8px"></div>${panel(`Squad ratings · ${sq.length}`,`${ratingHead}<div class="squad-ratings-table">${rows}</div>`,{flush:true})}<div class="xs dim" style="margin-top:8px">90+ ratings: Shield ${count90[0]} · One-Day ${count90[1]} · T20 ${count90[2]}. Gold indicates 90+. Tap a player for their profile.</div>`;
 }
 function setListFmt(f) { ui.listFmt = f; render(); }
 function fitTag(p) { const w = whereFits(p); return w ? `<span class="fit ${w.start ? 'start' : ''}">${esc(w.text)}</span> · ` : ''; }
