@@ -1167,6 +1167,51 @@ body.live-mode .actbar{display:none}
 .squad-rating-player{min-width:0}.squad-rating-player .main-t{font-weight:750;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.squad-rating-player .sub-t{color:var(--muted);font-size:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .squad-rating-number{font-size:16px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;color:var(--text)}.squad-rating-number.elite{color:#fcd34d}
 @media(max-width:390px){.squad-rating-head,.squad-rating-row{grid-template-columns:minmax(0,1fr) repeat(3,48px);padding-left:9px;padding-right:9px;gap:2px}.squad-rating-head{font-size:9px}.squad-rating-player .main-t{font-size:13px}.squad-rating-number{font-size:15px}}
+
+/* Build 150: tournament review layout, consistent hierarchy and compact scan-friendly sections. */
+.sheet[data-key="wc-review"] .sheet-b{padding:10px 13px 14px;overscroll-behavior:contain}
+.wc-review-v2{display:flex;flex-direction:column;gap:11px;line-height:1.35}
+.wc-v2-hero{border:1px solid var(--line);border-radius:14px;background:var(--s1);padding:15px 13px 12px;text-align:center}
+.wc-v2-eyebrow{font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--text)}
+.wc-v2-eyebrow span{color:var(--muted)}
+.wc-v2-crown{font-size:10px;font-weight:850;color:var(--accent);letter-spacing:.12em;margin-top:16px}
+.wc-v2-winner{display:flex;justify-content:center;align-items:center;gap:9px;margin-top:5px;font-size:clamp(22px,5.2vw,28px);line-height:1.16}
+.wc-v2-winner .legacy-flag{width:32px!important;min-width:32px!important;max-width:32px!important;height:22px!important;min-height:22px!important;max-height:22px!important}
+.wc-v2-result{color:var(--muted);font-size:12px;margin:9px 0 12px}
+.wc-v2-finalists{border-top:1px solid var(--line2);padding-top:11px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px}
+.wc-v2-finalists>span{color:var(--muted);font-weight:750;font-size:10px;letter-spacing:.07em}
+.wc-v2-finalists b{display:inline-flex;align-items:center;gap:5px;text-align:right}
+.wc-v2-host{font-size:10px;color:var(--muted);margin-top:9px;display:flex;align-items:center;justify-content:center;gap:5px;letter-spacing:.03em}
+.wc-v2-section{border:1px solid var(--line);border-radius:13px;background:var(--s1);overflow:hidden}
+.wc-v2-section>h3{font-size:10px;letter-spacing:.10em;color:var(--muted);font-weight:850;margin:0;padding:13px 13px 10px}
+.wc-v2-awards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 11px 12px}
+.wc-v2-award{min-width:0;border:1px solid var(--line2);border-radius:10px;padding:11px 9px;background:rgba(255,255,255,.018)}
+.wc-v2-award.featured{grid-column:1/-1;border-color:rgba(239,191,66,.38);text-align:center;padding:13px}
+.wc-v2-award-label{color:var(--muted);font-size:10px;font-weight:750;margin-bottom:7px}
+.wc-v2-award.featured .wc-v2-award-label{color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+.wc-v2-award-person .wc-review-player{font-size:12px;white-space:normal;flex-wrap:wrap}
+.wc-v2-award.featured .wc-v2-award-person .wc-review-player{font-size:16px;justify-content:center}
+.wc-v2-award-number{font-size:12px;font-weight:750;margin-top:6px}
+.wc-v2-leaders{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:1px solid var(--line2)}
+.wc-v2-leader-col{min-width:0}
+.wc-v2-leader-col:first-child{border-right:1px solid var(--line2)}
+.wc-v2-leader-col h4{font-size:11px;font-weight:750;margin:0;padding:10px 9px;color:var(--text)}
+.wc-v2-leaders .wc-review-rank{display:flex;gap:6px;align-items:flex-start;padding:9px 8px;border-top:1px solid var(--line2);flex-wrap:wrap}
+.wc-v2-leaders .wc-review-rank-num{width:14px;flex:none;color:var(--muted)}
+.wc-v2-leaders .wc-review-player{flex:1;min-width:0;font-size:11px;gap:3px;flex-wrap:wrap}
+.wc-v2-leaders .wc-review-player-name{white-space:normal;overflow-wrap:anywhere}
+.wc-v2-leaders .wc-review-flag .legacy-flag{width:16px!important;min-width:16px!important;max-width:16px!important;height:12px!important;min-height:12px!important;max-height:12px!important}
+.wc-v2-leaders .wc-review-nat{font-size:9px}
+.wc-v2-leaders .wc-review-stat{display:block;width:100%;text-align:left;padding-left:20px;font-size:13px;color:var(--text)}
+.wc-v2-leaders .wc-review-stat small{font-size:10px;color:var(--muted);font-weight:500;margin-left:4px}
+.wc-v2-record{display:flex;justify-content:space-around;margin:0 11px 10px;padding:10px 0;border:1px solid var(--line2);border-radius:10px}
+.wc-v2-record>div{display:flex;align-items:center;flex-direction:column;gap:3px;flex:1}
+.wc-v2-record>div+div{border-left:1px solid var(--line2)}
+.wc-v2-record strong{font-size:21px}
+.wc-v2-record span{font-size:10px;color:var(--muted)}
+.wc-v2-section .wc-review-info{padding:10px 12px}
+@media(max-width:380px){.wc-v2-awards{gap:6px;padding:0 8px 10px}.wc-v2-award{padding:9px 7px}.wc-v2-leaders .wc-review-player{font-size:10px}}
+
 </style>
 </head>
 <body>
@@ -1225,7 +1270,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.72 Build 149', title: 'Unified Squad Ratings Review', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.73 Build 150', title: 'Tournament Review Experience', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4785,32 +4830,38 @@ function wcReviewRow(label,person,value){
 }
 function worldCupReviewHtml(r){
   const title=r.event==='ODIWC'?'ODI World Cup':r.event==='CT'?'Champions Trophy':'T20 World Cup';
-  const ranked=(rows,kind)=>rows?.length?rows.map((x,i)=>
-    `<div class="wc-review-rank"><span class="wc-review-rank-num">${i+1}.</span>${wcReviewPlayer(x.id)}<strong class="wc-review-stat">${kind==='bat'?Number(x.r||0)+' runs':Number(x.w||0)+' wickets'}</strong></div>`
-  ).join(''):'<div class="empty">Complete individual scorecards not retained.</div>';
-  const preview=(game.worldCupPreviews||[]).find(p=>p.id===r.previewId);
-  const awardRows=[
-    r.awards?.pot?wcReviewRow('Player of the Tournament',wcReviewPlayer(r.awards.pot.id),''):'',
-    r.awards?.bat?wcReviewRow('Leading batter',wcReviewPlayer(r.awards.bat.id),Number(r.awards.bat.r||0)+' runs'):'',
-    r.awards?.bowl?wcReviewRow('Leading bowler',wcReviewPlayer(r.awards.bowl.id),Number(r.awards.bowl.w||0)+' wickets'):''
-  ].join('');
   const host=String(r.host||'');
-  return `<div class="wc-review">
-    <div class="wc-review-hero"><div class="wc-review-kicker">${esc(title.toUpperCase())} · ${esc(r.year)}</div>
-      <div class="wc-review-host">Host ${flagFor(host)} ${esc(NATIONS[host]||host||'Not recorded')}</div>
-      <div class="wc-review-champion">${flagFor(teamNat(r.champion))}<span>${esc(teamName(r.champion))}</span></div>
-      <div class="wc-review-champion-label">${r.event==='CT'?'Champions Trophy winners':'World champions'}</div>
-      <div class="wc-review-final">${esc(r.finalText||'')}</div>
-      <div class="wc-review-runner">Runners-up ${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</div></div>
-    <section class="wc-review-section"><h3>Players of the tournament</h3>
-      ${awardRows||'<div class="empty">Tournament awards unavailable.</div>'}
-      ${r.coverage<(r.fixturesCompleted||0)?`<div class="wc-review-note">Available individual statistics cover ${r.coverage||0} of ${r.fixturesCompleted||0} completed matches. Missing scorecards are not reconstructed.</div>`:''}</section>
-    <section class="wc-review-section"><h3>Top three batters</h3>${ranked(r.leaders?.bat,'bat')}
-      <h3 class="wc-review-subhead">Top three bowlers</h3>${ranked(r.leaders?.bowl,'bowl')}</section>
-    <section class="wc-review-section"><h3>Australia's tournament</h3>
-      <div class="wc-review-info"><span>Record</span><strong>${r.aus.won} wins · ${r.aus.lost} losses</strong></div>
-      <div class="wc-review-info"><span>Semi-finalists</span><span class="wc-review-semis">${r.semiFinalists.map(t=>`<span title="${esc(teamName(t))}">${flagFor(teamNat(t))}</span>`).join(' ')}</span></div>
-      ${preview?`<div class="wc-review-info"><span>Pre-tournament favourite</span><span class="wc-review-favourite">${flagFor(preview.ranked?.[0]?.nat)} ${esc(NATIONS[preview.ranked?.[0]?.nat]||'—')}</span></div>`:''}</section>
+  const preview=(game.worldCupPreviews||[]).find(p=>p.id===r.previewId);
+  const ranked=(rows,kind)=>rows?.length?rows.map((x,i)=>
+    `<div class="wc-review-rank"><span class="wc-review-rank-num">${i+1}</span>${wcReviewPlayer(x.id)}<strong class="wc-review-stat">${Number(kind==='bat'?x.r||0:x.w||0)}<small>${kind==='bat'?'runs':'wickets'}</small></strong></div>`
+  ).join(''):'<div class="wc-review-note">Individual statistics are unavailable for this tournament.</div>';
+  const awards=[
+    r.awards?.pot?{label:'Player of the tournament',id:r.awards.pot.id,value:''}:null,
+    r.awards?.bat?{label:'Leading run scorer',id:r.awards.bat.id,value:`${Number(r.awards.bat.r||0)} runs`}:null,
+    r.awards?.bowl?{label:'Leading wicket taker',id:r.awards.bowl.id,value:`${Number(r.awards.bowl.w||0)} wickets`}:null
+  ].filter(Boolean);
+  const nonresult=Number(r.aus?.noResult||0);
+  return `<div class="wc-review wc-review-v2">
+    <header class="wc-v2-hero">
+      <div class="wc-v2-eyebrow">${esc(title)} <span>· ${esc(r.year)}</span></div>
+      <div class="wc-v2-crown">WORLD CHAMPIONS</div>
+      <div class="wc-v2-winner">${flagFor(teamNat(r.champion))}<strong>${esc(teamName(r.champion))}</strong></div>
+      <div class="wc-v2-result">${esc(r.finalText||'Final completed')}</div>
+      <div class="wc-v2-finalists"><span>RUNNERS-UP</span><b>${flagFor(teamNat(r.runnerUp))} ${esc(teamName(r.runnerUp))}</b></div>
+      <div class="wc-v2-host">HOSTED BY ${flagFor(host)} ${esc(NATIONS[host]||host||'Not recorded')}</div>
+    </header>
+    <section class="wc-v2-section"><h3>TOURNAMENT HONOURS</h3>
+      <div class="wc-v2-awards">${awards.length?awards.map((x,i)=>`<div class="wc-v2-award ${i===0?'featured':''}"><div class="wc-v2-award-label">${x.label}</div><div class="wc-v2-award-person">${wcReviewPlayer(x.id)}</div>${x.value?`<div class="wc-v2-award-number">${x.value}</div>`:''}</div>`).join(''):'<div class="wc-review-note">Tournament honours unavailable.</div>'}</div>
+      ${r.coverage<(r.fixturesCompleted||0)?`<div class="wc-review-note">Individual statistics cover ${r.coverage||0} of ${r.fixturesCompleted||0} completed matches.</div>`:''}
+    </section>
+    <section class="wc-v2-section"><h3>TOURNAMENT LEADERS</h3>
+      <div class="wc-v2-leaders"><div class="wc-v2-leader-col"><h4>Most runs</h4>${ranked(r.leaders?.bat,'bat')}</div><div class="wc-v2-leader-col"><h4>Most wickets</h4>${ranked(r.leaders?.bowl,'bowl')}</div></div>
+    </section>
+    <section class="wc-v2-section"><h3>AUSTRALIA'S CAMPAIGN</h3>
+      <div class="wc-v2-record"><div><strong>${Number(r.aus?.won||0)}</strong><span>Wins</span></div><div><strong>${Number(r.aus?.lost||0)}</strong><span>Losses</span></div>${nonresult?`<div><strong>${nonresult}</strong><span>No results</span></div>`:''}</div>
+      <div class="wc-review-info"><span>Semi-finalists</span><span class="wc-review-semis">${(r.semiFinalists||[]).map(t=>`<span title="${esc(teamName(t))}">${flagFor(teamNat(t))}</span>`).join(' ')||'Not recorded'}</span></div>
+      ${preview?`<div class="wc-review-info"><span>Pre-tournament favourite</span><span class="wc-review-favourite">${flagFor(preview.ranked?.[0]?.nat)} ${esc(NATIONS[preview.ranked?.[0]?.nat]||'—')}</span></div>`:''}
+    </section>
   </div>`;
 }
 function openWorldCupReview(id){const r=worldCupReviewStore().find(x=>x.id===id);if(!r)return;
