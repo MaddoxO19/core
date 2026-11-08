@@ -1270,7 +1270,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.73 Build 150', title: 'Tournament Review Experience', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.74 Build 151', title: 'Format-Aligned Tournament Favourites', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -4369,12 +4369,36 @@ function worldCupPreviewDue(){
   }
   return null;
 }
+// B151: Tournament previews must use the same independent format ranking as
+// International > World > Rankings. Never use the legacy composite Elo table.
+function worldCupPreviewFormat(event){return event==='T20WC'?'T20':'OD';}
+function worldCupPreviewFavourites(event,teams){
+  const fmt=worldCupPreviewFormat(event),rankings=teamWorldRanks(fmt);
+  return [...new Set(teams)].filter(Boolean)
+    .sort((a,b)=>(rankings[teamNat(b)]??-Infinity)-(rankings[teamNat(a)]??-Infinity)||a.localeCompare(b))
+    .map(t=>({id:t,nat:teamNat(t),rating:rankings[teamNat(t)]??0}));
+}
+// Old previews created before B151 may be queued in an existing career.
+// Refresh only *unviewed, unstarted* events; historic previews remain snapshots.
+function refreshPendingWorldCupPreview(r){
+  if(!r||r.viewed||!game||game.phase!=='season')return r;
+  const fx=worldCupPreviewFixtureGroup(r.event);
+  if(!fx.length||fx.some(f=>!!f.result))return r;
+  const first=Math.min(...fx.map(f=>f.day));
+  if(game.day>first)return r;
+  if(r.rankingSource==='format-v151')return r;
+  const all=worldCupPreviewFavourites(r.event,fx.flatMap(f=>[f.home,f.away]));
+  r.ranked=all.slice(0,3);
+  r.darkHorse=all[3]?{id:all[3].id,nat:all[3].nat}:null;
+  r.rankingFormat=worldCupPreviewFormat(r.event);
+  r.rankingSource='format-v151';
+  return r;
+}
 function createWorldCupPreview(info){
-  const {event,id,fx,first}=info, rankings=game.nation.rankings||{};
+  const {event,id,fx,first}=info;
   const teams=[...new Set(fx.flatMap(f=>[f.home,f.away]).filter(Boolean))];
-  const strength=t=>rankings[teamNat(t)]||0;
-  const ranked=teams.slice().sort((a,b)=>strength(b)-strength(a)||a.localeCompare(b));
-  const favorites=ranked.slice(0,3).map(t=>({id:t,nat:teamNat(t),rating:strength(t)}));
+  const ranked=worldCupPreviewFavourites(event,teams).map(t=>t.id);
+  const favorites=worldCupPreviewFavourites(event,teams).slice(0,3);
   // A dark horse is a competitive team outside the leading three, not a random selection.
   const darkHorse=ranked.length>3?{id:ranked[3],nat:teamNat(ranked[3])}:null;
   const participants=new Set(teams.map(teamNat));
@@ -4391,7 +4415,7 @@ function createWorldCupPreview(info){
   const champ=previous?(previous.winner||null):null;
   const australia=fx.filter(f=>f.home==='AUS'||f.away==='AUS').sort((a,b)=>a.day-b.day)[0]||null;
   const opening=fx.slice().sort((a,b)=>a.day-b.day)[0];
-  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':event==='CT'?'Champions Trophy':'ODI World Cup',teams:teams.length,first,host:tournamentHost(event,game.year),ranked:favorites,darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
+  const result={id,year:game.year,event,title:event==='T20WC'?'T20 World Cup':event==='CT'?'Champions Trophy':'ODI World Cup',teams:teams.length,first,host:tournamentHost(event,game.year),ranked:favorites,rankingFormat:worldCupPreviewFormat(event),rankingSource:'format-v151',darkHorse,stars,champion:champ,opening:{home:opening.home,away:opening.away,day:opening.day},ausOpening:australia?{opponent:australia.home==='AUS'?australia.away:australia.home,day:australia.day}:null,viewed:false};
   worldCupPreviewStore().push(result);return result;
 }
 // Build 128: tournament histories store international nation codes (e.g. SA),
@@ -4410,11 +4434,11 @@ function worldCupPreviewHtml(r){
   const starLine=(label,p)=>p?`<div class="kv"><span>${label}</span><span><span class="link" onclick="closeModal();showPlayer('${p.id}')">${esc(p.name)}</span> ${flagFor(p.nat)}</span></div>`:'';
   return `<div class="series-review-head wc-preview-head"><div class="xs muted">PRE-TOURNAMENT PREVIEW · ${r.year}</div><div class="series-review-nations">${esc(r.title)}</div>
     <div class="wc-preview-meta"><div><span>TEAMS</span><b>${r.teams}</b></div><div><span>HOST</span><b>${r.host?`${flagFor(r.host)} ${esc(NATIONS[r.host]||r.host)}`:'TBC'}</b></div><div><span>OPENS</span><b>${dateStr(r.first)}</b></div></div></div>
-    <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Pre-tournament favourites</h3></div><div class="rows">${r.ranked.map((t,i)=>`<div class="kv"><span>${i+1}. ${nationLine(t)}</span><b>${Math.round(t.rating)} rating</b></div>`).join('')}</div></div>
+    <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Pre-tournament favourites · ${r.event==='T20WC'?'T20I':'ODI'} rankings</h3></div><div class="rows">${r.ranked.map((t,i)=>`<div class="kv"><span>${i+1}. ${nationLine(t)}</span><b>${Math.round(t.rating)} pts</b></div>`).join('')}</div></div>
     <div class="panel" style="margin-bottom:10px"><div class="ph"><h3>Players to watch</h3></div><div class="rows">${starLine('Leading batter',r.stars.batter)}${starLine('Leading bowler',r.stars.bowler)}${starLine('All-rounder',r.stars.allrounder)}${starLine('Rising star',r.stars.rising)}</div></div>
     <div class="panel"><div class="ph"><h3>Tournament storylines</h3></div><div class="rows">${worldCupChampionNation(r.champion)?`<div class="kv"><span>Defending champions</span><span>${worldCupChampionHtml(r.champion)}</span></div>`:''}${r.darkHorse?`<div class="kv"><span>Dark horse</span><span>${nationLine(r.darkHorse)}</span></div>`:''}<div class="kv"><span>Opening fixture</span><span>${esc(teamName(r.opening.home))} v ${esc(teamName(r.opening.away))}</span></div>${r.ausOpening?`<div class="kv"><span>Australia's first match</span><span>${esc(teamName(r.ausOpening.opponent))} · ${dateStr(r.ausOpening.day)}</span></div>`:''}</div></div>`;
 }
-function openWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(!r)return;sheet('Tournament preview',r.title,worldCupPreviewHtml(r),{center:true,key:'wc-preview',foot:`<button class="btn pri block" onclick="dismissWorldCupPreview('${r.id}')">Begin Tournament</button>`});}
+function openWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(!r)return;refreshPendingWorldCupPreview(r);sheet('Tournament preview',r.title,worldCupPreviewHtml(r),{center:true,key:'wc-preview',foot:`<button class="btn pri block" onclick="dismissWorldCupPreview('${r.id}')">Begin Tournament</button>`});}
 function dismissWorldCupPreview(id){const r=worldCupPreviewStore().find(p=>p.id===id);if(r)r.viewed=true;closeModal();autosave();}
 function showPendingWorldCupPreview(){
   if(!game||document.querySelector('#modalRoot .sheet'))return false;
