@@ -325,6 +325,17 @@ body.live-mode .quick{display:none}
 @media (min-width:900px){.quick{max-width:560px;margin-left:auto}}
 tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .q{display:inline-block;width:12px;font-size:9px;font-weight:900;color:var(--accent)}
+.mc-list{display:grid;gap:8px;padding:10px}
+.mc-note{padding:10px 14px 0;font-size:var(--fs-s);color:var(--muted)}
+.mc{background:var(--s2);border:1px solid transparent;border-radius:12px;padding:10px 12px;min-width:0}
+.mc.mine{border-color:rgba(239,197,87,.45)}.mc.tap{cursor:pointer}
+.mc-head{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.mc-team{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:2px 0;min-width:0}
+.mc-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-m,15px)}
+.mc-score{flex:none;font-variant-numeric:tabular-nums;font-weight:700;font-size:var(--fs-m,15px)}
+.mc-ov{font-weight:400;color:var(--muted);font-size:12px}
+.mc-team.mc-w .mc-name{font-weight:700}.mc-team.mc-l{opacity:.6}
+.mc-res{margin-top:6px;font-size:12.5px;color:var(--muted);line-height:1.3}
 .bracket{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center}.bracket.single{grid-template-columns:1fr}
 .bk-col{display:grid;gap:8px}.bk{background:var(--s2);border-radius:10px;padding:8px 10px;min-width:0}.bk.tap{cursor:pointer}
 .bk-r{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
@@ -939,6 +950,14 @@ body.live-mode .actbar{display:none}
 .cw-compact-slot .cw-muted{font-size:13px;margin:0 0 13px;line-height:1.4}
 .cw-compact-slot .cw-kicker{font-size:10px}
 .cw-slot-actions{display:flex;align-items:center;gap:12px}
+.cw-more{margin-top:10px}.cw-more summary{cursor:pointer;color:#b5bdc9;font-size:13px;padding:8px 0;list-style:none}.cw-more summary::-webkit-details-marker{display:none}.cw-more summary::after{content:' ▾'}
+.cw-more-b{display:grid;gap:8px;padding-top:6px}.cw-more-b .cw-secondary{margin:0;width:100%}.cw-more-b .cw-delete{color:#e98b8b;justify-self:start}
+.launch-continue{display:grid;gap:3px;width:100%;max-width:360px;margin:0 auto 14px;padding:14px 16px;border-radius:14px;border:1px solid rgba(239,197,87,.55);background:rgba(239,197,87,.08);color:inherit;text-align:left;cursor:pointer;font:inherit}
+.launch-continue .lc-k{font-size:11px;letter-spacing:.14em;color:var(--gold,#efc557);font-weight:800}.launch-continue b{font-size:16px}.launch-continue small{color:var(--muted,#94a9b9);font-size:12px}
+.save-status{display:grid;gap:3px;padding:12px;border-radius:12px;background:var(--s2)}.save-status b{font-size:15px}.save-status span{font-size:12.5px;color:var(--muted)}
+.save-status.ok{border-left:3px solid var(--win,#58c27d)}.save-status.bad{border-left:3px solid #e2a23b}
+.save-sec{padding:4px 14px 14px;border-top:1px solid var(--line,rgba(255,255,255,.08))}.save-sec-h{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}
+.save-btns{display:grid;gap:8px;margin:10px 0}.warn-t{color:#e2a23b}
 .cw-slot-actions .cw-primary{flex:1;min-height:46px;border-radius:12px;font-size:14px;padding:10px}
 .cw-slot-actions .cw-delete{flex:0 0 auto;margin:0;padding:10px 6px;color:#b5bdc9;font-size:12px;min-height:46px}
 .cw-restore-foot{text-align:center;padding:10px 0 22px}
@@ -1238,6 +1257,7 @@ body.live-mode .actbar{display:none}
     <div class="launch-rule" aria-hidden="true"></div>
     <div class="launch-tagline">Build the Team. Shape the Legacy.</div>
     <p class="launch-world">A cricket world that evolves with every season.</p>
+    <div id="launchContinue"></div>
     <div class="launch-actions">
       <button class="btn pri" onclick="openNewCareer()">NEW CAREER</button>
       <button class="btn" onclick="openLoadCareer()">LOAD CAREER</button>
@@ -1251,7 +1271,7 @@ body.live-mode .actbar{display:none}
     <div class="ell brandblock"><div class="studio">H³O Interactive</div><div class="brand">Legacy Cricket</div><div class="date" id="dateChip"></div></div>
     <button class="btn pri cont" id="topContinue" onclick="continueGame()">Continue</button>
     <button class="btn icon gear" title="Settings" aria-label="Settings" onclick="openMenu()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-    <button class="btn ghost exitbtn" onclick="confirmSheet('Exit','Save and return to the start screen?','Save and exit','returnToLaunch()')">Exit</button>
+    <button class="btn ghost exitbtn" onclick="returnToLaunch()">Exit</button>
   </header>
   <div class="quick" id="quick"></div>
   <div class="actbar" id="actbar"></div>
@@ -1286,7 +1306,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.80 Build 157', title: 'Elite Player Ramp and Fixes', engine: 'C3.1E Ball-by-Ball with Elite Ramp' };
+const BUILD = { version: 'v0.9.81 Build 158', title: 'One Save System, Home and Live Controls', engine: 'C3.1E Ball-by-Ball with Elite Ramp' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -7683,6 +7703,7 @@ function startNewSeason() {
   game.board.objectives = makeObjectives(U());
   Object.keys(game.nation.rankings).forEach(n => { if (n !== 'AUS') game.nation.rankings[n] += Math.round(randn() * 3); });
   game.phase = 'season'; game.offseason = null;
+  _seasonSnapshotDue = game.meta.slot || 1;
   addNews('League', `${game.season.label} season begins`, 'New fixtures are out and the board has set fresh objectives.');
 }
 
@@ -7801,13 +7822,13 @@ const Store = {
     this.lastRecovery=rows[0] ? {slot,source:rows[0].name,revision:rows[0].info.revision,saved:rows[0].info.saved,alternatives:rows.length} : null;
     if (rows.length>1 && rows.some(r=>r.info.created===rows[0].info.created &&
         r.info.saved>rows[0].info.saved && r.info.revision<rows[0].info.revision)) {
-      this.lastError='Recovery copies disagree. Highest save revision retained; export JSON before proceeding.';
+      this.lastError='Recovery copies disagree. Highest save revision retained; download a backup file before continuing.';
     }
     // Header-ordered candidates are confirmed by a full parse only here, at load time.
     const usable=rows.find(r=>r.info.data);
     if (usable && usable!==rows[0]) {
       this.lastRecovery={slot,source:usable.name,revision:usable.info.revision,saved:usable.info.saved,alternatives:rows.length};
-      this.lastError='Newest copy could not be read; loaded the next valid copy. Export JSON before proceeding.';
+      this.lastError='Newest copy could not be read; loaded the next valid copy. Download a backup file before continuing.';
     }
     return usable?.raw || null;
   },
@@ -7857,7 +7878,7 @@ const Store = {
     }
     if (existing.some(c=>c.info.created===incoming.created &&
       (c.info.progress>incoming.progress || c.info.games>incoming.games))) {
-      this.lastError='Recovery has more career progress. Export JSON and review the saved slot.';
+      this.lastError='A copy with more progress exists. Download a backup file and check the slot.';
       return false;
     }
     const mirrorOk=this.lsOk && writeLocalSaveMirror(slot,str,meta);
@@ -7890,8 +7911,43 @@ const Store = {
   async del(slot) {
     // Do not allow an earlier background replica to recreate a deleted slot.
     await this._idbChain.catch(()=>false);
-    if (this.idbOk) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); st.delete('recovery' + slot); }); } catch (e) {} }
+    if (this.idbOk) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); st.delete('recovery' + slot); st.delete('seasonA' + slot); st.delete('seasonB' + slot); st.delete('undo' + slot); }); } catch (e) {} }
     clearLocalSaveMirror(slot);
+  },
+  // Build 158: start-of-season saves. Two kept per slot in the browser database only
+  // (never localStorage). A newer season moves A to B; the same season replaces A.
+  async putSeasonSnapshot(slot, str) {
+    if (!this.idbOk || !this.db) return false;
+    const incoming = saveSnapshotInfo(str); if (!incoming) return false;
+    try {
+      await this._tx('readwrite', st => {
+        const req = st.get('seasonA' + slot);
+        req.onsuccess = () => {
+          const a = readSaveHeader(req.result), inc = readSaveHeader(str);
+          const sameCareer = a && a.created === incoming.created;
+          if (sameCareer && a.m && inc && inc.m && a.m.year !== inc.m.year) st.put(req.result, 'seasonB' + slot);
+          if (a && !sameCareer) st.delete('seasonB' + slot);
+          st.put(str, 'seasonA' + slot);
+        };
+        return null;
+      });
+      return true;
+    } catch (e) { this.lastError = String(e); return false; }
+  },
+  // Earlier saves on this device: the previous save and up to two start-of-season saves.
+  async earlierSaves(slot) {
+    if (!this.idbOk || !this.db) return [];
+    try {
+      const found = await this._tx('readonly', st => {
+        const out = {};
+        for (const k of ['recovery', 'undo', 'seasonA', 'seasonB']) { const r = st.get(k + slot); r.onsuccess = () => { out[k] = r.result; }; }
+        return { get result() { return out; } };
+      });
+      return ['recovery', 'undo', 'seasonA', 'seasonB'].map(k => {
+        const raw = found && found[k], h = readSaveHeader(raw);
+        return h ? { kind: k, raw, h } : null;
+      }).filter(Boolean);
+    } catch (e) { this.lastError = String(e); return []; }
   },
   async list() {
     const out = [];
@@ -8092,6 +8148,7 @@ function saveKey(slot) { return SAVE_PREFIX + slot; }
 let _saving = Promise.resolve(true);
 let _saveBusy = false;
 let _pendingSave = null;
+let _seasonSnapshotDue = 0; // slot number awaiting a start-of-season save
 let _autosaveTicker = null;
 let _saveFailureNotified = false;
 // B153: autosave requests are debounced. Many actions (each live over, each
@@ -8158,11 +8215,14 @@ async function drainSaveQueue() {
       if (!ok) {
         overall = false;
         Store.status='error';
-        if (!_saveFailureNotified) { flash('Save failed. Export a JSON backup from Office → Saves.'); _saveFailureNotified=true; }
-      } else { _saveFailureNotified=false; _lastSaveAt=Date.now(); }
+        if (!_saveFailureNotified) { flash('Save failed. Download a backup file from Saves.'); _saveFailureNotified=true; }
+      } else {
+        _saveFailureNotified=false; _lastSaveAt=Date.now();
+        if (_seasonSnapshotDue && _seasonSnapshotDue===job.slot) { _seasonSnapshotDue=0; Store.putSeasonSnapshot(job.slot, job.str); }
+      }
       if (job.notify) {
         flash(ok ? `Saved to slot ${job.slot}.` : 'Save failed. Export your career JSON.');
-        saveStatusUpdate(ok ? `Saved at ${new Date().toLocaleTimeString('en-AU')}.` : 'Save failed. Please export JSON.', !ok);
+        saveStatusUpdate(ok ? `Saved at ${new Date().toLocaleTimeString('en-AU')}.` : 'Save failed. Download a backup file.', !ok);
       }
     }
   } finally { _saveBusy = false; }
@@ -8171,7 +8231,7 @@ async function drainSaveQueue() {
 function saveGame(slot, notify) {
   if (!game) return Promise.resolve(false);
   if (!Store.idbOk && !Store.lsOk) {
-    if (notify) { flash('Browser storage unavailable. Export career JSON.'); saveStatusUpdate('Browser storage unavailable.', true); }
+    if (notify) { flash('Browser storage unavailable. Download a backup file.'); saveStatusUpdate('Browser storage unavailable.', true); }
     return Promise.resolve(false);
   }
   slot = slot || game.meta.slot || 1;
@@ -8190,15 +8250,15 @@ function saveGame(slot, notify) {
     }
     if (ahead) {
       Store.status='error';
-      if (!_saveFailureNotified) { flash('Save blocked to protect later progress. Export JSON backup.'); _saveFailureNotified=true; }
-      Store.lastError='A more advanced career exists in browser recovery storage; save blocked. Verify slot and export JSON.';
+      if (!_saveFailureNotified) { flash('Save blocked to protect later progress. Download a backup file.'); _saveFailureNotified=true; }
+      Store.lastError='A more advanced career exists in browser recovery storage; save blocked. Download a backup file and check the slot.';
       if (notify) { saveStatusUpdate(Store.lastError,true); flash('Save blocked to protect newer progress.'); }
       return Promise.resolve(false);
     }
   }
   let str, meta;
   try { str = serialiseGame(); meta = metaOf(game); }
-  catch (e) { Store.lastError=String(e); if(notify) flash('Save encoding failed. Export backup.'); return Promise.resolve(false); }
+  catch (e) { Store.lastError=String(e); if(notify) flash('Save failed. Download a backup file.'); return Promise.resolve(false); }
   // Keep a best-effort synchronous fallback for Safari page suspension.
   const mirrorSaved=Store.lsOk && writeLocalSaveMirror(slot, str, meta);
   if (mirrorSaved) { Store.lastSaved=new Date(meta.saved); Store.status='ok'; Store.lastError=null; _lastSaveAt=Date.now(); }
@@ -8217,7 +8277,7 @@ async function loadGame(slot) {
   await _saving;
   const raw = await Store.get(slot);
   if (!raw) { flash('That save could not be found.'); return; }
-  try { loadFromString(raw, slot); const r=Store.lastRecovery; if(r && r.source!=='Database') flash('Recovered newest career from '+r.source+'.'); } catch (e) { flash('That save could not be read.'); }
+  try { loadFromString(raw, slot); const r=Store.lastRecovery; if(r && /recovery/i.test(r.source)) flash('Loaded the latest recovery copy of this career.'); } catch (e) { flash('That save could not be read.'); }
 }
 function loadFromString(raw, slot) {
   cancelAutosave();
@@ -8231,13 +8291,16 @@ function loadFromString(raw, slot) {
 }
 function exportSave() {
   if (!game) return;
+  game.meta.lastBackup = { at: new Date().toISOString(), label: game.season.label, year: game.year };
   const str = serialiseGame();
   const blob = new Blob([str], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `legacy-cricket-${game.gm.name.replace(/\W+/g, '')}-${game.season.label.replace(/\W+/g, '')}.json`;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  flash('Backup download requested. Check Safari Downloads or Files.');
+  flash('Backup file requested. Check Safari Downloads or Files.');
+  autosave();
+  if (document.querySelector('#modalRoot .sheet[data-key="saves"]')) openSaves();
 }
 // Build 140: One restore action. A valid JSON backup is never labelled corrupt
 // solely because Safari refuses persistent browser storage. The original file
@@ -8266,7 +8329,7 @@ function importSave() {
 function showRestoreStorageProblem(reason) {
   const msg=reason ? `<p class="xs" style="color:var(--bad);overflow-wrap:anywhere">${esc(reason)}</p>` : '';
   sheet('Restore backup','Career file is valid',
-    `<p class="s">Your career backup has been read successfully, but Safari could not store it in a save slot.</p>${msg}<p class="s muted">You can still open the career now. If browser storage remains unavailable, export a JSON backup before leaving the game.</p>`,
+    `<p class="s">Your career backup has been read successfully, but Safari could not store it in a save slot.</p>${msg}<p class="s muted">You can still open the career now. If browser storage remains unavailable, download a backup file before leaving the game.</p>`,
     {foot:`<button class="btn pri" onclick="openImportedCareerWithoutStorage()">Open this career</button><button class="btn ghost" onclick="closeModal()">Cancel</button>`});
 }
 function openImportedCareerWithoutStorage() {
@@ -8279,8 +8342,8 @@ function openImportedCareerWithoutStorage() {
     const slot=Number(backup.data.meta?.slot)||1;
     loadFromString(raw,slot);
     Store.status='error';
-    Store.lastError='This imported career is open, but has NOT been verified in browser storage. Export JSON before leaving.';
-    flash('Career opened. Browser save unverified; keep your JSON backup.');
+    Store.lastError='This imported career is open, but has NOT been verified in browser storage. Download a backup file before leaving.';
+    flash('Career opened. Save not confirmed; keep your backup file.');
   } catch(e) { Store.lastError=String(e); flash('Could not open the imported career.'); }
 }
 async function restoreCareerFile(raw) {
@@ -8538,6 +8601,13 @@ async function refreshLaunchCareers() {
   const metas = await Store.list();
   const count = metas.filter(Boolean).length;
   countEl.textContent = `${count} saved career${count === 1 ? '' : 's'} available.`;
+  renderLaunchContinue(metas);
+}
+// Build 158: one-tap Continue for the most recently saved career.
+function renderLaunchContinue(metas) {
+  const cont = $('launchContinue');
+  const latest = metas.map((g, k) => g && { g, i: k + 1 }).filter(Boolean).sort((a, b) => (Date.parse(b.g.saved) || 0) - (Date.parse(a.g.saved) || 0))[0];
+  if (cont) cont.innerHTML = latest ? `<button class="launch-continue" onclick="loadGame(${latest.i})"><span class="lc-k">CONTINUE</span><b>${esc(latest.g.name)} · ${esc(teamName(latest.g.team))}</b><small>${esc([latest.g.label, latest.g.saved ? 'saved ' + savedTimeText(Date.parse(latest.g.saved)) : ''].filter(Boolean).join(' · '))}</small></button>` : '';
 }
 function careerScreen(title, step, inner, back) {
   ensureCareerLaunchOriginal();
@@ -8549,11 +8619,10 @@ function careerScreen(title, step, inner, back) {
 function careerStepHeader(text, hint='') { return `<h3>${text}</h3>${hint ? `<p class="cw-muted">${hint}</p>` : ''}`; }
 async function openNewCareer() {
   const metas = await Store.list();
-  const cards = metas.map((g,k)=>{
-    const i=k+1;
-    return `<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${g ? esc(g.name) + ' · ' + esc(teamName(g.team)) : 'Empty Slot'}</h3><p class="cw-muted">${g ? esc([g.label,g.build].filter(Boolean).join(' · ')) : 'Available for a new career.'}</p><button class="cw-primary" ${g?'disabled':''} onclick="careerChooseSlot(${i})">${g?'Occupied · Keep Career':'Create Career'}</button></section>`;
-  }).join('');
-  careerScreen('Choose a Save Slot',-1,`${cards}<button class="cw-secondary cw-wide" onclick="openLoadCareer()">Manage Existing Saves</button><button class="cw-secondary cw-wide" onclick="importSave()">Restore From Backup File</button><p class="cw-footnote">Existing careers are protected. Export a backup before deleting a slot.</p>`,'careerBackToMenu()');
+  const empty = metas.map((g,k)=>g?null:k+1).filter(Boolean);
+  const cards = empty.map(i=>`<section class="cw-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>Empty slot</h3><p class="cw-muted">Available for a new career.</p><button class="cw-primary" onclick="careerChooseSlot(${i})">Create career</button></section>`).join('');
+  const none = `<section class="cw-slot" style="text-align:center"><h3>All save slots are in use</h3><p class="cw-muted">Delete a career from Load Career to free a slot. Download its backup file first if you want to keep it.</p><button class="cw-primary" onclick="openLoadCareer()">Load Career</button></section>`;
+  careerScreen('Choose a Save Slot',-1,empty.length?cards:none,'careerBackToMenu()');
 }
 async function careerChooseSlot(i) {
   const metas=await Store.list();
@@ -8603,9 +8672,11 @@ async function startCareer() {
 async function openLoadCareer() {
   const metas=await Store.list();
   const occupied=metas.map((g,k)=>({g,i:k+1})).filter(x=>x.g);
-  const cards=occupied.map(({g,i})=>`<section class="cw-slot cw-compact-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${esc(g.name)} · ${esc(teamName(g.team))}</h3><p class="cw-muted">${esc([g.label,g.saved?'Saved '+new Date(g.saved).toLocaleString('en-AU'):'Save time unknown'].filter(Boolean).join(' · '))}</p><div class="cw-slot-actions"><button class="cw-primary" onclick="loadGame(${i})">Continue Career</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete Career</button></div></section>`).join('');
-  const empty=occupied.length?cards:'<div class="cw-slot cw-compact-slot" style="text-align:center"><h3>No careers saved in this browser</h3><p class="cw-muted">You can restore a previously exported career below.</p></div>';
-  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">Browser storage is unavailable. A restored career may not be saved automatically.</div>':''}${empty}<div class="cw-restore-foot"><button class="cw-restore-link" onclick="importSave()">Restore from JSON backup</button></div>`,'careerBackToMenu()');
+  const cards=occupied.map(({g,i})=>`<section class="cw-slot cw-compact-slot"><div class="cw-kicker">SAVE SLOT ${i}</div><h3>${esc(g.name)} · ${esc(teamName(g.team))}</h3><p class="cw-muted">${esc([g.label,g.saved?'Saved '+savedTimeText(Date.parse(g.saved)):'Save time unknown'].filter(Boolean).join(' · '))}</p>
+    <div class="cw-slot-actions"><button class="cw-primary" onclick="loadGame(${i})">Load</button></div>
+    <details class="cw-more"><summary>More options</summary><div class="cw-more-b"><button class="cw-secondary" onclick="exportSlotBackup(${i})">Download backup file</button><button class="cw-secondary" onclick="loadGame(${i}).then(()=>{if(game)openSaves();})">Restore earlier save</button><button class="cw-delete" onclick="deleteSlot(${i})">Delete career</button></div></details></section>`).join('');
+  const empty=occupied.length?cards:'<div class="cw-slot cw-compact-slot" style="text-align:center"><h3>No careers saved in this browser</h3><p class="cw-muted">You can restore a backup file below.</p></div>';
+  careerScreen('Load Career',-1,`${Store.status==='none'?'<div class="note bad">This browser is not keeping saves. A restored career may not be saved automatically.</div>':''}${empty}<div class="cw-restore-foot"><button class="cw-restore-link" onclick="importSave()">Restore from backup file</button></div>`,'careerBackToMenu()');
 }
 async function exportSlotBackup(i) {
   const raw=await Store.get(i);
@@ -8618,26 +8689,26 @@ function downloadCareerJson(str,filename) {
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
 }
 async function deleteSlot(i) {
-  if(!confirm(`Permanently delete career in slot ${i}? This cannot be undone unless you already have a separate backup.`))return;
+  if(!confirm(`Delete the career in slot ${i}? This cannot be undone unless you have downloaded its backup file.`))return;
   await Store.del(i);openLoadCareer();
 }
 function openMenu() {
   const g = game.gm;
   sheet('Career', esc(g.name) + ' · ' + teamName(g.teamId), `<div class="rows">
+    <div class="row tap" onclick="openSaves()"><div class="stack"><div class="main-t">Saves</div><div class="sub-t">${esc(saveStatusShort())}</div></div><div class="end dim">›</div></div>
     <div class="kv"><span>Record</span><span>${g.wins}W ${g.losses}L ${g.draws}D · ${g.seasons} season${g.seasons === 1 ? '' : 's'}</span></div>
     <div class="kv"><span>Reputation</span><span>${g.rep}/100</span></div>
     <div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div>
     <div class="kv"><span>Trophies</span><span>${g.titles.length ? g.titles.map(t => COMPS[t.comp].short + ' ' + t.year).join(', ') : 'None yet'}</span></div>
     <div class="kv"><span>Save slot · build</span><span>${game.meta.slot} · ${BUILD.version}</span></div>
-    <div class="kv"><span>Storage</span><span class="${Store.status === 'none' ? 'loss' : 'win'}">${Store.status === 'none' ? 'Not being kept by this browser' : (Store.idbOk ? 'Browser database' : 'Browser storage') + (Store.lastSaved ? ' · saved ' + Store.lastSaved.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' }) : '')}</span></div></div>
+</div>
     ${Store.status === 'none' ? '<div class="pb"><div class="note bad">This browser is not keeping saves (private browsing, or opened from a file preview). Export your career to a file and import it next time, or open the game in Safari or Chrome directly.</div></div>' : ''}
     <div class="kv"><span>Contract Manager</span><span><select onchange="setContractManagerMode(this.value)"><option value="manual" ${contractManagerMode()==='manual'?'selected':''}>Manual</option><option value="assisted" ${contractManagerMode()==='assisted'?'selected':''}>Assisted</option><option value="automatic" ${contractManagerMode()==='automatic'?'selected':''}>Automatic</option></select></span></div>
     <div class="xs muted" style="padding:0 12px 12px">Delegation requires an appointed Contract Manager in Office → Staff. You can change this at any time.</div>
     <div class="kv"><span>Editor mode</span><span><span class="switch ${game.editor ? 'on' : ''}" onclick="game.editor=!game.editor;if(game.editor)game.edited=true;autosave();openMenu()"><i></i>${game.editor ? 'On' : 'Off'}</span></span></div>
     ${game.editor ? '<div class="pb" style="padding-bottom:0"><div class="xs muted">Edit any player from their profile, create players from League · Players, and rename teams below. Careers that use the editor are marked as edited.</div><button class="btn sm" style="margin-top:6px" onclick="editTeamsSheet()">Edit teams</button></div>' : ''}
-    <div class="pb"><button class="btn block" onclick="closeModal();ui.officeTab='saves';go('office')">Open Save Centre</button></div>
-    <div class="pb flex wrap"><button class="btn sm" onclick="exportSave()">Export save file</button><button class="btn sm" onclick="importSave()">Import save file</button><button class="btn sm ghost" onclick="closeModal();showHelp()">Help</button></div>`,
-    { flush: true, foot: `<button class="btn pri" onclick="saveGame(game.meta.slot,true)">Save now</button><button class="btn ghost" onclick="returnToLaunch()">Save and exit</button>` });
+    <div class="pb"><button class="btn sm ghost" onclick="closeModal();showHelp()">Help</button></div>`,
+    { flush: true, foot: `<button class="btn ghost block" onclick="closeModal()">Close</button>` });
 }
 function showGMProfile() { openMenu(); }
 // B134: A failed database write must never trap a player in their career.
@@ -8651,24 +8722,22 @@ function finishCareerExit() {
   $('launch').classList.remove('hidden');
   careerBackToMenu();
 }
+// Build 158: one sheet when the exit save cannot be confirmed.
 function showUnverifiedExitOptions(reason='') {
-  const detail = reason ? `<p class="xs" style="color:var(--bad)">${esc(reason)}</p>` : '';
-  sheet('Save recovery', 'Browser save not verified',
-    `<p class="s">Safari could not confirm that this career was saved in browser storage. You can still leave the game after exporting a JSON backup.</p>${detail}<p class="s muted">Use <b>Export backup and exit</b>, check that the download is available in Files, then confirm. This does not fix browser storage.</p>`,
-    {foot:`<button class="btn pri" onclick="exportBackupBeforeExit()">Export backup and exit</button><button class="btn ghost" onclick="closeModal()">Stay in career</button><button class="btn ghost" onclick="confirmExitWithoutBackup()">Exit without backup</button>`});
+  const detail = reason ? `<p class="xs muted" style="overflow-wrap:anywhere">${esc(reason)}</p>` : '';
+  sheet('Exit', 'Save not confirmed',
+    `<p class="s">This browser could not confirm your latest save. Download a backup file before you leave so no progress is lost.</p>${detail}<p class="xs muted" style="margin-top:12px"><button class="link" onclick="confirmExitWithoutBackup()">Exit without a backup</button></p>`,
+    {key:'exit-unverified', foot:`<button class="btn pri" onclick="exportBackupBeforeExit()">Download backup file and exit</button><button class="btn ghost" onclick="closeModal()">Stay</button>`});
 }
 function exportBackupBeforeExit() {
   if (!game) return;
   try { exportSave(); }
-  catch(e) { Store.lastError=String(e); flash('Backup download failed to start. Stay in career and try again.'); return; }
-  sheet('Backup recovery', 'Confirm your backup',
-    `<p class="s">A JSON backup download was requested. Check Safari Downloads or the Files app and confirm the file is present before exiting.</p><p class="s muted">The game cannot verify that iOS completed the download. If you cannot find it, stay in your career and try again.</p>`,
-    {foot:`<button class="btn pri" onclick="finishCareerExit()">I have the backup · Exit</button><button class="btn ghost" onclick="closeModal()">Stay in career</button><button class="btn ghost" onclick="exportBackupBeforeExit()">Download again</button>`});
+  catch(e) { Store.lastError=String(e); flash('Backup download failed to start. Try again.'); return; }
+  // Give Safari a moment to start the download before the career closes.
+  setTimeout(finishCareerExit, 1200);
 }
 function confirmExitWithoutBackup() {
-  sheet('Confirm', 'Exit without a verified save?',
-    `<p class="s">Your latest progress may be lost. Only select Exit if you accept that risk. Otherwise go back and export a JSON backup.</p>`,
-    {foot:`<button class="btn pri" onclick="closeModal()">Keep playing</button><button class="btn danger" onclick="finishCareerExit()">Exit anyway</button>`});
+  if (confirm('Exit without a confirmed save? Progress since your last save may be lost.')) finishCareerExit();
 }
 async function returnToLaunch() {
   if (!game) return;
@@ -8791,41 +8860,68 @@ function attentionSheet() {
   const body=pending.length ? pending.map(n=>`<div class="attention-item"><div class="attention-item-head"><span class="attention-status ${n.action?'required':''}">${n.action?'ACTION':'INFO'}</span><strong>${esc(n.title)}</strong></div><div class="attention-detail">${esc(n.description)}</div><div class="attention-buttons"><button class="btn ${n.action?'pri':'ghost'}" onclick="noticeAct(${n.i})">${n.action?'Review':'View details'}</button><button class="btn ghost" onclick="noticeDismiss(${n.i})">Dismiss</button></div></div>`).join('') : '<div class="empty">You’re all caught up.</div>';
   sheet('Club updates', pending.length ? `${pending.length} update${pending.length===1?'':'s'}` : 'All caught up', body, {flush:true, key:'attention', foot: pending.length?'<button class="btn ghost block" onclick="closeModal()">Close</button>':''});
 }
-function nationHomeKpis() {
-  const n = game.nation || {}, rankings = teamWorldRanks('FC');
-  const rank = Object.keys(rankings).sort((a, b) => rankings[b] - rankings[a]).indexOf('AUS') + 1;
-  const mine = squadOf(U()).filter(p => p.natDuty).length;
-  const st = (v, l, js) => `<button onclick="${js}"><b>${v}</b><span>${l}</span></button>`;
-  return `<div class="status-strip" style="grid-template-columns:repeat(3,1fr)">${st(rank ? ordinal(rank) : '–', 'Test rank', "ui.intlTab='world';go('intl')")}${st(n.conf ?? '–', 'National board', "ui.intlTab='aus';go('intl')")}${st(mine, 'Your players', "ui.intlTab='aus';go('intl')")}</div>`;
+// Build 158: 'v' at home and at neutral tournament venues; '@' only when the opponent is the home side or tournament host.
+function fixtureTournamentEvent(f) { return f ? (f.event || (f.comp === 'WC' ? 'T20WC' : null)) : null; }
+function fixtureVsWord(f, mine) {
+  if (!f) return 'v';
+  const opp = mine === f.home ? f.away : f.home;
+  const ev = fixtureTournamentEvent(f);
+  if (['T20WC','ODIWC','CT'].includes(ev)) return teamNat(opp) === tournamentHost(ev, game.year) && teamNat(mine) !== teamNat(opp) ? '@' : 'v';
+  if (f.stage === 'wtcfinal') return 'v';
+  return mine === f.home ? 'v' : '@';
 }
-function worldHomeRankings() {
- const ranks = teamWorldRanks('FC');
- return Object.keys(ranks).sort((a,b)=>ranks[b]-ranks[a]).slice(0,5).map((n,i)=>`<div class="kv"><span>${i+1}. ${nationTag(n)} ${esc(NATIONS[n]||n)}</span><b>${Math.round(ranks[n])}</b></div>`).join('') || '<div class="empty">Rankings not yet available.</div>';
-}
-// Build 132: National Home shows the relevant live tournament rather than unrelated Test rankings.
-// Derived entirely from fixtures/windows; no new persisted fields or save migration.
-function nationalHomeCompetitionPanel() {
+// The national tournament currently in focus (opening fixtures within 3 days, until the day after the last).
+function activeNationalTournament() {
   const all = game.season.fixtures || [];
   const events = [
     {id:'T20WC',label:'T20 World Cup',fmt:'T20',fx:all.filter(f=>f.comp==='WC')},
     {id:'ODIWC',label:'ODI World Cup',fmt:'OD',fx:all.filter(f=>f.event==='ODIWC')},
-    {id:'CT',label:'Champions Trophy',fmt:'CT',fx:all.filter(f=>f.event==='CT')}
+    {id:'CT',label:'Champions Trophy',fmt:'OD',fx:all.filter(f=>f.event==='CT')}
   ];
-  // A future tournament should not displace the rankings until its opening fixtures approach.
-  const active = events.filter(e=>e.fx.length && e.fx.some(f=>f.home==='AUS'||f.away==='AUS') &&
+  return events.filter(e=>e.fx.length && e.fx.some(f=>f.home==='AUS'||f.away==='AUS') &&
     game.day >= Math.min(...e.fx.map(f=>f.day))-3 && game.day <= Math.max(...e.fx.map(f=>f.day))+1)
-    .sort((a,b)=>Math.min(...a.fx.map(f=>f.day))-Math.min(...b.fx.map(f=>f.day)))[0];
-  if (!active) return panel('Test rankings',`<div class="rows">${worldHomeRankings()}</div>`,{flush:true});
+    .sort((a,b)=>Math.min(...a.fx.map(f=>f.day))-Math.min(...b.fx.map(f=>f.day)))[0] || null;
+}
+// The format Home should describe: the live tournament, otherwise Australia's next match, otherwise Tests.
+function nationalFocusFormat() {
+  const t = activeNationalTournament();
+  if (t) return t.fmt;
+  const nx = (game.season.fixtures || []).filter(f => !f.result && f.home && (f.home === 'AUS' || f.away === 'AUS') && f.day >= game.day).sort((a, b) => a.day - b.day)[0];
+  return nx && COMPS[nx.comp] && FORMATS[COMPS[nx.comp].fmt] ? COMPS[nx.comp].fmt : 'FC';
+}
+const FOCUS_RANK_LABEL = { FC: 'Test rank', OD: 'ODI rank', T20: 'T20I rank' };
+function nationRankOrder(fmt) {
+  const R = teamWorldRanks(fmt);
+  return Object.keys(R).filter(n => fmt !== 'FC' || !ASSOCIATE_NATIONS.includes(n)).sort((a, b) => R[b] - R[a] || a.localeCompare(b));
+}
+function nationHomeKpis() {
+  const n = game.nation || {}, fmt = nationalFocusFormat();
+  const rank = nationRankOrder(fmt).indexOf('AUS') + 1;
+  const mine = squadOf(U()).filter(p => p.natDuty).length;
+  const st = (v, l, js) => `<button onclick="${js}"><b>${v}</b><span>${l}</span></button>`;
+  const toRank = `ui.intlTab='world';ui.worldView='rankings';ui.worldRankKind='teams';ui.worldRankFmt='${fmt}';go('intl')`;
+  return `<div class="status-strip" style="grid-template-columns:repeat(3,1fr)">${st(rank ? ordinal(rank) : '–', FOCUS_RANK_LABEL[fmt], toRank)}${st(n.conf ?? '–', 'Board confidence', "ui.intlTab='aus';go('intl')")}${st(mine, 'Your players', "ui.intlTab='aus';go('intl')")}</div>`;
+}
+function worldHomeRankings(fmt = 'FC') {
+ const ranks = teamWorldRanks(fmt);
+ return nationRankOrder(fmt).slice(0,5).map((n,i)=>`<div class="kv"><span>${i+1}. ${nationTag(n)} ${esc(NATIONS[n]||n)}</span><b>${Math.round(ranks[n])}</b></div>`).join('') || '<div class="empty">Rankings not yet available.</div>';
+}
+// Build 132: National Home shows the relevant live tournament rather than unrelated Test rankings.
+// Derived entirely from fixtures/windows; no new persisted fields or save migration.
+function nationalHomeCompetitionPanel() {
+  const active = activeNationalTournament();
+  if (!active) { const fmt = nationalFocusFormat(); return panel(`${WORLD_RANK_LABELS[fmt]} rankings`,`<div class="rows">${worldHomeRankings(fmt)}</div>`,{flush:true,end:`<button class="link" onclick="ui.intlTab='world';ui.worldView='rankings';ui.worldRankKind='teams';ui.worldRankFmt='${fmt}';go('intl')">All ▸</button>`}); }
   const e=active, finals=e.fx.filter(f=>f.stage==='wcsemi1'||f.stage==='wcsemi2'||f.stage==='wcfinal'||f.stage==='globalsemi'||f.stage==='globalfinal');
   const ausKnock=finals.filter(f=>f.home==='AUS'||f.away==='AUS');
   const groupDone=e.fx.filter(f=>f.stage==='wcgroup'||f.stage==='wcsuper'||f.stage==='globalgroup'||f.stage==='globalsuper').every(f=>!!f.result);
   const progress=finals.some(f=>f.home&&f.away) && (ausKnock.length>0 || groupDone);
-  const go=`ui.intlTab='wc';ui.tournamentFormat='${e.fmt}';go('intl')`;
+  const go=`ui.intlTab='wc';ui.tournamentFormat='${e.id==='CT'?'CT':e.fmt}';go('intl')`;
   const link=`<button class="link" onclick="${go}">Full tournament ▸</button>`;
-  const miniRow=f=>`<div class="row ${f.result&&game.scorecards[f.id]?'tap':''}" ${f.result&&game.scorecards[f.id]?`onclick="showScorecard('${f.id}',0)"`:''}><div class="stack"><div class="main-t">${esc(f.round||'Knockout')}</div><div class="sub-t">${f.home?`${nationTag(teamNat(f.home))} ${esc(wcName(f.home))}`:'TBC'} v ${f.away?`${nationTag(teamNat(f.away))} ${esc(wcName(f.away))}`:'TBC'}</div></div><div class="end s">${f.result?esc(displayInternationalSummary(f.result.text||'')):f.day>=game.day?esc(dateStr(f.day)):'Upcoming'}</div></div>`;
+  const miniRow=f=>matchCard(f);
+  const note=nationalTournamentStanding(e);
   if(progress){
     const knockout=finals.filter(f=>f.home||f.away).sort((a,b)=>a.day-b.day);
-    return panel(`${e.label} · knockouts`,`<div class="rows">${knockout.map(miniRow).join('')||'<div class="empty">Semi-final fixtures pending.</div>'}</div>`,{flush:true,end:link});
+    return panel(`${e.label} · knockouts`,`${note?`<div class="mc-note">${esc(note)}</div>`:''}<div class="mc-list">${knockout.map(miniRow).join('')||'<div class="empty">Semi-final fixtures pending.</div>'}</div>`,{flush:true,end:link});
   }
   let group=null,rows=[],cutoff=2,stage='Group';
   if(e.id==='T20WC'){
@@ -8853,7 +8949,45 @@ function nationalHomeCompetitionPanel() {
     return panel(title,wcGroupTable(rows,{cutoff,destination:stage==='Group'&&e.id==='ODIWC'?'to Super Six':stage==='Group'&&e.id==='T20WC'?'to Super Eight':'to semi-finals',final:false}),{flush:true,end:link});
   }
   // During the tournament's transition between rounds, keep tournament information visible.
-  return panel(e.label,`<div class="rows">${(ausKnock.length?ausKnock:e.fx.filter(f=>f.home==='AUS'||f.away==='AUS').slice(-3)).map(miniRow).join('')}</div>`,{flush:true,end:link});
+  return panel(e.label,`${note?`<div class="mc-note">${esc(note)}</div>`:''}<div class="mc-list">${(ausKnock.length?ausKnock:e.fx.filter(f=>f.home==='AUS'||f.away==='AUS').slice(-3)).map(miniRow).join('')}</div>`,{flush:true,end:link});
+}
+// Build 158: compact match cards. One team per line with its score; result underneath.
+function matchCardScore(f, team) {
+  const sc = game.scorecards && game.scorecards[f.id];
+  const inns = sc && sc.innings ? sc.innings.filter(i => i.bat === team) : null;
+  if (inns && inns.length) return inns.map(i => `${i.runs}${i.allOut || i.wkts >= 10 ? '' : '/' + i.wkts}${i.declared ? 'd' : ''}${sc.fmt !== 'FC' ? ` <span class="mc-ov">(${oversStr(i.balls)})</span>` : ''}`).join(' &amp; ');
+  const r = f.result && (f.result.inns || []).filter(i => i.bat === team);
+  return r && r.length ? r.map(i => String(i.runs)).join(' &amp; ') : '';
+}
+function matchCard(f) {
+  const card = f.result && game.scorecards[f.id];
+  const mineRow = f.home === 'AUS' || f.away === 'AUS';
+  const w = f.result && f.result.winner;
+  const line = t => {
+    if (!t) return `<div class="mc-team"><span class="mc-name dim">To be decided</span></div>`;
+    const cls = !f.result ? '' : w === t ? 'mc-w' : w ? 'mc-l' : '';
+    return `<div class="mc-team ${cls}"><span class="mc-name">${nationTag(teamNat(t))} ${esc(wcName(t))}</span><span class="mc-score">${f.result ? matchCardScore(f, t) : ''}</span></div>`;
+  };
+  const right = f.result ? 'Result' : f.day >= game.day ? esc(dateStr(f.day)) : 'Upcoming';
+  const summary = f.result ? displayInternationalSummary(f.result.text || '') : '';
+  return `<div class="mc ${mineRow ? 'mine' : ''} ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}',0)"` : ''}>
+    <div class="mc-head"><span>${esc(f.round || 'Knockout')}</span><span>${right}</span></div>${line(f.home)}${line(f.away)}${summary ? `<div class="mc-res">${esc(summary)}</div>` : ''}</div>`;
+}
+// One line of Australia's group or super-stage finish for the tournament panel.
+function nationalTournamentStanding(e) {
+  try {
+    if (e.id === 'T20WC') {
+      const w = game.season.windows.find(x => x.wc && x.groups); if (!w) return '';
+      const gs = Object.keys(w.groups).filter(k => w.groups[k] && w.groups[k].includes('AUS'));
+      const g = gs.find(k => k === 'E' || k === 'F') || gs[0]; if (!g) return '';
+      const pos = wcTable(w, g).findIndex(r => r.t === 'AUS') + 1;
+      return pos ? `Australia finished ${ordinal(pos)} in ${g === 'E' || g === 'F' ? 'Super Eight group ' + g : 'Group ' + g}` : '';
+    }
+    const g = ['A','B'].find(k => e.fx.some(f => f.stage === 'globalgroup' && f.group === k && (f.home === 'AUS' || f.away === 'AUS')));
+    if (!g) return '';
+    const pos = globalTournamentTable(e.id, g).findIndex(r => r.t === 'AUS') + 1;
+    return pos ? `Australia finished ${ordinal(pos)} in Group ${g}` : '';
+  } catch (err) { return ''; }
 }
 function renderHome() {
   if (game.phase !== 'season') return renderOffseason();
@@ -8869,7 +9003,7 @@ function renderHome() {
   } else if (fx) {
     const mine = isUserTeam(fx.home) ? fx.home : fx.away, opp = mine === fx.home ? fx.away : fx.home, days = fx.day - game.day;
     hero = `<div class="hero">${badge(mine, true)}<div class="mid"><div class="comp featured-competition">${esc(fixtureCompetitionText(fx))}</div>
-      <div class="vs ell">${mine === fx.home ? 'v' : '@'} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>${bilateralSeriesHtml(fx)}`;
+      <div class="vs ell">${fixtureVsWord(fx, mine)} ${teamName(opp)}</div><div class="meta">${dateStr(fx.day)} · ${days > 0 ? `in ${days} day${days > 1 ? 's' : ''}` : 'today'}</div></div>${badge(opp, true)}</div>${bilateralSeriesHtml(fx)}`;
     acts = `<button class="btn pri" onclick="continueGame()">${game.pendingFx ? 'Match day ▸' : 'Continue ▸'}</button>${simBtn}`;
   } else {
     hero = `<div class="hero"><div class="mid"><div class="comp">Season</div><div class="vs">No fixtures left for ${me.nick}</div></div></div>`;
@@ -8895,7 +9029,7 @@ function renderHome() {
     ${needs}
     <div class="grid g2">
       <div class="grid">${homeNation ? nationalHomeCompetitionPanel() : panel('Ladder', ladderTable(hc, true), { flush: true, end: `<span class="home-comp-select">${sel(COMP_ORDER.map(c => [c, COMPS[c].short]), hc, "ui.homeComp=this.value;render()")}</span>` })}</div>
-      <div class="grid">${wcHomeCard()}${up.length ? panel('Coming up', `<div class="rows">${up.map(f => fixtureRow(f, false)).join('')}</div>`, { flush: true }) : ''}${news}</div>
+      <div class="grid">${homeNation && activeNationalTournament() ? '' : wcHomeCard()}${up.length ? panel('Coming up', `<div class="rows">${up.map(f => fixtureRow(f, false)).join('')}</div>`, { flush: true }) : ''}${news}</div>
     </div></div>`;
 }
 function newsRow(n) { return `<div class="row tap" onclick="newsSheet()"><div class="stack"><div class="main-t ell">${chip('', esc(n.tag))} ${esc(n.title)}</div><div class="sub-t ell">${esc(n.body)}</div></div></div>`; }
@@ -9216,7 +9350,7 @@ function fixtureRow(f, isNext) {
     else end = f.result.winner ? `<span class="xs">${tdot(f.result.winner)}</span>` : '<span class="xs dim">Draw</span>';
   } else if (isNext) end = chip('warn', 'Next');
   const intl = !!COMPS[f.comp]?.intl || !!f.event || f.stage === 'intl' || f.stage === 'world';
-  const teams = f.home ? (mine && ui.fxMine ? `${f.stage === 'intl' ? 'AUS ' : ''}${me === f.home ? 'v' : '@'} ${intl ? internationalTeamName(me === f.home ? f.away : f.home) : teamName(me === f.home ? f.away : f.home)}` : `${intl ? internationalTeamName(f.home) : teamDef(f.home).nick} v ${intl ? internationalTeamName(f.away) : teamDef(f.away).nick}`) : 'Teams to be decided';
+  const teams = f.home ? (mine && ui.fxMine ? `${intl && me === 'AUS' ? 'AUS ' : ''}${fixtureVsWord(f, me)} ${intl ? internationalTeamName(me === f.home ? f.away : f.home) : teamName(me === f.home ? f.away : f.home)}` : `${intl ? internationalTeamName(f.home) : teamDef(f.home).nick} v ${intl ? internationalTeamName(f.away) : teamDef(f.away).nick}`) : 'Teams to be decided';
   const sub = f.result ? esc(displayInternationalSummary(f.result.summary)) : f.home ? teamDef(f.venue || f.home).ground : '';
   const card = f.result && game.scorecards[f.id];
   return `<div class="row ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}')"` : ''}><div class="center" style="width:34px;flex:none"><div class="b" style="line-height:1">${d.getUTCDate()}</div><div class="xs dim">${d.toLocaleDateString('en-AU', { month:'short', timeZone:'UTC' })}</div></div>
@@ -9388,8 +9522,8 @@ function playerSearchRows() {
 // §22 OFFICE --------------------------------------------------------------------------
 function setOfficeTab(t) { ui.officeTab = t; render(); }
 function saveHealthText() {
-  if (Store.status === 'none') return 'Browser storage unavailable. Export your career JSON now.';
-  if (Store.status === 'error') return 'Last save attempt failed. Export JSON and check the saved slot.';
+  if (Store.status === 'none') return 'Browser storage unavailable. Download a backup file now.';
+  if (Store.status === 'error') return 'Last save attempt failed. Download a backup file.';
   return `${Store.idbOk ? 'Database + recovery copies' : 'Local browser storage'}${Store.lastSaved ? ' · Last saved '+Store.lastSaved.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : ' · No confirmed save this session'}`;
 }
 // A visible manual save must complete even if Safari leaves an autosave in flight.
@@ -9421,16 +9555,18 @@ async function saveAndConfirm() {
     if (valid) {
       const stamp=new Date(info.data.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
       Store.lastSaved=new Date(info.data.meta.saved);
-      saveStatusUpdate(`Saved and verified at ${stamp} (${checked?.name||'browser storage'}).`);
-      flash(`Career saved and verified · ${stamp}`);
+      Store.status='ok';
+      if (document.querySelector('#modalRoot .sheet[data-key="saves"]')) sheetSwap('saves', savesSheetBody(_savesEarlier), `<button class="btn ghost block" onclick="returnToLaunch()">Save and exit</button>`);
+      saveStatusUpdate(`Saved and checked at ${stamp}.`);
+      flash(`Career saved · ${stamp}`);
     } else {
-      saveStatusUpdate((Store.lastError ? Store.lastError + ' ' : '') + (completed ? 'Save could not be verified. Export a JSON backup now.' : 'Browser storage stalled. Export a JSON backup now.'),true);
-      flash('Save not confirmed. Export JSON backup.');
+      saveStatusUpdate((completed ? 'Save could not be confirmed.' : 'Browser storage did not respond.') + ' Download a backup file now.',true);
+      flash('Save not confirmed. Download a backup file.');
     }
   } catch(e) {
     Store.lastError=String(e);
-    saveStatusUpdate('Save check failed. Export a JSON backup now.',true);
-    flash('Save could not be verified. Export JSON.');
+    saveStatusUpdate('Save check failed. Download a backup file now.',true);
+    flash('Save could not be confirmed. Download a backup file.');
   } finally { _manualSaveActive=false; }
 }
 async function verifyActiveSlot() {
@@ -9443,19 +9579,104 @@ async function verifyActiveSlot() {
     String(g.meta.created||'')===String(game.meta.created||'') && Number(g.meta.slot || slot) === slot &&
     Number(g.meta.saveRevision||0)>=Number(game.meta.saveRevision||0));
   const stamp = ok && g.meta.saved ? new Date(g.meta.saved).toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'}) : 'unknown';
-  saveStatusUpdate(ok ? `Current career and revision verified in slot ${slot} (${Store.lastRecovery?.source||'storage'}), saved at ${stamp}.` : `Current career progress is not verified in slot ${slot}. Select Save career or export JSON.`, !ok);
+  saveStatusUpdate(ok ? `Current career and revision verified in slot ${slot} (${Store.lastRecovery?.source||'storage'}), saved at ${stamp}.` : `Current career progress is not verified in slot ${slot}. Select Save now or download a backup file.`, !ok);
   flash(ok ? `Slot ${slot} verified · ${stamp}` : 'Save verification failed. Export JSON.');
   return ok;
 }
-function renderSaveCentre() {
-  const slot=game.meta.slot||1;
-  return `<section class="panel"><div class="ph"><h3>Career saves</h3></div><div class="pb"><div class="s b">Active career · Slot ${slot}</div><div class="xs muted" style="margin:6px 0 14px">${esc(saveHealthText())}</div><div class="save-centre-actions" style="display:grid;grid-template-columns:1fr"><button class="btn pri" onclick="saveAndConfirm()">Save career</button><button class="btn" onclick="importSave()">Restore a backup</button></div><details style="margin-top:12px"><summary class="xs muted" style="cursor:pointer;padding:9px 0">Backup and recovery</summary><button class="btn ghost block" onclick="exportSave()">Download JSON backup</button></details><p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:12px 0 0;min-height:17px">Select Save career to save and check your progress.</p><p class="xs muted" style="margin-top:10px;line-height:1.5">Your career is saved in this browser, not on GitHub. Export a JSON backup regularly, especially before changing phones, clearing Safari data or replacing a slot.</p></div></section>`;
+// Build 158: the one place for saves. Save, backup file, restore, earlier saves on this device.
+function savedTimeText(ms) {
+  if (!ms) return 'unknown';
+  const d = new Date(ms), today = new Date().toDateString() === d.toDateString();
+  return today ? d.toLocaleTimeString('en-AU', { hour:'numeric', minute:'2-digit' }) : d.toLocaleString('en-AU', { day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
+}
+function saveStatusShort() {
+  if (Store.status === 'none') return 'Not being kept by this browser';
+  if (Store.status === 'error') return 'Last save not confirmed';
+  return Store.lastSaved ? `Saved ${savedTimeText(+Store.lastSaved)}` : 'Saved automatically';
+}
+function backupReminderText() {
+  const b = game.meta.lastBackup;
+  if (!b) return 'No backup file yet. Download one and keep it in Files.';
+  const behind = (Number(game.year) || 0) - (Number(b.year) || 0);
+  return `Last backup: ${esc(b.label || '')} season${behind >= 1 ? ' · a season or more ago' : ''}`;
+}
+const EARLIER_LABEL = { recovery: 'Previous save', undo: 'Before your last restore', seasonA: 'Start of season', seasonB: 'Start of season' };
+function savesSheetBody(earlier) {
+  const slot = game.meta.slot || 1;
+  const bad = Store.status !== 'ok';
+  const status = bad
+    ? `<div class="save-status bad"><b>${Store.status === 'none' ? 'This browser is not keeping saves' : 'Your last save was not confirmed'}</b><span>Download a backup file now so no progress is lost.</span></div>`
+    : `<div class="save-status ok"><b>${Store.lastSaved ? 'Saved automatically · ' + savedTimeText(+Store.lastSaved) : 'Saved automatically'}</b><span>Slot ${slot} · ${Store.idbOk ? 'browser database' : 'browser storage'}</span></div>`;
+  const behind = !game.meta.lastBackup || (Number(game.year) || 0) > (Number(game.meta.lastBackup.year) || 0);
+  let earlierHtml;
+  if (earlier === null) earlierHtml = '<div class="empty">Checking…</div>';
+  else if (!Store.idbOk) earlierHtml = '<div class="empty">Not available in this browser.</div>';
+  else {
+    const rows = earlier.filter(e => e.h.created === String(game.meta.created || '')).map(e => {
+      const m = e.h.m || {};
+      const when = `${m.day != null ? dateStr(m.day) + ' · ' : ''}${esc(m.label || '')}`;
+      return `<div class="row"><div class="stack"><div class="main-t">${EARLIER_LABEL[e.kind]}</div><div class="sub-t">${when} · saved ${esc(savedTimeText(e.h.saved))}</div></div><button class="btn sm" onclick="confirmRestoreEarlier('${e.kind}')">Restore</button></div>`;
+    }).join('');
+    earlierHtml = rows || '<div class="empty">None yet. A save is kept at the start of each season.</div>';
+  }
+  return `<div class="pb">${status}<button class="btn pri block" style="margin-top:12px" onclick="saveAndConfirm()">Save now</button>
+    <p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:8px 0 0;min-height:16px"></p></div>
+    <div class="save-sec"><div class="save-sec-h">Backup file</div><p class="xs ${behind ? 'warn-t' : 'muted'}">${backupReminderText()}</p>
+    <div class="save-btns"><button class="btn" onclick="exportSave()">Download backup file</button><button class="btn ghost" onclick="importSave()">Restore from backup file</button></div>
+    <p class="xs muted">A backup file is the safest copy of your career. Restoring one opens it in an empty slot and never replaces another career.</p></div>
+    <div class="save-sec"><div class="save-sec-h">Earlier saves on this device</div><div class="rows">${earlierHtml}</div>
+    <p class="xs muted">Restoring an earlier save replaces your current save. The save you replace is kept, so you can switch back.</p></div>`;
+}
+let _savesEarlier = null;
+async function openSaves() {
+  if (!game) return;
+  const foot = `<button class="btn ghost block" onclick="returnToLaunch()">Save and exit</button>`;
+  if (!sheetSwap('saves', savesSheetBody(_savesEarlier), foot)) sheet('Career', 'Saves', savesSheetBody(_savesEarlier), { flush: true, key: 'saves', foot });
+  const list = await Store.earlierSaves(game.meta.slot || 1);
+  _savesEarlier = list;
+  sheetSwap('saves', savesSheetBody(list), foot);
+}
+function confirmRestoreEarlier(kind) {
+  const e = (_savesEarlier || []).find(x => x.kind === kind); if (!e) return;
+  const m = e.h.m || {};
+  confirmSheet('Restore earlier save', `Go back to ${m.day != null ? dateStr(m.day) + ', ' : ''}${esc(m.label || 'this save')}? Your current save is kept as “Before your last restore”, so you can switch back.`, 'Restore', `restoreEarlierSave('${kind}')`);
+}
+// Replace the active slot with an earlier copy of the same career. The current state is
+// kept under 'undo' (Before your last restore). Revisions stay monotonic so every later save orders correctly.
+async function restoreEarlierSave(kind) {
+  if (!game || !Store.idbOk) return;
+  const slot = game.meta.slot || 1, created = String(game.meta.created || '');
+  cancelAutosave();
+  try { await _saving; await Store._idbChain.catch(() => false); } catch (e) {}
+  const earlier = (await Store.earlierSaves(slot)).find(x => x.kind === kind);
+  if (!earlier || earlier.h.created !== created) { flash('That earlier save is no longer available.'); return; }
+  const currentRaw = serialiseGame();
+  const topRev = Math.max(Number(game.meta.saveRevision) || 0, ...((await Store.candidates(slot)).map(c => c.info.revision || 0)), earlier.h.revision || 0);
+  try {
+    loadFromString(earlier.raw, slot);
+    game.meta.saveRevision = topRev + 1;
+    game.meta.saved = new Date().toISOString();
+    game.meta.slot = slot;
+    const str = serialiseGame(), meta = metaOf(game);
+    await Store._tx('readwrite', st => { st.put(currentRaw, 'undo' + slot); st.put(str, 'slot' + slot); st.put(meta, 'meta' + slot); return null; });
+    clearLocalSaveMirror(slot);
+    writeLocalSaveMirror(slot, str, meta);
+    const check = await verifiedCareerSnapshot(slot, game.meta.saveRevision, created);
+    if (!check) throw new Error('Restored save could not be verified.');
+    Store.status = 'ok'; Store.lastError = null; Store.lastSaved = new Date(game.meta.saved); _lastSaveAt = Date.now();
+    _savesEarlier = null;
+    flash('Earlier save restored.');
+  } catch (err) {
+    Store.lastError = String(err);
+    try { loadFromString(currentRaw, slot); } catch (e2) {}
+    flash('Could not restore that save. Your current career is unchanged.');
+  }
 }
 function renderOffice() {
   const t = ui.officeTab;
-  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'log' ? renderLog() : t === 'diagnostics' ? renderDiagnostics() : t === 'saves' ? renderSaveCentre() : t === 'inbox' ? renderInbox() : renderBoard();
+  const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'log' ? renderLog() : t === 'diagnostics' ? renderDiagnostics() : t === 'inbox' ? renderInbox() : renderBoard();
   const open = openInbox().length;
-  return `${pageTitle('Office', `GM's desk · ${teamName(U())}`)}<div class="office-navigation">${seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['diagnostics','Diagnostics'],['saves','Saves'],['log','Log']], t, 'setOfficeTab')}</div><div style="height:10px"></div>${body}`;
+  return `${pageTitle('Office', `GM's desk · ${teamName(U())}`)}<div class="office-navigation">${seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['diagnostics','Diagnostics'],['log','Log']], t, 'setOfficeTab')}</div><div style="height:10px"></div>${body}`;
 }
 // ---- Club, Intl and Legacy pages ----
 function renderClubPage() {
@@ -9712,7 +9933,7 @@ function renderDiagnostics(){
   const e=matchEngineDiagnosticReport();
   const gaps=d.teams.filter(t=>t.underMinimum||t.overCap);
   const rows=d.teams.map(t=>`<div class="kv"><span>${esc(t.name)} · ${t.squad} players · WK ${t.roles.WK} · PACE ${t.roles.PACE} · SPIN ${t.roles.SPIN}</span><span>${money(t.capSpace)} cap ${t.underMinimum||t.overCap?'<b class="loss">CHECK</b>':''}</span></div>`).join('');
-  return `${panel('Match engine diagnostics',`<p class="s muted">Export retained batting scorecards by position (1–11), early dismissals, run shares and individual player performance. This report is read-only. Earlier seasons and background fixtures without scorecards cannot be reconstructed.</p><div class="pb"><button class="btn pri" onclick="downloadMatchEngineDiagnostic()">Export match engine report (.json)</button> <button class="btn sm" onclick="exportSave()">Export full career save (.json)</button></div><p class="xs muted">${e.sample.analysedMatches} retained matches available · ${e.sample.retainedScorecards} stored scorecards. Share either or both files for analysis.</p>`,{flush:true})}${panel('Career diagnostic',`<p class="s muted">Export a read-only JSON snapshot of this career for engine and long-term recruitment analysis. It includes player ratings, club composition, contracts, cap positions, free agents and league history. It does not change the save.</p><div class="pb"><button class="btn pri" onclick="downloadCareerDiagnostic()">Export diagnostic report (.json)</button></div><p class="s">${gaps.length?gaps.length+' clubs require attention':'All domestic clubs meet the numerical squad and salary checks.'}</p>`,{flush:true})}${panel('Domestic free agents by role',`<div class="rows">${Object.entries(d.market.domesticAvailableByRole).map(([g,n])=>`<div class="kv"><span>${g}</span><b>${n}</b></div>`).join('')}</div>`,{flush:true})}${panel('Domestic squad health',`<div class="rows">${rows}</div>`,{flush:true})}`;
+  return `${panel('Match engine diagnostics',`<p class="s muted">Export retained batting scorecards by position (1–11), early dismissals, run shares and individual player performance. This report is read-only. Earlier seasons and background fixtures without scorecards cannot be reconstructed.</p><div class="pb"><button class="btn pri" onclick="downloadMatchEngineDiagnostic()">Export match engine report (.json)</button></div><p class="xs muted">${e.sample.analysedMatches} retained matches available · ${e.sample.retainedScorecards} stored scorecards. Share it for analysis. Career backup files are in Saves.</p>`,{flush:true})}${panel('Career diagnostic',`<p class="s muted">Export a read-only JSON snapshot of this career for engine and long-term recruitment analysis. It includes player ratings, club composition, contracts, cap positions, free agents and league history. It does not change the save.</p><div class="pb"><button class="btn pri" onclick="downloadCareerDiagnostic()">Export diagnostic report (.json)</button></div><p class="s">${gaps.length?gaps.length+' clubs require attention':'All domestic clubs meet the numerical squad and salary checks.'}</p>`,{flush:true})}${panel('Domestic free agents by role',`<div class="rows">${Object.entries(d.market.domesticAvailableByRole).map(([g,n])=>`<div class="kv"><span>${g}</span><b>${n}</b></div>`).join('')}</div>`,{flush:true})}${panel('Domestic squad health',`<div class="rows">${rows}</div>`,{flush:true})}`;
 }
 function renderFA() {
   // Upgrade an existing save already parked at the 2026-27 (or later) market.
@@ -10172,6 +10393,7 @@ function liveStep(mode) {
     const inn = curInn(M);
     if (inn.closed && mode !== 'match') break;
     if (M.pause) { if ((mode === 'stumps' || mode === 'innings') && M.pause.type !== 'stumps') M.pause = null; else break; }
+    if (mode === 'ball') break;
     if (mode === 'wicket' && ev.wkt) break;
     if ((mode === 'break' || mode === 'stumps') && (M.breakSeq || 0) > seq0 && (mode === 'stumps' ? M.lastBreak === 'stumps' : M.lastBreak !== 'drinks')) break;
     if ((mode === 'over' || mode === 'five' || mode === 'session') && inn.overBalls === 0 && legal >= target) break;
@@ -10184,7 +10406,13 @@ function liveStep(mode) {
   const beforeY = window.scrollY || document.documentElement.scrollTop || 0;
   autosave(); render(); window.scrollTo(0, beforeY); setTimeout(openPendingWeather, 0);
 }
-function liveSkip(v) { if (v) liveStep(v); }
+// Build 158: the main live button follows the chosen step (ball or over); other choices are one-off jumps.
+function liveSkip(v) {
+  if (!v) return;
+  const M = game.live;
+  if ((v === 'ball' || v === 'over') && M) M.stepMode = v;
+  liveStep(v);
+}
 function resumeLive() { const M = game.live; if (!M) return; M.pause = null; autosave(); render(); window.scrollTo(0, 0); }
 function startNextInnings() {
   const M = game.live; if (!M || M.done) return;
@@ -10400,8 +10628,12 @@ function renderLive() {
     : `<button class="btn" onclick="liveScorecardSheet()">Scorecard</button><button class="btn pri" style="grid-column:span 2" onclick="showMatchReview()">Match review ▸</button>`;
   else if (inn.closed) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="startNextInnings()">Start next innings ▸</button>`;
   else if (M.pause) bar = `<button class="btn" onclick="liveStep('match')">Sim to result</button><button class="btn pri" style="grid-column:span 2" onclick="resumeLive()">${M.pause.type === 'stumps' ? `Start day ${M.pause.day + 2}` : 'Resume play'} ▸</button>`;
-  else bar = `<button class="btn pri" style="grid-column:span 2" onclick="liveStep('over')">Next over ▸</button>
-    <select class="skip" onchange="liveSkip(this.value);this.value=''"><option value="">Skip ahead…</option><option value="wicket">To next wicket</option>${M.fmt === 'FC' ? '<option value="break">To the next break</option><option value="stumps">To stumps</option>' : '<option value="five">5 overs</option>'}<option value="innings">To end of innings</option><option value="match">To the result</option></select>`;
+  else {
+    const step = M.stepMode === 'ball' ? 'ball' : 'over';
+    const opt = (v, l) => `<option value="${v}">${v === step ? '✓ ' : ''}${l}</option>`;
+    bar = `<button class="btn pri" style="grid-column:span 2" onclick="liveStep('${step}')">${step === 'ball' ? 'Next ball' : 'Next over'} ▸</button>
+    <select class="skip" aria-label="Play to" onchange="liveSkip(this.value);this.value=''"><option value="">Play to…</option>${opt('ball', 'Next ball')}${opt('over', 'Next over')}${opt('wicket', 'Next wicket')}${opt('five', '5 overs')}${M.fmt === 'FC' ? opt('break', 'Next break') + opt('stumps', 'Stumps') : ''}${opt('innings', 'End of innings')}${opt('match', 'Result')}</select>`;
+  }
   // Build 077: hold the completed innings in the match centre until the GM requests the review.
   // M.done is already finalised by the engine; no additional balls can be bowled here.
   if (M.done && ui.matchReview) return `<div class="grid">${recap}</div><div class="livebar three">${bar}</div>`;
@@ -10946,7 +11178,7 @@ function renderTournaments(){
  const current=group.length?`<div class="note">ODI World Cup ${game.season.label} · Host ${tournamentHostLabel('ODIWC',game.year)} · 14 nations · Two groups, Super Six and knockouts</div>
    <div class="grid g2">${['A','B'].map(g=>panel('Group '+g,wcGroupTable(globalTournamentTable('ODIWC',g),{cutoff:wcQualificationCutoff('ODIWC','group',g),destination:'to Super Six',final:group.filter(f=>f.group===g).every(f=>!!f.result)}),{flush:true})).join('')}</div>
    ${superTable.length?panel('Super Six · carried results included',wcGroupTable(superTable,{cutoff:wcQualificationCutoff('ODIWC','super'),destination:'to semi-finals',final:superFx.every(f=>!!f.result)}),{flush:true}):''}
-   ${panel('Knockouts',`<div class="bracket">${ko.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
+   ${panel('Knockouts',`<div class="mc-list">${ko.map(matchCard).join('')}</div>`,{flush:true})}
    ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures</div>'}</div>`,{flush:true})}
    ${panel('Tournament fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
  return `${tabs}<div style="height:10px"></div>${currentWorldCupPreviewButton('ODIWC')}${worldCupReviewButton('ODIWC')}${current}${!group.length?'<div class="note">No ODI World Cup scheduled this season.</div>':''}
@@ -10984,7 +11216,7 @@ function renderChampionsTrophy(){
  const ko=matches.filter(f=>f.stage==='globalsemi'||f.stage==='globalfinal');
  const current=groups.length?`<div class="note">Champions Trophy ${game.season.label} · Host ${tournamentHostLabel('CT',game.year)} · 8 nations · Two groups of four · Top two reach semi-finals</div>
  <div class="grid g2">${['A','B'].map(g=>panel('Group '+g,wcGroupTable(globalTournamentTable(event,g),{cutoff:2,destination:'to semi-finals',final:groups.filter(f=>f.group===g).every(f=>!!f.result)}),{flush:true})).join('')}</div>
- ${panel('Knockouts',`<div class="bracket">${ko.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
+ ${panel('Knockouts',`<div class="mc-list">${ko.map(matchCard).join('')}</div>`,{flush:true})}
  ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">Australia has no scheduled matches in this tournament.</div>'}</div>`,{flush:true})}
  ${panel('Fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
  const historyPanel=globalPastWinners('CT');
@@ -11001,7 +11233,7 @@ function renderWorldCup() {
   const phase=w.champion?'Champions: '+wcName(w.champion):knock.some(f=>f.home)?'Knockouts':w.groups.E?'Super Eight':'Group stage';
   return `${currentWorldCupPreviewButton('T20WC')}${worldCupReviewButton('T20WC')}<div class="note">T20 World Cup ${game.season.label} · Host ${tournamentHostLabel('T20WC',game.year)} · <b>${esc(phase)}</b> · 20 teams</div>
     <div class="grid g2">${allGroups.map(g=>panel('Group '+g,wcGroupTable(wcTable(w,g),{cutoff:wcQualificationCutoff('T20WC',g==='E'||g==='F'?'super':'group',g),destination:g==='E'||g==='F'?'to semi-finals':(game.season.fixtures.some(f=>f.stage==='wcsuper')?'to Super Eight':'to semi-finals'),final:fx.filter(f=>f.group===g && (g==='E'||g==='F'?f.stage==='wcsuper':f.stage==='wcgroup')).every(f=>!!f.result)}),{flush:true})).join('')}</div>
-    ${panel('Knockouts',`<div class="bracket">${knock.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
+    ${panel('Knockouts',`<div class="mc-list">${knock.map(matchCard).join('')}</div>`,{flush:true})}
     <div class="grid g2">${panel("Australia's path",`<div class="rows">${aus.map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures.</div>'}</div>`,{flush:true})}
     ${panel('Tournament leaders',wcLeaderRows(L.bat.map(x=>({id:x.id,v:x.r+' runs',sub:x.inn+' inns'})),L.bowl.map(x=>({id:x.id,v:x.w+' wkts',sub:oversStr(x.balls)+' ov'}))),{flush:true})}</div>
     ${panel('Results',`<div class="rows">${fx.filter(f=>f.result).slice().reverse().map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No results yet.</div>'}</div>`,{flush:true})}
@@ -11416,6 +11648,7 @@ function homeExtras() {
     const count = metas.filter(Boolean).length;
     launchSavedCount.textContent = count ? `${count} saved career${count === 1 ? '' : 's'}` : 'No saved careers';
   }
+  renderLaunchContinue(metas);
 })();
 
 // Build 038: iOS Safari's floating bottom toolbar can cover bottom:0 fixed controls.
