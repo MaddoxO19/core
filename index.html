@@ -1063,7 +1063,9 @@ body.live-mode .actbar{display:none}
 .career-stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:11px}
 .career-stat{min-width:0;border:1px solid var(--line2);border-radius:11px;padding:12px 10px;background:var(--s2)}
 .career-stat-name{font-size:11px;color:var(--muted);line-height:1.3}
-.career-stat-value{font-size:25px;font-weight:900;margin:5px 0;color:var(--text);font-variant-numeric:tabular-nums}
+.career-stat-value{font-size:20px;font-weight:900;margin:5px 0;color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.15}
+.career-stat-value.long{font-size:17px}
+.career-stat-value.xlong{font-size:14.5px}
 .career-stat-sub{font-size:11px;color:var(--dim);line-height:1.3}
 .career-opponent-header,.career-opponent summary{display:grid;grid-template-columns:minmax(0,1fr) 105px;align-items:center;gap:8px;padding:11px 10px}
 .career-opponent-header{color:var(--dim);text-transform:uppercase;font-size:11px;font-weight:800;letter-spacing:.05em}
@@ -1218,6 +1220,14 @@ body.live-mode .actbar{display:none}
   .seg button{min-height:38px}
   button.link{padding:10px 8px;margin:-10px -8px}
 }
+
+/* B155: Past winners rows, shared by every tournament */
+.past-winner{align-items:flex-start;gap:10px}
+.past-winner .pw-season{color:var(--muted);white-space:nowrap;flex:none}
+.past-winner .pw-main{text-align:right;min-width:0}
+.past-winner .pw-main .legacy-flag{display:inline-block!important;vertical-align:-3px!important;margin-right:4px}
+.past-winner .pw-sub{display:block;margin-top:2px;line-height:1.35}
+.past-winner .pw-sub .legacy-flag{width:18px!important;height:12px!important;min-width:18px!important;max-width:18px!important;min-height:12px!important;max-height:12px!important;vertical-align:-1px!important;margin:0 2px 0 0}
 </style>
 </head>
 <body>
@@ -1276,7 +1286,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.76 Build 153', title: 'Faster Saves, Lighter Screens and Fixes', engine: 'C3.1 Long-Career Trial Ball-by-Ball' };
+const BUILD = { version: 'v0.9.80 Build 157', title: 'Elite Player Ramp and Fixes', engine: 'C3.1E Ball-by-Ball with Elite Ramp' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -2446,6 +2456,8 @@ function ballContextC23(M, inn, batter, bowler, sc) {
 let ENGINE_EXPERIMENT_C3 = true;
 // C3.1 provisional intercept correction, preserving matchup and plan sensitivity.
 const C31_HAZARD_LOGIT_ADJ = {FC:-0.095,OD:0,T20:-0.12};
+// B157: elite-rating ramp strengths (log-odds at the top of the ramp). Bowling is at half strength.
+const ELITE_RAMP = { bat: { FC:0.45, OD:0.40, T20:0.32 }, bowl: { FC:0.225, OD:0.20, T20:0.16 } };
 function ballContextC3(M, inn, batter, bowler, sc) {
   const old = ballContextC23(M, inn, batter, bowler, sc);
   const fmt = M.fmt;
@@ -2471,7 +2483,14 @@ function ballContextC3(M, inn, batter, bowler, sc) {
   const contextMul = Math.max(0.25, (old.pW / Math.max(0.000001, oldSkillMul * baseHazard)));
   const logit = p => Math.log(p / (1 - p));
   const logistic = x => 1 / (1 + Math.exp(-x));
-  let hazard = logistic(logit(baseHazard) - 0.37 * gap + Math.log(contextMul) + initialRisk + fatigueRisk + phaseRisk + wicketRisk + C31_HAZARD_LOGIT_ADJ[fmt]);
+  // B157: elite ramp. Above a displayed rating of about 88 the bounded skill gap
+  // flattens, so a 99-rated batter barely out-performed a 90. This term grows
+  // linearly from 0 (engine rating 82, about 88 displayed) to 1 (93, about 99 displayed).
+  // Batters below the threshold, and therefore almost the whole league, are unaffected.
+  const eliteBat = clamp((batRating(batter, fmt) - RATING_SHIFT - 82) / 11, 0, 1);
+  const eliteBowl = canBowl(bowler) ? clamp((bowlRating(bowler, fmt) - RATING_SHIFT - 82) / 11, 0, 1) : 0;
+  const eliteAdj = -ELITE_RAMP.bat[fmt] * eliteBat + ELITE_RAMP.bowl[fmt] * eliteBowl;
+  let hazard = logistic(logit(baseHazard) - 0.37 * gap + Math.log(contextMul) + initialRisk + fatigueRisk + phaseRisk + wicketRisk + C31_HAZARD_LOGIT_ADJ[fmt] + eliteAdj);
   hazard = clamp(hazard, fmt === 'FC' ? 0.007 : fmt === 'OD' ? 0.010 : 0.016, fmt === 'FC' ? 0.042 : fmt === 'OD' ? 0.065 : 0.095);
   // Reweight the *conditional* scoring distribution independently from hazard:
   // remove a fraction of the extreme matchup boundary multiplier without
@@ -2780,8 +2799,8 @@ function simBall(M) {
     if (M.dayLogged !== d) {
       M.dayLogged = d;
       const dd = M.cond.days[d];
-      M.log.unshift({ cls:'sys', text: `Day ${d + 1}: ${SKIES[dd.sky].label}.` });
-      if (dd.lost > 0) registerMatchWeather(M, 'day-' + d, `Day ${d + 1}: Rain delay · ${dd.lost} overs lost. Play resumes.`, dd.lost, `Day ${d + 1} · ${SKIES[dd.sky].label}`);
+      M.log.unshift({ cls:'sys', text: dd.reserve ? `Reserve day: ${SKIES[dd.sky].label}. Up to ${dd.recover} overs to make up lost time.` : `Day ${d + 1}: ${SKIES[dd.sky].label}.` });
+      if (dd.lost > 0 && !dd.reserve) registerMatchWeather(M, 'day-' + d, `Day ${d + 1}: Rain delay · ${dd.lost} overs lost. Play resumes.`, dd.lost, `Day ${d + 1} · ${SKIES[dd.sky].label}`);
     }
   }
   let inn = curInn(M);
@@ -3182,9 +3201,15 @@ function rollConditions(M, fx) {
       const sky = rollSky(fx.day + d, v), r = SKIES[sky].rain;
       c.days.push({ sky, lost: r ? Math.round(rand() * r * opd) : 0 });
     }
-    M.maxBalls = c.days.reduce((a, d) => a + (opd - d.lost), 0) * 6;
     const lost = c.days.reduce((a, d) => a + d.lost, 0);
+    // B156: the WTC final has a reserve day that only makes up overs lost to weather.
+    if (fx && fx.stage === 'wtcfinal' && lost > 0) {
+      const recover = Math.min(lost, opd);
+      c.days.push({ sky: rollSky(fx.day + nd, v), lost: opd - recover, reserve: true, recover });
+    }
+    M.maxBalls = c.days.reduce((a, d) => a + (opd - d.lost), 0) * 6;
     if (lost) M.notes.push(`Weather: about ${lost} overs are expected to be lost to rain across the match.`);
+    if (c.days.some(d => d.reserve)) M.notes.push(`Reserve day: up to ${c.days[c.days.length - 1].recover} overs to make up time lost to weather.`);
   } else {
     const sky = rollSky(fx.day, v), r = SKIES[sky].rain;
     c.days.push({ sky, lost: 0 });
@@ -3313,7 +3338,7 @@ function mMaxBalls(M) { return M.maxBalls || FORMATS.FC.matchOvers * 6; }
 function condSummary(M) {
   if (!M.cond) return '';
   const pt = PITCHES[M.cond.pitch];
-  const sk = M.fmt === 'FC' ? M.cond.days.map((d, i) => `Day ${i + 1} ${SKIES[d.sky].label}${d.lost ? ` (−${d.lost} ov)` : ''}`).join(' · ') : SKIES[M.cond.days[0].sky].label;
+  const sk = M.fmt === 'FC' ? M.cond.days.map((d, i) => d.reserve ? `Reserve day ${SKIES[d.sky].label} (up to ${d.recover} ov)` : `Day ${i + 1} ${SKIES[d.sky].label}${d.lost ? ` (−${d.lost} ov)` : ''}`).join(' · ') : SKIES[M.cond.days[0].sky].label;
   return `${pt.label}. ${sk}.`;
 }
 
@@ -4190,14 +4215,21 @@ function prepareWtcFinal() {
   fx.away=qualified[1].nat==='AUS'?'AUS':'X_'+qualified[1].nat;
   addNews('World','World Test Championship final',`${NATIONS[qualified[0].nat]} v ${NATIONS[qualified[1].nat]} · ${dateStr(fx.day)}.`);
 }
+function wtcWinners(x) {
+  if (!x) return [];
+  if (x.winner) return [x.winner];
+  return x.home && x.away ? [x.home, x.away] : [];
+}
 function archiveWtcFinal(fx) {
   const w=ensureWtc();
   const winner=fx.result.winner || null;
-  w.final={home:fx.home,away:fx.away,winner,year:game.year};
-  game.wtcHistory.unshift({start:w.start,end:game.year,home:fx.home,away:fx.away,winner,
+  // B156: ICC playing conditions: a drawn, tied or abandoned final makes both teams joint winners.
+  const joint=!winner;
+  w.final={home:fx.home,away:fx.away,winner,joint,year:game.year};
+  game.wtcHistory.unshift({start:w.start,end:game.year,home:fx.home,away:fx.away,winner,joint,
     rows:wtcRows().map(r=>({nat:r.nat,p:r.p,pts:r.pts,max:r.max,pct:Math.round(r.pct*10)/10}))});
   game.wtcHistory=game.wtcHistory.slice(0,12);
-  addNews('World','World Test Championship completed',winner?`${internationalTeamName(winner)} win the championship.`:'WTC final ends without a winner.');
+  addNews('World','World Test Championship completed',winner?`${internationalTeamName(winner)} win the championship.`:`${internationalTeamName(fx.home)} and ${internationalTeamName(fx.away)} are joint winners after the final ends ${fx.result&&fx.result.tie?'in a tie':'in a draw'}.`);
 }
 function rolloverWtc(year) {
   ensureWtc();
@@ -9459,6 +9491,17 @@ function careerTrophyArt(kind) {
 function careerTrophySeason(year, international) {
   return international ? String(year) : `${year}–${String(Number(year)+1).slice(-2)}`;
 }
+// B156: national titles come from three histories: T20 World Cup (worldHistory),
+// ODI World Cup and Champions Trophy (globalTournamentHistory) and the WTC (wtcHistory,
+// where a drawn final counts for both joint winners).
+function nationalTitleYears(kind, match) {
+  const isAus = id => id === 'AUS' || id === 'Australia' || pastWinnerNat(id) === 'AUS';
+  const years = (game.worldHistory||[]).filter(h => match.test(h.event||'') && isAus(h.winner)).map(h => h.year);
+  const ev = kind === 'ODIWC' ? 'ODIWC' : kind === 'CHAMP' ? 'CT' : null;
+  if (ev) (game.globalTournamentHistory||[]).filter(h => h.event === ev && isAus(h.winner)).forEach(h => years.push(h.year));
+  if (kind === 'WTC') (game.wtcHistory||[]).filter(x => wtcWinners(x).some(isAus)).forEach(x => years.push(x.end));
+  return years;
+}
 function careerTrophyCabinet(national) {
   const specs = national ? [
     ['ODIWC','ODI World Cup',/odi world cup|50.over world cup/i],
@@ -9469,7 +9512,7 @@ function careerTrophyCabinet(national) {
     ['SHIELD','Sheffield Shield','SHIELD'],['ODC','One-Day Cup','ODC'],['T20C','T20 Championship','T20C']
   ];
   const rows=specs.map(([kind,label,match])=>{
-    const won = national ? (game.worldHistory||[]).filter(h => match.test(h.event||'') && (h.winner === 'AUS' || h.winner === 'Australia')).map(h=>h.year)
+    const won = national ? nationalTitleYears(kind, match)
       : (game.gm.titles||[]).filter(t=>t.comp===match).map(t=>t.year);
     const years=[...new Set(won)].sort((a,b)=>b-a);
     return `<details class="career-trophy ${years.length?'earned':'unearned'}"><summary><div class="trophy-art">${careerTrophyArt(kind)}</div><div class="trophy-label">${label}</div><div class="trophy-count">${years.length ? '×'+years.length : 'Not yet won'}</div><div class="trophy-last">${years.length?'Latest: '+careerTrophySeason(years[0],national):'Awaiting first title'}</div></summary><div class="trophy-years">${years.length?'Winning seasons: '+years.map(y=>careerTrophySeason(y,national)).join(', '):'No titles recorded in this career.'}</div></details>`;
@@ -9509,7 +9552,8 @@ function careerWdl(rows) {return {w:rows.filter(x=>x.outcome==='W').length,d:row
 function careerBoard(label,record,total,titles,confidence,note) {
   const denom=record.w+record.d+record.l;
   const pct=denom?Math.round(record.w/denom*100):0;
-  const stat=(k,v,sub)=>`<div class="career-stat"><div class="career-stat-name">${esc(k)}</div><div class="career-stat-value">${esc(String(v))}</div><div class="career-stat-sub">${esc(sub||'')}</div></div>`;
+  // B154: values shrink as careers grow (e.g. 1183–122–1140) so they never overflow the card.
+  const stat=(k,v,sub)=>{ const t=String(v), cls=t.length>13?' xlong':t.length>9?' long':''; return `<div class="career-stat"><div class="career-stat-name">${esc(k)}</div><div class="career-stat-value${cls}">${esc(t)}</div><div class="career-stat-sub">${esc(sub||'')}</div></div>`; };
   return `<div class="career-summary-head">${esc(label)}</div><div class="career-stat-grid">${stat('Won · Drawn · Lost',`${record.w}–${record.d}–${record.l}`,record.nr?`${record.nr} no results`:'Career record')}${stat('Win rate',`${pct}%`,`${denom} decided/drawn`)}${stat('Championships',titles,'Recorded titles')}${stat('Board confidence',confidence,'Current rating')}</div>${note?`<div class="xs muted" style="margin:5px 0 13px">${esc(note)}</div>`:''}`;
 }
 function careerOpponentRecord(rows,fmt,national) {
@@ -10891,7 +10935,7 @@ function renderTournaments(){
  const tabs=seg([['OD','ODI World Cup'],['CT','Champions Trophy'],['T20','T20 World Cup'],['FC','Test Championship']],mode,'(v=>{ui.tournamentFormat=v;render();})');
  if(mode==='T20')return `${tabs}<div style="height:10px"></div>${renderWorldCup()}`;
  if(mode==='CT')return `${tabs}<div style="height:10px"></div>${renderChampionsTrophy()}`;
- if(mode==='FC'){const w=ensureWtc(),rows=wtcRows(),fin=game.season.fixtures.find(f=>f.stage==='wtcfinal');return `${tabs}<div style="height:10px"></div>${panel('World Test Championship',`<div class="pb xs muted">${w.start}–${w.start+1} cycle · percentage of points earned</div><div class="rows">${rows.map((r,i)=>`<div class="kv"><span>${i+1}. ${esc(NATIONS[r.nat])} · ${r.p} Tests</span><b>${r.pct.toFixed(1)}%</b></div>`).join('')}</div>${fin?`<div class="pb">${fixtureRow(fin,false)}</div>`:''}`,{flush:true})}`;}
+ if(mode==='FC'){const w=ensureWtc(),rows=wtcRows(),fin=game.season.fixtures.find(f=>f.stage==='wtcfinal');return `${tabs}<div style="height:10px"></div>${panel('World Test Championship',`<div class="pb xs muted">${w.start}–${w.start+1} cycle · percentage of points earned</div><div class="rows">${rows.map((r,i)=>`<div class="kv"><span>${i+1}. ${esc(NATIONS[r.nat])} · ${r.p} Tests</span><b>${r.pct.toFixed(1)}%</b></div>`).join('')}</div>${fin?`<div class="pb">${fixtureRow(fin,false)}</div>`:''}`,{flush:true})}<div style="height:8px"></div>${pastWinnersPanel((game.wtcHistory||[]).map(x=>({season:`${x.start}–${String(x.end).slice(2)} cycle`,winner:x.winner,runnerUp:x.winner?(x.winner===x.home?x.away:x.home):null,joint:x.winner?null:wtcWinners(x),jointNote:'final drawn'})),'No Test Championship final played yet in this career.')}`;}
  const matches=game.season.fixtures.filter(f=>f.event==='ODIWC');
  const history=(game.globalTournamentHistory||[]).filter(h=>h.event==='ODIWC');
  const group=matches.filter(f=>f.stage==='globalgroup');
@@ -10906,7 +10950,30 @@ function renderTournaments(){
    ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">No fixtures</div>'}</div>`,{flush:true})}
    ${panel('Tournament fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
  return `${tabs}<div style="height:10px"></div>${currentWorldCupPreviewButton('ODIWC')}${worldCupReviewButton('ODIWC')}${current}${!group.length?'<div class="note">No ODI World Cup scheduled this season.</div>':''}
-   ${history.length?panel('Past champions',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]):'Host not recorded'}</span><b>${esc(internationalTeamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):''}`;
+   ${globalPastWinners('ODIWC')}`;
+}
+// B155: one Past winners layout for every international tournament.
+// Row: season (or WTC cycle) on the left; winner flag and name, then
+// "beat <runner-up> · Host <nation>" beneath it, on the right.
+function pastWinnerNat(id) { if (!id) return null; return internationalNationCode(id) || null; }
+function pastWinnersPanel(rows, emptyText) {
+  const name = n => esc(NATIONS[n] || n);
+  const body = rows.map(r => {
+    const w = pastWinnerNat(r.winner), ru = pastWinnerNat(r.runnerUp), h = pastWinnerNat(r.host);
+    if (r.joint && r.joint.length === 2) {
+      const [a, b] = r.joint.map(pastWinnerNat);
+      return `<div class="kv past-winner"><span class="pw-season">${esc(r.season)}</span><span class="pw-main">${a ? flagFor(a) : ''} <b>${name(a)}</b> and ${b ? flagFor(b) : ''} <b>${name(b)}</b><span class="pw-sub xs dim">Joint winners · ${esc(r.jointNote || 'final drawn')}</span></span></div>`;
+    }
+    const sub = [ru ? `beat ${name(ru)}` : '', h ? `Host ${flagFor(h)} ${name(h)}` : (r.venueNote ? esc(r.venueNote) : '')].filter(Boolean).join(' · ');
+    return `<div class="kv past-winner"><span class="pw-season">${esc(r.season)}</span><span class="pw-main">${w ? `${flagFor(w)} <b>${name(w)}</b>` : '<b>No winner</b>'}${sub ? `<span class="pw-sub xs dim">${sub}</span>` : ''}</span></div>`;
+  }).join('');
+  return panel('Past winners', `<div class="rows">${body || `<div class="empty">${esc(emptyText || 'No completed tournaments yet in this career.')}</div>`}</div>`, { flush: true });
+}
+function seasonSpan(y) { return `${y}–${String(y + 1).slice(2)}`; }
+function globalPastWinners(event) {
+  const h = (game.globalTournamentHistory || []).filter(x => x.event === event);
+  return pastWinnersPanel(h.map(x => ({ season: seasonSpan(x.year), winner: x.winner, runnerUp: x.runnerUp, host: x.host || tournamentHost(event, x.year) })),
+    event === 'CT' ? 'No Champions Trophy completed yet in this career.' : 'No ODI World Cup completed yet in this career.');
 }
 function renderIntlLegacyRecords(){const n=ui.intlRecNat||'AUS',f=ui.intlRecFmt||'FC';return `<div class="tool-row">${sel(Object.keys(NATIONS).map(k=>[k,NATIONS[k]]),n,'ui.intlRecNat=this.value;render()')}${seg([['FC','Test'],['OD','ODI'],['T20','T20I']],f,'setIntlRecFmt')}</div><div style="height:8px"></div>${nationalCareerPanel(n,f)}`;}
 // B120: Full Champions Trophy hub, works with an already active or completed CT save.
@@ -10920,7 +10987,7 @@ function renderChampionsTrophy(){
  ${panel('Knockouts',`<div class="bracket">${ko.map(f=>bracketBox(f.round,f.home,f.away,f.result,f.id)).join('')}</div>`)}
  ${panel('Australia’s path',`<div class="rows">${matches.filter(f=>f.home==='AUS'||f.away==='AUS').map(f=>fixtureRow(f,false)).join('')||'<div class="empty">Australia has no scheduled matches in this tournament.</div>'}</div>`,{flush:true})}
  ${panel('Fixtures and results',`<div class="rows">${matches.map(f=>fixtureRow(f,false)).join('')}</div>`,{flush:true})}`:'';
- const historyPanel=history.length?panel('Past Champions Trophy winners',`<div class="rows">${history.map(h=>`<div class="kv"><span>${h.year} · ${h.host?flagFor(h.host)+' '+esc(NATIONS[h.host]||h.host):'Host not recorded'}</span><b>${esc(internationalTeamName(h.winner))}</b></div>`).join('')}</div>`,{flush:true}):'';
+ const historyPanel=globalPastWinners('CT');
  const nextYear=game.year+( (1-game.year%4+4)%4||4 );
  return `${currentWorldCupPreviewButton('CT')}${worldCupReviewButton('CT')}${current||`<div class="note">No Champions Trophy scheduled this season. Next cycle: ${nextYear}.</div>`}${historyPanel}`;
 }
@@ -10956,7 +11023,8 @@ function renderWCArchive(e) {
 }
 function pastWinners() {
   const h = (game.worldHistory || []).filter(x => x.event === 'T20 World Cup');
-  return `<div style="height:8px"></div>${panel('Past winners', `<div class="rows">${h.map(x => `<div class="kv"><span>${x.year}–${String(x.year + 1).slice(2)}</span><span><b>${NATIONS[x.winner]}</b> <span class="dim">beat ${NATIONS[x.runnerUp]}</span></span></div>`).join('') || '<div class="empty">No World Cups played yet in this career.</div>'}</div>`, { flush: true })}`;
+  const arch = game.wcArchive || [];
+  return `<div style="height:8px"></div>${pastWinnersPanel(h.map(x => ({ season: seasonSpan(x.year), winner: x.winner, runnerUp: x.runnerUp, host: (arch.find(a => a.year === x.year) || {}).host || tournamentHost('T20WC', x.year) })), 'No T20 World Cup completed yet in this career.')}`;
 }
 // Home card while a World Cup is on.
 function wcHomeCard() {
