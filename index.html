@@ -352,6 +352,23 @@ tr.cut td{border-bottom:2px solid rgba(244,197,66,.55)!important}
 .comm-toggle{display:flex;gap:2px;background:var(--s2);border-radius:8px;padding:2px}
 .comm-toggle button{border:0;background:transparent;color:var(--muted);font:inherit;font-size:12.5px;padding:6px 10px;border-radius:6px;min-height:30px;cursor:pointer}
 .comm-toggle button.on{background:var(--s3,#22364d);color:var(--text,#fff);font-weight:700}
+.gear{padding:4px 14px 14px}
+.gear-status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);padding:10px 0 2px}
+.gear-status i{width:8px;height:8px;border-radius:50%;background:#58c27d;flex:none}.gear-status.warn i{background:#e2a23b}.gear-status.warn{color:#e9c27a}
+.gear-result{min-height:16px;margin:4px 0 0;font-size:12px;color:var(--muted)}
+.gear-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0 6px}.gear-actions .btn{min-height:48px;font-size:16px}
+.gear-sec{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
+.gear-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.gear-stats div{background:var(--s2);border-radius:10px;padding:10px;text-align:center}
+.gear-stats b{display:block;font-size:17px;font-variant-numeric:tabular-nums}.gear-stats span{font-size:11.5px;color:var(--muted)}
+.gear-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.gear-row b{display:block;font-size:14.5px}.gear-row span{font-size:12px;color:var(--muted)}.gear-row select{max-width:130px}
+.gear-link{display:flex;justify-content:space-between;align-items:center;width:100%;background:none;border:0;border-bottom:1px solid var(--line);color:inherit;font:inherit;font-size:14.5px;padding:12px 0;cursor:pointer;text-align:left}
+.gear-link i{font-style:normal;color:var(--muted)}
+.gear-foot{font-size:11.5px;color:var(--muted);text-align:center;margin-top:16px}
+.hon-season{padding:8px 12px;border-bottom:1px solid var(--line)}.hon-season:last-child{border-bottom:0}
+.hon-season-h{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+.hon-row{align-items:flex-start;gap:10px}.hon-row>span:last-child{text-align:right}.hon-aus b{color:var(--gold,#efc557)}
+.honour-mine{box-shadow:inset 0 0 0 1px rgba(239,197,87,.6);border-radius:6px}
 .mc-list{display:grid;gap:8px;padding:10px}
 .mc-note{padding:10px 14px 0;font-size:var(--fs-s);color:var(--muted)}
 .mc{background:var(--s2);border:1px solid transparent;border-radius:12px;padding:10px 12px;min-width:0}
@@ -1330,7 +1347,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.83 Build 160', title: 'Legacy Records Presentation Consistency', engine: 'C3.1E Ball-by-Ball with Elite Ramp' };
+const BUILD = { version: 'v0.9.86 Build 163', title: 'Simple Save and Gear Sheet', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -2519,6 +2536,9 @@ function ballContextC3(M, inn, batter, bowler, sc) {
   const fatigueRisk = fmt === 'FC' ? Math.max(0, sc.b - 135) * 0.00065 : 0;
   const phaseRisk = fmt === 'FC' ? 0 : (fmt === 'OD' ? 0.11 : 0.14) * Math.max(0, phase - 0.7) / 0.3;
   const wicketRisk = fmt === 'FC' ? 0.025 * Math.max(0, wk - 5) : 0.03 * Math.max(0, wk - 5);
+  // B162: collapse brake. In white-ball cricket a side five or more down for a low score
+  // stops attacking and tries to bat the overs out, so very low totals stay rare.
+  const collapseBrake = fmt !== 'FC' && wk >= 5 && inn.runs < (fmt === 'OD' ? 90 : 60) ? -0.35 : 0;
   // Preserve the original context-sensitive plan, intent, field, condition and
   // bowler modifiers, while replacing only the rating hazard and settling term.
   const oldSet = sc.b < 10 ? -(10 - sc.b) * 0.6 : sc.b > 40 ? Math.min(fmt === 'FC' ? 3 : 1.5, (sc.b - 40) / 15) : 0;
@@ -2531,10 +2551,12 @@ function ballContextC3(M, inn, batter, bowler, sc) {
   // flattens, so a 99-rated batter barely out-performed a 90. This term grows
   // linearly from 0 (engine rating 82, about 88 displayed) to 1 (93, about 99 displayed).
   // Batters below the threshold, and therefore almost the whole league, are unaffected.
-  const eliteBat = clamp((batRating(batter, fmt) - RATING_SHIFT - 82) / 11, 0, 1);
-  const eliteBowl = canBowl(bowler) ? clamp((bowlRating(bowler, fmt) - RATING_SHIFT - 82) / 11, 0, 1) : 0;
+  // B162: the ramp is squared, so it stays strong for true elites (about 96 to 99 displayed)
+  // but no longer lifts the 89 to 94 band to near-Bradman averages.
+  const eliteBat = clamp((batRating(batter, fmt) - RATING_SHIFT - 82) / 11, 0, 1) ** 2;
+  const eliteBowl = canBowl(bowler) ? clamp((bowlRating(bowler, fmt) - RATING_SHIFT - 82) / 11, 0, 1) ** 2 : 0;
   const eliteAdj = -ELITE_RAMP.bat[fmt] * eliteBat + ELITE_RAMP.bowl[fmt] * eliteBowl;
-  let hazard = logistic(logit(baseHazard) - 0.37 * gap + Math.log(contextMul) + initialRisk + fatigueRisk + phaseRisk + wicketRisk + C31_HAZARD_LOGIT_ADJ[fmt] + eliteAdj);
+  let hazard = logistic(logit(baseHazard) - 0.37 * gap + Math.log(contextMul) + initialRisk + fatigueRisk + phaseRisk + wicketRisk + collapseBrake + C31_HAZARD_LOGIT_ADJ[fmt] + eliteAdj);
   hazard = clamp(hazard, fmt === 'FC' ? 0.007 : fmt === 'OD' ? 0.010 : 0.016, fmt === 'FC' ? 0.042 : fmt === 'OD' ? 0.065 : 0.095);
   // Reweight the *conditional* scoring distribution independently from hazard:
   // remove a fraction of the extreme matchup boundary multiplier without
@@ -2865,6 +2887,7 @@ function simBall(M) {
     const br = sampleRuns(ctx.weights);
     ev.extra = 'nb'; ev.legal = false; ev.bat = br; ev.runs = 1 + br; inn.ext.nb += 1; conceded = 1 + br;
     sc.r += br; sc.b++; if (br === 4) sc.f4++; if (br === 6) sc.f6++;
+    if (sc.r >= 100 && !sc.b100) sc.b100 = sc.b;
     ev.sym = br ? 'nb+' + br : 'nb';
   } else {
     sc.b++; bf.balls++; inn.balls++; M.balls++; inn.overBalls++; inn.part.b++;
@@ -2878,6 +2901,7 @@ function simBall(M) {
       } else {
         ev.bat = br; ev.runs = br; conceded = br;
         sc.r += br; if (br === 4) sc.f4++; if (br === 6) sc.f6++;
+        if (sc.r >= 100 && !sc.b100) sc.b100 = sc.b;
         if (br > 0) { ev.zone = pickZone(br); (sc.shots = sc.shots || []).push([zoneAngle(ev.zone, batter), br, inn.wkts]); }
         ev.sym = br === 0 ? '•' : String(br);
       }
@@ -3487,6 +3511,7 @@ function migrateGame(g) {
   if ((g.scaleV || 1) < 3) rebalanceIntl(g);
   if ((g.scaleV || 1) < 4) upgradePartTimers(g);
   upgradeRealCareers(g);
+  repairRecordTeamNames(g);
   applyTeamEdits();
   ensureNationCoach();
   // v0.7.4: a save loaded during a multi-day match the GM just ran picks up the clash window.
@@ -5778,18 +5803,25 @@ function topPush(list, item, better, n) {
 function recordMatch(M) {
   if (M.abandoned) return;
   const R = game.records = game.records || { hs:{}, bb:{}, th:{}, tl:{}, pt:{} };
-  const k = recKey(M), y = game.year;
-  ['hs','bb','th','tl','pt'].forEach(t => R[t][k] = R[t][k] || []);
+  const k = recKey(M), y = game.year, fx = M.fxId || null;
+  R.fh = R.fh || {};
+  ['hs','bb','th','tl','pt','fh'].forEach(t => R[t][k] = R[t][k] || []);
+  // Build 161: international records also keep an Australia-only top 10, so the Australia
+  // filter is not limited to Australian entries that survive in the world top 10.
+  const intl = !!COMPS[M.comp].intl, ka = k + '_aus';
+  if (intl) ['hs','bb','th','tl','pt','fh'].forEach(t => R[t][ka] = R[t][ka] || []);
+  const push = (t, team, item, better) => { if (fx) item.fx = fx; topPush(R[t][k], item, better); if (intl && team === 'AUS') topPush(R[t][ka], Object.assign({}, item), better); };
   const sn = t => teamDef(t) ? (teamDef(t).short || teamDef(t).id) : t;
   M.innings.forEach(inn => {
     const opp = sn(inn.bowl), team = sn(inn.bat);
-    topPush(R.th[k], { t: team, opp, r: inn.runs, w: inn.wkts, y }, (a, b) => b.r - a.r);
-    if (inn.allOut) topPush(R.tl[k], { t: team, opp, r: inn.runs, y }, (a, b) => a.r - b.r);
-    inn.card.forEach(c => { if (c.in && c.r >= 50) topPush(R.hs[k], { id: c.id, n: pname(P(c.id)), t: team, r: c.r, b: c.b, no: !c.out, opp, y }, (a, b) => b.r - a.r || (b.no ? 1 : 0) - (a.no ? 1 : 0)); });
-    Object.keys(inn.bw).forEach(id => { const b = inn.bw[id]; if (b.w >= 3) topPush(R.bb[k], { id, n: pname(P(id)), t: sn(inn.bowl), w: b.w, r: b.r, opp: team, y }, (a, b2) => b2.w - a.w || a.r - b2.r); });
+    push('th', team, { t: team, opp, r: inn.runs, w: inn.wkts, y }, (a, b) => b.r - a.r);
+    if (inn.allOut) push('tl', team, { t: team, opp, r: inn.runs, y }, (a, b) => a.r - b.r);
+    inn.card.forEach(c => { if (c.in && c.b100) push('fh', team, { id: c.id, n: pname(P(c.id)), t: team, b: c.b100, r: c.r, no: !c.out, opp, y }, (a, b) => a.b - b.b || b.r - a.r); });
+    inn.card.forEach(c => { if (c.in && c.r >= 50) push('hs', team, { id: c.id, n: pname(P(c.id)), t: team, r: c.r, b: c.b, no: !c.out, opp, y }, (a, b) => b.r - a.r || (b.no ? 1 : 0) - (a.no ? 1 : 0)); });
+    Object.keys(inn.bw).forEach(id => { const b = inn.bw[id]; if (b.w >= 3) push('bb', sn(inn.bowl), { id, n: pname(P(id)), t: sn(inn.bowl), w: b.w, r: b.r, opp: team, y }, (a, b2) => b2.w - a.w || a.r - b2.r); });
     const parts = (inn.parts || []).slice();
     if (inn.part && inn.part.r > 0 && !inn.allOut) parts.push({ r: inn.part.r, w: inn.wkts + 1, a: inn.card[inn.striker].id, o: inn.card[inn.non].id, unb: true });
-    parts.forEach(pt => { if (pt.r >= 80) topPush(R.pt[k], { a: pname(P(pt.a)), b: pname(P(pt.o)), t: team, r: pt.r, w: pt.w, unb: !!pt.unb, opp, y }, (a, b) => b.r - a.r); });
+    parts.forEach(pt => { if (pt.r >= 80) push('pt', team, { a: pname(P(pt.a)), b: pname(P(pt.o)), t: team, r: pt.r, w: pt.w, unb: !!pt.unb, opp, y }, (a, b) => b.r - a.r); });
   });
 }
 // Rolling log of each player's last 15 matches: [fmt, runs, wickets, opponent, intl].
@@ -5814,8 +5846,10 @@ function logMatchForPlayers(M) {
 function careerLeaders(fmt, scope, stat, n) {
   const ps = Object.values(game.players).filter(p => !(p.teamId || '').startsWith('X_') || scope === 'intl');
   const src = p => scope === 'intl' ? (p.stats.intl ? p.stats.intl[fmt] : null) : p.stats.career[fmt];
-  const val = { runs: s => s.r, wkts: s => s.w, avg: s => s.inn >= 20 ? batAvgOf(s) : -1, bavg: s => s.w >= 30 ? -bowlAvgOf(s) : -999, m: s => s.m, c100: s => s.c100 }[stat];
-  return ps.map(p => ({ p, s: src(p) })).filter(x => x.s && x.s.m > 0 && val(x.s) > -1 && val(x.s) > -999).sort((a, b) => val(b.s) - val(a.s)).slice(0, n || 10);
+  const val = { runs: s => s.r, wkts: s => s.w, avg: s => s.inn >= 20 && s.inn > s.no ? batAvgOf(s) : -1, bavg: s => s.w >= 30 ? 1000 - bowlAvgOf(s) : -1, m: s => s.m, c100: s => s.c100,
+    w5: s => s.w5 || 0, dis: s => (s.ct || 0) + (s.st || 0), f6: s => s.f6 || 0 }[stat];
+  const need = ['w5','dis','f6','c100'].includes(stat);
+  return ps.map(p => ({ p, s: src(p) })).filter(x => x.s && x.s.m > 0 && val(x.s) > -1 && (!need || val(x.s) > 0)).sort((a, b) => val(b.s) - val(a.s)).slice(0, n || 10);
 }
 function teamHonours(teamId) {
   const out = { SHIELD:0, ODC:0, T20C:0 };
@@ -5856,7 +5890,7 @@ function nationalCareerLeaders(nat, fmt, stat, limit) {
 function nationalCareerPanel(nat,fmt) {
   const labels={FC:'Tests',OD:'ODIs',T20:'T20Is'};
   const r=(game.nationalMatchRecords||{})[nat+'_'+fmt];
-  const summary=r?`${r.p} played · ${r.w} won · ${r.l} lost${r.d?' · '+r.d+' drawn':''}${r.t?' · '+r.t+' tied':''}${r.nr?' · '+r.nr+' no result':''}`:'Results recorded from v0.9.5 onwards';
+  const summary=r?`In this save: ${r.p} played · ${r.w} won · ${r.l} lost${r.d?' · '+r.d+' drawn':''}${r.t?' · '+r.t+' tied':''}${r.nr?' · '+r.nr+' no result':''}`:'No matches recorded in this save yet.';
   const blocks=[['runs','Runs'],['wickets','Wickets'],['matches','Caps'],['hundreds','Centuries']].map(([key,label])=>{
     const rows=nationalCareerLeaders(nat,fmt,key,5);
     return `<div class="national-record-group"><div class="lbl">${label}</div>${rows.map((x,i)=>`<div class="row tap" onclick="showPlayer('${x.p.id}')"><span class="n">${i+1}</span><div class="grow s">${esc(pname(x.p))}<div class="xs dim">${x.s.m} matches${x.p.retired?' · Retired':''}</div></div><span class="b">${x.value.toLocaleString()}</span></div>`).join('')||'<div class="empty">No international appearances yet.</div>'}</div>`;
@@ -5871,7 +5905,7 @@ function nationalCareerPanel(nat,fmt) {
 // Row: [value, display, name, team, note, active]. Larger value ranks higher; lowest totals use a negative value.
 // cat: run (career runs) wkt (career wickets) c100 (hundreds) avg (batting average, 20+ innings)
 //      hs (highest score) bb (best innings bowling) th (highest total) tl (lowest total) pt (partnership)
-const RR_SRC = 'Wikipedia record lists (citing ESPNcricinfo), read 29 Oct 2026';
+const RR_SRC = 'Wikipedia record lists (citing ESPNcricinfo), read 29 Oct 2026; tables marked rechecked were compared with ESPNcricinfo and current record lists in Nov 2026 and found unchanged';
 const RR_CATS = { run: 'Most runs', hs: 'Highest score', avg: 'Best average', c100: 'Most hundreds', wkt: 'Most wickets', bb: 'Best bowling', th: 'Highest total', tl: 'Lowest total', pt: 'Partnership' };
 // Best-bowling value: wickets first, then fewer runs.
 const bbv = (w, r) => w * 1000 - r;
@@ -5883,7 +5917,7 @@ const REAL_RECORDS = {
       avg: { asOf: 'Jul 2026', note: 'Minimum 20 innings.', rows: [[99.94, '99.94', 'Don Bradman', 'AUS', '80 innings'], [61.87, '61.87', 'Adam Voges', 'AUS', '31 innings'], [60.97, '60.97', 'Graeme Pollock', 'SA', '41 innings'], [60.83, '60.83', 'George Headley', 'WI', '40 innings'], [60.73, '60.73', 'Herbert Sutcliffe', 'ENG', '84 innings']] },
       c100: { asOf: 'Jul 2026', rows: [[51, '51', 'Sachin Tendulkar', 'IND', '200 Tests'], [45, '45', 'Jacques Kallis', 'SA', '166 Tests'], [41, '41', 'Ricky Ponting', 'AUS', '168 Tests'], [41, '41', 'Joe Root', 'ENG', '164 Tests', 1], [38, '38', 'Kumar Sangakkara', 'SL', '134 Tests']] },
       wkt: { asOf: 'Jul 2024', rows: [[800, '800', 'Muttiah Muralitharan', 'SL', '133 Tests'], [708, '708', 'Shane Warne', 'AUS', '145 Tests'], [704, '704', 'James Anderson', 'ENG', '188 Tests'], [619, '619', 'Anil Kumble', 'IND', '132 Tests'], [604, '604', 'Stuart Broad', 'ENG', '167 Tests']] },
-      bb: { asOf: 'Dec 2021', rows: [[bbv(10, 53), '10/53', 'Jim Laker', 'ENG', 'v AUS, 1956'], [bbv(10, 74), '10/74', 'Anil Kumble', 'IND', 'v PAK, 1999'], [bbv(10, 119), '10/119', 'Ajaz Patel', 'NZ', 'v IND, 2021'], [bbv(9, 28), '9/28', 'George Lohmann', 'ENG', 'v SA, 1896'], [bbv(9, 37), '9/37', 'Jim Laker', 'ENG', 'v AUS, 1956']] },
+      bb: { asOf: 'rechecked Nov 2026', rows: [[bbv(10, 53), '10/53', 'Jim Laker', 'ENG', 'v AUS, 1956'], [bbv(10, 74), '10/74', 'Anil Kumble', 'IND', 'v PAK, 1999'], [bbv(10, 119), '10/119', 'Ajaz Patel', 'NZ', 'v IND, 2021'], [bbv(9, 28), '9/28', 'George Lohmann', 'ENG', 'v SA, 1896'], [bbv(9, 37), '9/37', 'Jim Laker', 'ENG', 'v AUS, 1956']] },
       th: { asOf: 'Oct 2024', rows: [[952, '952/6d', 'Sri Lanka', 'SL', 'v IND, 1997'], [903, '903/7d', 'England', 'ENG', 'v AUS, 1938'], [849, '849', 'England', 'ENG', 'v WI, 1930'], [823, '823/7d', 'England', 'ENG', 'v PAK, 2024'], [790, '790/3d', 'West Indies', 'WI', 'v PAK, 1958']] },
       tl: { asOf: 'Jul 2025', rows: [[-26, '26', 'New Zealand', 'NZ', 'v ENG, 1955'], [-27, '27', 'West Indies', 'WI', 'v AUS, 2025'], [-30, '30', 'South Africa', 'SA', 'v ENG, 1896'], [-30, '30', 'South Africa', 'SA', 'v ENG, 1924'], [-35, '35', 'South Africa', 'SA', 'v ENG, 1899']] },
       pt: { asOf: 'Oct 2024', rows: [[624, '624', 'Sangakkara & Jayawardene', 'SL', '3rd wkt v SA, 2006'], [576, '576', 'Jayasuriya & Mahanama', 'SL', '2nd wkt v IND, 1997'], [467, '467', 'Jones & Crowe', 'NZ', '3rd wkt v SL, 1991'], [454, '454', 'Root & Brook', 'ENG', '4th wkt v PAK, 2024'], [451, '451', 'Ponsford & Bradman', 'AUS', '2nd wkt v ENG, 1934']] }
@@ -5906,11 +5940,11 @@ const REAL_RECORDS = {
       hs: { asOf: 'Sep 2026', rows: [[264, '264', 'Rohit Sharma', 'IND', 'v SL, 2014'], [237.5, '237*', 'Martin Guptill', 'NZ', 'v WI, 2015'], [223.5, '223*', 'Shubman Gill', 'IND', 'v WI, 2026', 1], [219, '219', 'Virender Sehwag', 'IND', 'v WI, 2011'], [215, '215', 'Chris Gayle', 'WI', 'v ZIM, 2015']] },
       avg: { asOf: 'Sep 2026', note: 'Minimum 20 innings. Associate players are included.', rows: [[67.00, '67.00', 'Ryan ten Doeschate', 'NED', '32 innings'], [65.12, '65.12', 'Shubman Gill', 'IND', '68 innings', 1], [63.89, '63.89', 'Milind Kumar', 'USA', '27 innings', 1], [59.01, '59.01', 'Virat Kohli', 'IND', '303 innings', 1], [57.36, '57.36', 'Daryl Mitchell', 'NZ', '57 innings', 1]] },
       c100: { asOf: 'Sep 2026', rows: [[55, '55', 'Virat Kohli', 'IND', '', 1], [49, '49', 'Sachin Tendulkar', 'IND', ''], [34, '34', 'Rohit Sharma', 'IND', '', 1], [30, '30', 'Ricky Ponting', 'AUS', ''], [28, '28', 'Sanath Jayasuriya', 'SL', '']] },
-      wkt: { asOf: 'Feb 2016', rows: [[534, '534', 'Muttiah Muralitharan', 'SL', '350 ODIs'], [502, '502', 'Wasim Akram', 'PAK', '356 ODIs'], [416, '416', 'Waqar Younis', 'PAK', '262 ODIs'], [400, '400', 'Chaminda Vaas', 'SL', '322 ODIs'], [395, '395', 'Shahid Afridi', 'PAK', '398 ODIs']] },
+      wkt: { asOf: 'rechecked Nov 2026', rows: [[534, '534', 'Muttiah Muralitharan', 'SL', '350 ODIs'], [502, '502', 'Wasim Akram', 'PAK', '356 ODIs'], [416, '416', 'Waqar Younis', 'PAK', '262 ODIs'], [400, '400', 'Chaminda Vaas', 'SL', '322 ODIs'], [395, '395', 'Shahid Afridi', 'PAK', '398 ODIs']] },
       bb: { asOf: 'Jan 2024', rows: [[bbv(8, 19), '8/19', 'Chaminda Vaas', 'SL', 'v ZIM, 2001'], [bbv(7, 12), '7/12', 'Shahid Afridi', 'PAK', 'v WI, 2013'], [bbv(7, 15), '7/15', 'Glenn McGrath', 'AUS', 'v NAM, 2003'], [bbv(7, 18), '7/18', 'Rashid Khan', 'AFG', 'v WI, 2017'], [bbv(7, 19), '7/19', 'Wanindu Hasaranga', 'SL', 'v ZIM, 2024']] },
       th: { asOf: 'Jun 2022', rows: [[498, '498/4', 'England', 'ENG', 'v NED, 2022'], [481, '481/6', 'England', 'ENG', 'v AUS, 2018'], [444, '444/3', 'England', 'ENG', 'v PAK, 2016'], [443, '443/9', 'Sri Lanka', 'SL', 'v NED, 2006'], [439, '439/2', 'South Africa', 'SA', 'v WI, 2015']] },
-      tl: { asOf: 'Feb 2020', rows: [[-35, '35', 'United States', 'USA', 'v NEP, 2020'], [-35, '35', 'Zimbabwe', 'ZIM', 'v SL, 2004'], [-36, '36', 'Canada', 'CAN', 'v SL, 2003'], [-38, '38', 'Zimbabwe', 'ZIM', 'v SL, 2001'], [-43, '43', 'Pakistan', 'PAK', 'v WI, 1993']] },
-      pt: { asOf: 'Aug 2020', rows: [[372, '372', 'Gayle & Samuels', 'WI', '2nd wkt v ZIM, 2015'], [365, '365', 'Campbell & Hope', 'WI', '1st wkt v IRE, 2019'], [331, '331', 'Tendulkar & Dravid', 'IND', '2nd wkt v NZ, 1999'], [318, '318', 'Ganguly & Dravid', 'IND', '2nd wkt v SL, 1999'], [304, '304', 'Fakhar & Imam', 'PAK', '1st wkt v ZIM, 2018']] }
+      tl: { asOf: 'rechecked Nov 2026', rows: [[-35, '35', 'United States', 'USA', 'v NEP, 2020'], [-35, '35', 'Zimbabwe', 'ZIM', 'v SL, 2004'], [-36, '36', 'Canada', 'CAN', 'v SL, 2003'], [-38, '38', 'Zimbabwe', 'ZIM', 'v SL, 2001'], [-43, '43', 'Pakistan', 'PAK', 'v WI, 1993']] },
+      pt: { asOf: 'rechecked Nov 2026', rows: [[372, '372', 'Gayle & Samuels', 'WI', '2nd wkt v ZIM, 2015'], [365, '365', 'Campbell & Hope', 'WI', '1st wkt v IRE, 2019'], [331, '331', 'Tendulkar & Dravid', 'IND', '2nd wkt v NZ, 1999'], [318, '318', 'Ganguly & Dravid', 'IND', '2nd wkt v SL, 1999'], [304, '304', 'Fakhar & Imam', 'PAK', '1st wkt v ZIM, 2018']] }
     },
     aus: {
       run: { asOf: 'Aug 2025', note: 'Runs for Australia only, so Ponting\'s total excludes his World XI match.', rows: [[13589, '13,589', 'Ricky Ponting', 'AUS', ''], [9595, '9,595', 'Adam Gilchrist', 'AUS', ''], [8500, '8,500', 'Mark Waugh', 'AUS', ''], [7981, '7,981', 'Michael Clarke', 'AUS', ''], [7569, '7,569', 'Steve Waugh', 'AUS', '']] },
@@ -5940,7 +5974,7 @@ const REAL_RECORDS = {
   },
   SHIELD: {
     world: {
-      run: { asOf: 'Mar 2015', rows: [[13635, '13,635', 'Darren Lehmann', 'SA/VIC', '1988–2008'], [10821, '10,821', 'Jamie Cox', 'TAS', '1988–2006'], [10643, '10,643', 'Jamie Siddons', 'VIC/SA', '1985–2000'], [10621, '10,621', 'Michael Bevan', 'SA/NSW/TAS', '1990–2007'], [10474, '10,474', 'Brad Hodge', 'VIC', '1994–2010']] },
+      run: { asOf: 'Dec 2025', rows: [[13635, '13,635', 'Darren Lehmann', 'SA/VIC', '1988–2008'], [10821, '10,821', 'Jamie Cox', 'TAS', '1988–2006'], [10643, '10,643', 'Jamie Siddons', 'VIC/SA', '1985–2000'], [10621, '10,621', 'Michael Bevan', 'SA/NSW/TAS', '1990–2007'], [10474, '10,474', 'Brad Hodge', 'VIC', '1994–2010']] },
       hs: { asOf: 'Mar 2019', rows: [[452.5, '452*', 'Don Bradman', 'NSW', 'v QLD, 1930'], [437, '437', 'Bill Ponsford', 'VIC', 'v QLD, 1928'], [365.5, '365*', 'Clem Hill', 'SA', 'v NSW, 1901'], [359, '359', 'Bob Simpson', 'NSW', 'v QLD, 1964'], [357, '357', 'Don Bradman', 'SA', 'v VIC, 1936']] },
       c100: { asOf: 'Mar 2015', rows: [[45, '45', 'Darren Lehmann', 'SA/VIC', '147 matches'], [42, '42', 'Michael Bevan', 'SA/NSW/TAS', '118 matches'], [36, '36', 'Don Bradman', 'NSW/SA', '62 matches'], [33, '33', 'Chris Rogers', 'WA/VIC', '120 matches'], [32, '32', 'Matthew Elliott', 'VIC/SA', '122 matches']] },
       wkt: { asOf: 'Feb 2025', rows: [[513, '513', 'Clarrie Grimmett', 'SA/VIC', '79 matches'], [441, '441', 'Michael Kasprowicz', 'QLD', '101 matches'], [430, '430', 'Andy Bichel', 'QLD', '89 matches'], [419, '419', 'Jo Angel', 'WA', '105 matches'], [397, '397', 'Jackson Bird', 'NSW/TAS', '91 matches']] },
@@ -5956,26 +5990,57 @@ function rrScope(set) { return set === 'SHIELD' ? 'dom' : 'intl'; }
 
 // Entries from this save for one table, as rows comparable with the real ones.
 // aus: limit to Australia (internationals) or no limit (world, Shield).
+// Build 161: Australia views merge the dedicated Australia list with Australian world entries.
+function recList(R, t, k, aus) {
+  const base = (R[t] && R[t][k]) || [];
+  if (!aus) return base;
+  const seen = new Set();
+  return ((R[t] && R[t][k + '_aus']) || []).concat(base.filter(x => x.t === 'AUS')).filter(x => { const sig = JSON.stringify(x); if (seen.has(sig)) return false; seen.add(sig); return true; });
+}
 function saveRows(set, cat, aus) {
   const fmt = RR_FMT[set], scope = rrScope(set), k = scope + '_' + fmt, R = game.records || {};
   const ausT = teamDef('AUS') ? (teamDef('AUS').short || 'AUS') : 'AUS';
   const okT = t => !aus || t === ausT;
-  const yr = y => y ? `${y}` : '';
+  const yr = y => y ? seasonSpan(y) : '';
   const out = [];
-  if (cat === 'hs') (R.hs && R.hs[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r + (x.no ? 0.5 : 0), d: x.r + (x.no ? '*' : ''), n: x.n, t: x.t, note: `v ${x.opp}, ${yr(x.y)}`, id: x.id }));
-  if (cat === 'bb') (R.bb && R.bb[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: bbv(x.w, x.r), d: `${x.w}/${x.r}`, n: x.n, t: x.t, note: `v ${x.opp}, ${yr(x.y)}`, id: x.id }));
-  if (cat === 'th') (R.th && R.th[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r, d: x.r + (x.w < 10 ? '/' + x.w : ''), n: teamName(teamIdByShort(x.t)) || x.t, t: x.t, note: `v ${x.opp}, ${yr(x.y)}` }));
-  if (cat === 'tl') (R.tl && R.tl[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: -x.r, d: String(x.r), n: teamName(teamIdByShort(x.t)) || x.t, t: x.t, note: `v ${x.opp}, ${yr(x.y)}` }));
-  if (cat === 'pt') (R.pt && R.pt[k] || []).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r, d: x.r + (x.unb ? '*' : ''), n: `${lastOf(x.a)} & ${lastOf(x.b)}`, t: x.t, note: `${ordinal(x.w)} wkt v ${x.opp}, ${yr(x.y)}` }));
+  if (cat === 'hs') recList(R, 'hs', k, aus).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r + (x.no ? 0.5 : 0), d: x.r + (x.no ? '*' : ''), n: x.n, t: x.t, note: `v ${x.opp}, ${yr(x.y)}`, id: x.id }));
+  if (cat === 'bb') recList(R, 'bb', k, aus).filter(x => okT(x.t)).forEach(x => out.push({ v: bbv(x.w, x.r), d: `${x.w}/${x.r}`, n: x.n, t: x.t, note: `v ${x.opp}, ${yr(x.y)}`, id: x.id }));
+  if (cat === 'th') recList(R, 'th', k, aus).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r, d: x.r + (x.w < 10 ? '/' + x.w : ''), n: recordTeamName(x.t, scope), t: x.t, note: `v ${x.opp}, ${yr(x.y)}` }));
+  if (cat === 'tl') recList(R, 'tl', k, aus).filter(x => okT(x.t)).forEach(x => out.push({ v: -x.r, d: String(x.r), n: recordTeamName(x.t, scope), t: x.t, note: `v ${x.opp}, ${yr(x.y)}` }));
+  if (cat === 'pt') recList(R, 'pt', k, aus).filter(x => okT(x.t)).forEach(x => out.push({ v: x.r, d: x.r + (x.unb ? '*' : ''), n: `${lastOf(x.a)} & ${lastOf(x.b)}`, t: x.t, note: `${ordinal(x.w)} wkt v ${x.opp}, ${yr(x.y)}` }));
   if (['run', 'wkt', 'c100', 'avg'].includes(cat)) {
     const stat = { run: 'runs', wkt: 'wkts', c100: 'c100', avg: 'avg' }[cat];
-    careerLeaders(fmt, scope, stat, 40).filter(x => !aus || x.p.nat === 'AUS').slice(0, 10).forEach(x => {
+    careerLeaders(fmt, scope, stat, aus ? 5000 : 40).filter(x => !aus || x.p.nat === 'AUS').slice(0, 10).forEach(x => {
       const s = x.s, v = { run: s.r, wkt: s.w, c100: s.c100, avg: batAvgOf(s) }[cat];
       const t = x.p.teamId && teamDef(x.p.teamId) ? (teamDef(x.p.teamId).short || x.p.teamId) : (x.p.retired ? 'retired' : '');
       out.push({ v, d: cat === 'avg' ? fmtNum(v) : v.toLocaleString('en-AU'), n: pname(x.p), t: scope === 'intl' ? (x.p.nat || t) : t, note: cat === 'avg' ? `${countNum(s.inn || 0)} innings` : `${countNum(s.m)} ${({ TEST:'Tests', ODI:'ODIs', T20I:'T20Is', SHIELD:'Shield matches' })[set] || 'matches'}`, id: x.p.id });
     });
   }
   return out.filter(x => x.v != null && isFinite(x.v)).sort((a, b) => b.v - a.v);
+}
+function seasonSpan(y) { return `${y}–${String(y + 1).slice(2)}`; }
+// Build 161: record rows store a team short code. Resolve it inside the record's own scope,
+// so South Africa (SA) is never shown as South Australia and other nations never show as TBC.
+function recordTeamName(short, scope) {
+  if (!short) return '';
+  if (scope === 'intl') return short === 'AUS' ? 'Australia' : (NATIONS[short] || short);
+  const t = TEAM_DEFS.find(x => (x.short || x.id) === short);
+  return t ? t.name : short;
+}
+// Build 161: earlier builds named nations in team-total records through the domestic team
+// table, which produced "TBC" (and "South Australia" for South Africa). Repair stored text.
+function repairRecordTeamNames(g) {
+  const R = g.records || {}, setFmt = { Test: 'FC', ODI: 'OD', T20I: 'T20' };
+  const fixName = (txt, year) => {
+    const m = /^(TBC|South Australia) broke the (Australian )?(Test|ODI|T20I) record for (highest|lowest) total: (\d+)/.exec(txt || '');
+    if (!m) return null;
+    const list = ((m[4] === 'highest' ? R.th : R.tl) || {})['intl_' + setFmt[m[3]]] || [];
+    const hit = list.find(x => String(x.r) === m[5] && (!year || x.y === year)) || list.find(x => String(x.r) === m[5]);
+    return hit ? recordTeamName(hit.t, 'intl') : null;
+  };
+  (g.legacyLog || []).forEach(e => { const n = fixName(e.text, e.year); if (n) e.text = e.text.replace(/^(TBC|South Australia)/, n); });
+  (g.news || []).forEach(e => { if (!e || e.tag !== 'Records' || !/^(TBC|South Australia) breaks the/.test(e.title || '')) return; const num = (/^(\d+)/.exec(e.body || '') || [])[1]; const n = num && fixName(`${String(e.title).replace(' breaks ', ' broke ')}: ${num}`, e.year); if (n) e.title = e.title.replace(/^(TBC|South Australia)/, n); });
+  Object.values(g.recBroken || {}).forEach(b => { if (b && b.set !== 'SHIELD' && (b.cat === 'th' || b.cat === 'tl') && (b.n === 'TBC' || b.n === 'South Australia')) b.n = recordTeamName(b.t, 'intl'); });
 }
 function lastOf(n) { const parts = String(n || '').split(' '); return parts[parts.length - 1]; }
 function teamIdByShort(sh) { const t = TEAM_DEFS.find(x => (x.short || x.id) === sh); return t ? t.id : (teamDef(sh) ? sh : null); }
@@ -5997,6 +6062,38 @@ function mergedTable(set, cat, aus) {
   return { tab, rows: merged, best, beaten, top };
 }
 
+// Build 162: career milestones in this save. The first check marks thresholds already passed
+// (seeded real careers) silently, so only landmarks reached during the save are logged.
+const SAVE_MILESTONES = [
+  ['intl','FC','r',[5000,8000,10000,12000,15000],'Test runs'], ['intl','FC','w',[200,300,400,500,600,700],'Test wickets'], ['intl','FC','m',[100,150],'Tests'],
+  ['intl','OD','r',[5000,8000,10000,12000],'ODI runs'], ['intl','OD','w',[200,300,400],'ODI wickets'],
+  ['intl','T20','r',[2000,3000,4000,5000],'T20I runs'], ['intl','T20','w',[100,150,200],'T20I wickets'],
+  ['dom','FC','r',[5000,8000,10000],'Shield runs'], ['dom','FC','w',[300,400,500],'Shield wickets']
+];
+function checkSaveMilestones() {
+  if (!game || !game.players) return;
+  const first = !game.milestoneDone; const done = game.milestoneDone = game.milestoneDone || {};
+  const log = game.milestones = game.milestones || [];
+  Object.values(game.players).forEach(p => {
+    const overseas = (p.teamId || '').startsWith('X_');
+    SAVE_MILESTONES.forEach(([scope, fmt, key, marks, label]) => {
+      if (scope === 'dom' && overseas) return;
+      const st = scope === 'intl' ? p.stats.intl && p.stats.intl[fmt] : p.stats.career && p.stats.career[fmt];
+      if (!st) return;
+      marks.forEach(mark => {
+        const id = `${p.id}:${scope}:${fmt}:${key}:${mark}`;
+        if (done[id] || (st[key] || 0) < mark) return;
+        done[id] = 1;
+        if (first) return;
+        const firstInSave = !log.some(e => e.k === `${scope}:${fmt}:${key}:${mark}`);
+        log.unshift({ year: game.year, day: game.day, k: `${scope}:${fmt}:${key}:${mark}`, id: p.id, nat: p.nat,
+          text: `${pname(p)} ${key === 'm' ? 'played' : 'reached'} ${mark.toLocaleString('en-AU')} ${label}${firstInSave ? ' (first in this save)' : ''}.` });
+        if (firstInSave && (mark >= 10000 || (key === 'w' && mark >= 500))) addNews('Records', `${pname(p)} reaches ${mark.toLocaleString('en-AU')} ${label}`, 'A landmark in this career.');
+      });
+    });
+  });
+  if (log.length > 80) log.length = 80;
+}
 // Record broken: post news and a Legacy entry the first time a save player passes the real mark,
 // and again if another save player later takes it from him.
 function checkRealRecords(silent) {
@@ -6012,7 +6109,10 @@ function checkRealRecords(silent) {
       const isNew = !prev || prev.n !== cur.n;
       B[key] = { n: cur.n, d: cur.d, t: cur.t, set, sc, cat, year: game.year, day: game.day, was: `${m.top.n} (${m.top.d})` };
       if (!isNew || silent) return;
-      const what = `${sc === 'aus' ? 'Australian ' : ''}${RR_LABEL[set]} record for ${RR_CATS[cat].toLowerCase()}`;
+      // Build 161: one story when the same feat also breaks the world record in this check.
+      if (sc === 'aus') { const w = B[`${set}_world_${cat}`]; if (w && w.n === cur.n && w.d === cur.d && w.year === game.year && w.day === game.day) return; }
+      const alsoAus = sc === 'world' && cur.t === 'AUS' && REAL_RECORDS[set].aus && REAL_RECORDS[set].aus[cat];
+      const what = `${sc === 'aus' ? 'Australian ' : ''}${RR_LABEL[set]} record for ${RR_CATS[cat].toLowerCase()}${alsoAus ? ' (also an Australian record)' : ''}`;
       addNews('Records', `${cur.n} breaks the ${what}`, `${cur.d}, passing ${m.top.n}'s ${m.top.d}.`);
       (game.legacyLog = game.legacyLog || []).unshift({ year: game.year, day: game.day, text: `${cur.n} broke the ${what}: ${cur.d}, passing ${m.top.n}'s ${m.top.d}.` });
       if (game.legacyLog.length > 40) game.legacyLog.length = 40;
@@ -6634,7 +6734,7 @@ function nextDay() {
     if (game.day === nationalDutyEnd(w)) windowEnd(w);
   }
   reconcileWorldCupDuty(game); // B133: keep tournament players unavailable on all off-days.
-  if (game.day % 7 === 0) { weeklyMorale(); checkRealRecords(); }
+  if (game.day % 7 === 0) { weeklyMorale(); checkRealRecords(); checkSaveMilestones(); }
   if (game.day % 30 === 15) monthlyDevelopment();
   if (game.day === CAL.TRADE_DEADLINE) addNews('League', 'Trade deadline passed', 'No more trades until the off-season. Free agents can still be signed.');
   game.offers = game.offers.filter(o => o.expires >= game.day);
@@ -8709,23 +8809,67 @@ async function deleteSlot(i) {
   if(!confirm(`Delete the career in slot ${i}? This cannot be undone unless you have downloaded its backup file.`))return;
   await Store.del(i);openLoadCareer();
 }
+// Build 163: the gear sheet. Save and Exit first; everything else is quiet and grouped.
+// Save writes to this browser and checks it. If the browser cannot keep saves, the same
+// button downloads a backup file instead, inside the tap so iOS allows the download.
+function gearStatusHtml() {
+  const none = Store.status === 'none', bad = Store.status === 'error';
+  const when = Store.lastSaved ? savedTimeText(+Store.lastSaved) : '';
+  const text = none ? 'This browser cannot keep saves. Save downloads a backup file instead.'
+    : bad ? 'Your last save was not confirmed. Tap Save to try again.'
+    : when ? `Saved in this browser at ${esc(when)}` : 'Saved automatically in this browser';
+  return `<div class="gear-status ${none || bad ? 'warn' : 'ok'}"><i></i><span>${text}</span></div><p id="save-centre-result" class="gear-result" role="status" aria-live="polite"></p>`;
+}
 function openMenu() {
   const g = game.gm;
-  sheet('Career', esc(g.name) + ' · ' + teamName(g.teamId), `<div class="rows">
-    <div class="row tap" onclick="openSaves()"><div class="stack"><div class="main-t">Saves</div><div class="sub-t">${esc(saveStatusShort())}</div></div><div class="end dim">›</div></div>
-    <div class="kv"><span>Record</span><span>${g.wins}W ${g.losses}L ${g.draws}D · ${g.seasons} season${g.seasons === 1 ? '' : 's'}</span></div>
-    <div class="kv"><span>Reputation</span><span>${g.rep}/100</span></div>
-    <div class="kv"><span>Board confidence</span><span>${game.board.confidence}/100</span></div>
-    <div class="kv"><span>Trophies</span><span>${g.titles.length ? g.titles.map(t => COMPS[t.comp].short + ' ' + t.year).join(', ') : 'None yet'}</span></div>
-    <div class="kv"><span>Save slot · build</span><span>${game.meta.slot} · ${BUILD.version}</span></div>
-</div>
-    ${Store.status === 'none' ? '<div class="pb"><div class="note bad">This browser is not keeping saves (private browsing, or opened from a file preview). Export your career to a file and import it next time, or open the game in Safari or Chrome directly.</div></div>' : ''}
-    <div class="kv"><span>Contract Manager</span><span><select onchange="setContractManagerMode(this.value)"><option value="manual" ${contractManagerMode()==='manual'?'selected':''}>Manual</option><option value="assisted" ${contractManagerMode()==='assisted'?'selected':''}>Assisted</option><option value="automatic" ${contractManagerMode()==='automatic'?'selected':''}>Automatic</option></select></span></div>
-    <div class="xs muted" style="padding:0 12px 12px">Delegation requires an appointed Contract Manager in Office → Staff. You can change this at any time.</div>
-    <div class="kv"><span>Editor mode</span><span><span class="switch ${game.editor ? 'on' : ''}" onclick="game.editor=!game.editor;if(game.editor)game.edited=true;autosave();openMenu()"><i></i>${game.editor ? 'On' : 'Off'}</span></span></div>
-    ${game.editor ? '<div class="pb" style="padding-bottom:0"><div class="xs muted">Edit any player from their profile, create players from League · Players, and rename teams below. Careers that use the editor are marked as edited.</div><button class="btn sm" style="margin-top:6px" onclick="editTeamsSheet()">Edit teams</button></div>' : ''}
-    <div class="pb"><button class="btn sm ghost" onclick="closeModal();showHelp()">Help</button></div>`,
-    { flush: true, foot: `<button class="btn ghost block" onclick="closeModal()">Close</button>` });
+  const cm = contractManagerMode();
+  const body = `<div class="gear">
+    ${gearStatusHtml()}
+    <div class="gear-actions">
+      <button class="btn pri" onclick="gearSave()">Save</button>
+      <button class="btn" onclick="gearExit()">Exit</button>
+    </div>
+    <div class="gear-sec">Career</div>
+    <div class="gear-stats">
+      <div><b>${g.wins}–${g.draws}–${g.losses}</b><span>W–D–L</span></div>
+      <div><b>${game.board.confidence}</b><span>Board</span></div>
+      <div><b>${g.rep}</b><span>Reputation</span></div>
+    </div>
+    <div class="gear-sec">Settings</div>
+    <div class="gear-row"><div><b>Contract manager</b><span>Needs a Contract Manager on staff</span></div>
+      <select onchange="setContractManagerMode(this.value)">${[['manual','Manual'],['assisted','Assisted'],['automatic','Automatic']].map(([v,l]) => `<option value="${v}"${cm === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
+    <div class="gear-row"><div><b>Editor mode</b><span>Edit players and teams</span></div>
+      <span class="switch ${game.editor ? 'on' : ''}" onclick="game.editor=!game.editor;if(game.editor)game.edited=true;autosave();openMenu()"><i></i>${game.editor ? 'On' : 'Off'}</span></div>
+    ${game.editor ? `<div class="gear-row"><div><b>Teams</b><span>Rename teams and change colours</span></div><button class="btn sm" onclick="editTeamsSheet()">Edit teams</button></div>` : ''}
+    <div class="gear-sec">More</div>
+    <button class="gear-link" onclick="openSaves()"><span>Backup and restore</span><i>›</i></button>
+    <button class="gear-link" onclick="closeModal();showHelp()"><span>How to play</span><i>›</i></button>
+    <div class="gear-foot">Slot ${game.meta.slot} · ${esc(BUILD.version)}</div>
+  </div>`;
+  if (!sheetSwap('gear', body, '')) sheet('Career', `${esc(g.name)} · ${esc(teamName(g.teamId))}`, body, { flush: true, key: 'gear' });
+}
+async function gearSave() {
+  if (!game) return;
+  if (Store.status === 'none') { exportSave(); saveStatusUpdate('Downloaded a backup file. Keep it in Files to restore later.'); return; }
+  const ok = await saveAndConfirm();
+  if (!ok) {
+    const el = $('save-centre-result');
+    if (el) el.innerHTML = `Saving to this browser did not work. <button class="link" onclick="exportSave()">Download backup file</button>`;
+    return;
+  }
+  const st = document.querySelector('#modalRoot .gear-status');
+  const res = $('save-centre-result'); if (res && st) res.textContent = '';
+  if (st) st.outerHTML = gearStatusHtml().replace(/<p id="save-centre-result"[^>]*><\/p>$/, '');
+}
+function gearExit() {
+  if (!game) return;
+  // Inside the tap: when the browser cannot keep saves, download the career, then leave.
+  if (Store.status === 'none') {
+    try { exportSave(); } catch (e) { flash('Backup download failed to start. Try again.'); return; }
+    setTimeout(finishCareerExit, 1200);
+    return;
+  }
+  returnToLaunch();
 }
 function showGMProfile() { openMenu(); }
 // B134: A failed database write must never trap a player in their career.
@@ -9511,9 +9655,47 @@ function renderLeaders() {
   return `<div class="flex wrap">${fmtSeg(f, 'setLeadFmt')}<span class="grow"></span>${sel(Object.keys(LEAD_STATS).map(k => [k, LEAD_STATS[k].label]), ui.leadStat, "ui.leadStat=this.value;render()")}</div><div style="height:8px"></div>
     ${panel(`${compName(f)} · ${st.label}`, `<div class="rows">${rows.map((p, i) => playerRow(p, { n: i + 1, team: true, markMine: true, sub: `${ROLES[p.role].short} · ${p.stats.season[f].m} matches`, end: `<span class="b">${st.show(p.stats.season[f])}</span>` })).join('') || '<div class="empty">No data yet.</div>'}</div>`, { flush: true })}`;
 }
+// Build 162: Honours has a Domestic and an International roll.
 function renderHistory() {
+  const mode = ui.honoursMode || 'dom';
+  const top = seg([['dom','Domestic'],['intl','International']], mode, '(v=>{ui.honoursMode=v;render();})');
+  return `${top}<div style="height:10px"></div>${mode === 'intl' ? renderIntlHonours() : renderDomesticHonours()}`;
+}
+function intlTitleRows() {
+  const nat = id => pastWinnerNat(id) || (NATIONS[id] ? id : null);
+  const rows = [];
+  (game.worldHistory || []).forEach(x => rows.push({ year: x.year, event: 'T20 World Cup', winners: [nat(x.winner)], runnerUp: nat(x.runnerUp) }));
+  (game.globalTournamentHistory || []).forEach(x => rows.push({ year: x.year, event: x.event === 'CT' ? 'Champions Trophy' : 'ODI World Cup', winners: [nat(x.winner)], runnerUp: nat(x.runnerUp) }));
+  (game.wtcHistory || []).forEach(x => { const w = wtcWinners(x).map(nat); rows.push({ year: x.end, event: 'World Test Championship', winners: w, runnerUp: x.winner ? nat(x.winner === x.home ? x.away : x.home) : null, joint: !x.winner }); });
+  return rows.filter(r => r.winners.length && r.winners[0]);
+}
+function renderIntlHonours() {
+  const titles = intlTitleRows();
+  const seasons = [...new Set(titles.map(t => t.year))].sort((a, b) => b - a);
+  const nm = n => `${flagFor(n)} ${esc(NATIONS[n] || n)}`;
+  const titleHtml = seasons.map(y => `<div class="hon-season"><div class="hon-season-h">${seasonSpan(y)}</div>${titles.filter(t => t.year === y).map(t => `<div class="kv hon-row${t.winners.includes('AUS') ? ' hon-aus' : ''}"><span>${esc(t.event)}</span><span><b>${t.winners.map(nm).join(' and ')}</b>${t.joint ? '<div class="xs dim">Joint winners</div>' : t.runnerUp ? `<div class="xs dim">Runners-up ${esc(NATIONS[t.runnerUp] || t.runnerUp)}</div>` : ''}</span></div>`).join('')}</div>`).join('');
+  const ausCount = {}; titles.forEach(t => { if (t.winners.includes('AUS')) ausCount[t.event] = (ausCount[t.event] || 0) + 1; });
+  const cabinet = Object.keys(ausCount).length ? Object.entries(ausCount).map(([e, n]) => `<div class="kv"><span>${esc(e)}</span><b>${n}</b></div>`).join('') : '<div class="empty">No global titles for Australia yet in this save.</div>';
+  const fmtName = { TEST: 'Tests', ODI: 'ODIs', T20I: 'T20Is', FC: 'Tests', OD: 'ODIs', T20: 'T20Is' };
+  const series = (game.internationalSeriesReviews || []).filter(r => r.home === 'AUS' || r.away === 'AUS').slice(0, 30).map(r => {
+    const opp = r.home === 'AUS' ? r.away : r.home, oppNat = pastWinnerNat(opp) || opp;
+    const aw = r.home === 'AUS' ? r.hw : r.aw, ow = r.home === 'AUS' ? r.aw : r.hw;
+    const res = !r.winner ? `Drawn ${aw}–${ow}` : r.winner === 'AUS' ? `Won ${aw}–${ow}` : `Lost ${aw}–${ow}`;
+    const pos = r.playerOfSeries && r.playerOfSeries.name ? `Player of the series: ${r.playerOfSeries.name}` : '';
+    return `<div class="row tap" onclick="openInternationalSeriesReview('${r.id}')"><div class="stack"><div class="main-t">${seasonSpan(r.year)} · ${esc(fmtName[r.fmt] || r.fmt)} v ${nm(oppNat)}</div>${pos ? `<div class="sub-t">${esc(pos)}</div>` : ''}</div><div class="end ${!r.winner ? '' : r.winner === 'AUS' ? 'win' : 'loss'} b">${res}</div></div>`;
+  }).join('');
+  const aw = (game.intlSeasonHonours || []).slice().sort((a, b) => b.year - a.year).map(a => {
+    const who = k => { const it = a.winners && a.winners[k], pl = it && P(it.id); return pl ? `${nationTag(pl.nat)} ${plink(pl, pname(pl))}` : '<span class="dim">Not awarded</span>'; };
+    return `<div class="hon-season"><div class="hon-season-h">${seasonSpan(a.year)}</div><div class="kv"><span>Player of the year</span><span>${who('overall')}</span></div><div class="kv"><span>Young player</span><span>${who('young')}</span></div></div>`;
+  }).join('');
+  return `<div class="grid g2">${panel('Global titles', titleHtml || '<div class="empty">No global tournament completed yet in this save.</div>', { flush: true })}
+    ${panel('Australia\'s titles', `<div class="rows">${cabinet}</div>`, { flush: true })}
+    ${panel('Australia\'s series', series ? `<div class="rows">${series}</div>` : '<div class="empty">No completed series yet.</div>', { flush: true })}
+    ${panel('International awards', aw || '<div class="empty">No international season completed yet.</div>', { flush: true })}</div>`;
+}
+function renderDomesticHonours() {
   const h = game.history;
-  return `<div class="grid g2">${panel('Honour roll', h.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Season</th>${COMP_ORDER.map(c => `<th>${COMPS[c].short}</th>`).join('')}<th>You</th></tr></thead><tbody>${h.map(s => `<tr><td>${s.label}</td>${COMP_ORDER.map(c => `<td>${s.champions[c] ? tdot(s.champions[c]) : '–'}</td>`).join('')}<td class="dim">${COMP_ORDER.map(c => s.finish[c]).join('/')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Complete a season to start the honour roll.</div>', { flush: true })}
+  return `<div class="grid g2">${panel('Honour roll', h.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Season</th>${COMP_ORDER.map(c => `<th>${COMPS[c].short}</th>`).join('')}</tr></thead><tbody>${h.map(s => `<tr><td>${s.label}<div class="xs dim" style="white-space:nowrap">${s.team ? esc(teamDef(s.team) ? (teamDef(s.team).short || s.team) : s.team) + ' ' : ''}${COMP_ORDER.map(c => s.finish && s.finish[c] ? ordinal(s.finish[c]) : '–').join(' · ')}</div></td>${COMP_ORDER.map(c => `<td${s.champions[c] && s.champions[c] === s.team ? ' class="honour-mine"' : ''}>${s.champions[c] ? tdot(s.champions[c]) : '–'}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Complete a season to start the honour roll.</div>', { flush: true })}
     ${panel('Players of the Year', `<div class="rows">${h.filter(s => s.awards.poy).map(s => `<div class="kv"><span>${s.label}</span><span>${plink(P(s.awards.poy.id), s.awards.poy.name)} <span class="dim">${tdot(s.awards.poy.team)}</span></span></div>`).join('') || '<div class="empty">None yet.</div>'}</div>`, { flush: true })}
     ${panel('Your trophy cabinet', `<div class="rows">${game.gm.titles.map(t => `<div class="kv"><span>${COMPS[t.comp].name}</span><span>${t.year}–${String(t.year + 1).slice(2)}</span></div>`).join('') || '<div class="empty">Empty for now.</div>'}</div>`, { flush: true })}</div>`;
 }
@@ -9576,6 +9758,7 @@ async function saveAndConfirm() {
       if (document.querySelector('#modalRoot .sheet[data-key="saves"]')) sheetSwap('saves', savesSheetBody(_savesEarlier), `<button class="btn ghost block" onclick="returnToLaunch()">Save and exit</button>`);
       saveStatusUpdate(`Saved and checked at ${stamp}.`);
       flash(`Career saved · ${stamp}`);
+      return true;
     } else {
       saveStatusUpdate((completed ? 'Save could not be confirmed.' : 'Browser storage did not respond.') + ' Download a backup file now.',true);
       flash('Save not confirmed. Download a backup file.');
@@ -9585,6 +9768,7 @@ async function saveAndConfirm() {
     saveStatusUpdate('Save check failed. Download a backup file now.',true);
     flash('Save could not be confirmed. Download a backup file.');
   } finally { _manualSaveActive=false; }
+  return false;
 }
 async function verifyActiveSlot() {
   const slot = game.meta.slot || 1;
@@ -9613,7 +9797,7 @@ function saveStatusShort() {
 }
 function backupReminderText() {
   const b = game.meta.lastBackup;
-  if (!b) return 'No backup file yet. Download one and keep it in Files.';
+  if (!b) return Store.status === 'ok' ? 'No backup file yet.' : 'No backup file yet. Download one and keep it in Files.';
   const behind = (Number(game.year) || 0) - (Number(b.year) || 0);
   return `Last backup: ${esc(b.label || '')} season${behind >= 1 ? ' · a season or more ago' : ''}`;
 }
@@ -9624,7 +9808,8 @@ function savesSheetBody(earlier) {
   const status = bad
     ? `<div class="save-status bad"><b>${Store.status === 'none' ? 'This browser is not keeping saves' : 'Your last save was not confirmed'}</b><span>Download a backup file now so no progress is lost.</span></div>`
     : `<div class="save-status ok"><b>${Store.lastSaved ? 'Saved automatically · ' + savedTimeText(+Store.lastSaved) : 'Saved automatically'}</b><span>Slot ${slot} · ${Store.idbOk ? 'browser database' : 'browser storage'}</span></div>`;
-  const behind = !game.meta.lastBackup || (Number(game.year) || 0) > (Number(game.meta.lastBackup.year) || 0);
+  // Build 163: only press for a backup file when this browser is not keeping saves.
+  const behind = Store.status !== 'ok' && (!game.meta.lastBackup || (Number(game.year) || 0) > (Number(game.meta.lastBackup.year) || 0));
   let earlierHtml;
   if (earlier === null) earlierHtml = '<div class="empty">Checking…</div>';
   else if (!Store.idbOk) earlierHtml = '<div class="empty">Not available in this browser.</div>';
@@ -9636,19 +9821,18 @@ function savesSheetBody(earlier) {
     }).join('');
     earlierHtml = rows || '<div class="empty">None yet. A save is kept at the start of each season.</div>';
   }
-  return `<div class="pb">${status}<button class="btn pri block" style="margin-top:12px" onclick="saveAndConfirm()">Save now</button>
-    <p id="save-centre-result" class="xs muted" role="status" aria-live="polite" style="margin:8px 0 0;min-height:16px"></p></div>
+  return `<div class="pb">${status}</div>
     <div class="save-sec"><div class="save-sec-h">Backup file</div><p class="xs ${behind ? 'warn-t' : 'muted'}">${backupReminderText()}</p>
     <div class="save-btns"><button class="btn" onclick="exportSave()">Download backup file</button><button class="btn ghost" onclick="importSave()">Restore from backup file</button></div>
-    <p class="xs muted">A backup file is the safest copy of your career. Restoring one opens it in an empty slot and never replaces another career.</p></div>
+    <p class="xs muted">Your career saves in this browser automatically, so a backup file is optional. It is useful for moving to another device or keeping a copy. Restoring one opens it in an empty slot.</p></div>
     <div class="save-sec"><div class="save-sec-h">Earlier saves on this device</div><div class="rows">${earlierHtml}</div>
     <p class="xs muted">Restoring an earlier save replaces your current save. The save you replace is kept, so you can switch back.</p></div>`;
 }
 let _savesEarlier = null;
 async function openSaves() {
   if (!game) return;
-  const foot = `<button class="btn ghost block" onclick="returnToLaunch()">Save and exit</button>`;
-  if (!sheetSwap('saves', savesSheetBody(_savesEarlier), foot)) sheet('Career', 'Saves', savesSheetBody(_savesEarlier), { flush: true, key: 'saves', foot });
+  const foot = `<button class="btn ghost block" onclick="openMenu()">Back</button>`;
+  if (!sheetSwap('saves', savesSheetBody(_savesEarlier), foot)) sheet('Career', 'Backup and restore', savesSheetBody(_savesEarlier), { flush: true, key: 'saves', foot });
   const list = await Store.earlierSaves(game.meta.slot || 1);
   _savesEarlier = list;
   sheetSwap('saves', savesSheetBody(list), foot);
@@ -9709,7 +9893,7 @@ function renderIntl() {
 function renderLegacy() {
   const t = ui.legacyTab || 'career';
   const body = t === 'honours' ? renderHistory() : t === 'seasons' ? renderGMSeasons() : t === 'records' ? renderLegacyRecords() : t === 'international' ? renderIntlLegacyRecords() : renderGMCareer();
-  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honours'],['records','Records'],['international','International']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
+  return `${pageTitle('Legacy', `${esc(game.gm.name)} · GM career`)}${seg([['career','Career'],['seasons','Seasons'],['honours','Honours'],['records','Records'],['international','Nations']], t, '(v=>{ui.legacyTab=v;render();})')}<div style="height:10px"></div>${body}`;
 }
 // Build 106: distinct, self-contained vector trophies; no image assets or save migration.
 function careerTrophyArt(kind) {
@@ -9792,7 +9976,7 @@ function careerBoard(label,record,total,titles,confidence,note) {
   const pct=denom?Math.round(record.w/denom*100):0;
   // B154: values shrink as careers grow (e.g. 1183–122–1140) so they never overflow the card.
   const stat=(k,v,sub)=>{ const t=String(v), cls=t.length>13?' xlong':t.length>9?' long':''; return `<div class="career-stat"><div class="career-stat-name">${esc(k)}</div><div class="career-stat-value${cls}">${esc(t)}</div><div class="career-stat-sub">${esc(sub||'')}</div></div>`; };
-  return `<div class="career-summary-head">${esc(label)}</div><div class="career-stat-grid">${stat('Won · Drawn · Lost',`${record.w}–${record.d}–${record.l}`,record.nr?`${record.nr} no results`:'Career record')}${stat('Win rate',`${pct}%`,`${denom} decided/drawn`)}${stat('Championships',titles,'Recorded titles')}${stat('Board confidence',confidence,'Current rating')}</div>${note?`<div class="xs muted" style="margin:5px 0 13px">${esc(note)}</div>`:''}`;
+  return `<div class="career-summary-head">${esc(label)}</div><div class="career-stat-grid">${stat('Won · Drawn · Lost',`${record.w}–${record.d}–${record.l}`,record.nr?`${record.nr} no results`:'Career record')}${stat('Win rate',`${pct}%`,`of ${countNum(denom)} matches`)}${stat('Championships',titles,'Recorded titles')}${stat('Board confidence',confidence,'Current rating')}</div>${note?`<div class="xs muted" style="margin:5px 0 13px">${esc(note)}</div>`:''}`;
 }
 function careerOpponentRecord(rows,fmt,national) {
   const formats=national?[['ALL','All'],['FC','Test'],['OD','ODI'],['T20','T20I']]:[['ALL','All'],['FC','Shield'],['OD','One-Day'],['T20','T20']];
@@ -9825,7 +10009,7 @@ function renderGMCareer() {
     // Total historical GM wins/losses are preserved, but historical draws cannot be inferred from missing fixtures.
     const totalRecord={w:g.wins||0,d:Math.max(0,g.draws||0),l:g.losses||0,nr:0};
     const missing=Math.max(0,totalRecord.w+totalRecord.d+totalRecord.l-(available.w+available.d+available.l));
-    const note=missing?`${missing} historical matches have no retained opponent detail; club opponent tables include only available and newly archived fixtures.`:'';
+    const note=missing?`Opponent tables cover ${countNum(available.w+available.d+available.l)} of ${countNum(totalRecord.w+totalRecord.d+totalRecord.l)} matches. The rest were played before match details were kept.`:'';
     const jobs=(g.jobs||[]).map(j=>`<div class="kv"><span>${tdot(j.teamId)} ${esc(teamName(j.teamId))}</span><span class="dim">from ${j.from}</span></div>`).join('');
     content=view==='overview'?`${careerBoard(`${teamName(U())} · Club career`,totalRecord,g.seasons,g.titles.length,game.board.confidence,note)}${panel('Clubs managed',`<div class="rows">${jobs||'<div class="empty">No club appointments recorded.</div>'}<div class="kv"><span>Seasons managed</span><b>${g.seasons}</b></div></div>`,{flush:true})}`
       :panel('Match records by club',careerOpponentRecord(matches,fmt,false));
@@ -11262,7 +11446,6 @@ function pastWinnersPanel(rows, emptyText) {
   }).join('');
   return panel('Past winners', `<div class="rows">${body || `<div class="empty">${esc(emptyText || 'No completed tournaments yet in this career.')}</div>`}</div>`, { flush: true });
 }
-function seasonSpan(y) { return `${y}–${String(y + 1).slice(2)}`; }
 function globalPastWinners(event) {
   const h = (game.globalTournamentHistory || []).filter(x => x.event === event);
   return pastWinnersPanel(h.map(x => ({ season: seasonSpan(x.year), winner: x.winner, runnerUp: x.runnerUp, host: x.host || tournamentHost(event, x.year) })),
@@ -11605,8 +11788,9 @@ function legacyRecordNote(row, set) {
 // Legacy > Records: real all-time tables with this save's players ranked among them, or this save's own book.
 function renderLegacyRecords() {
   const mode = ui.rrMode || 'all';
-  const top = seg([['all','All-time'],['save','This save']], mode, '(v=>{ui.rrMode=v;render();})');
+  const top = seg([['all','All-time'],['save','This save'],['miles','Milestones']], mode, '(v=>{ui.rrMode=v;render();})');
   if (mode === 'save') return `${top}<div style="height:8px"></div>${renderRecords()}`;
+  if (mode === 'miles') return `${top}<div style="height:8px"></div>${renderMilestones()}`;
   const set = ui.rrSet || 'TEST', aus = set !== 'SHIELD' && ui.rrScope === 'aus';
   const tabs = REAL_RECORDS[set][aus ? 'aus' : 'world'];
   const cats = Object.keys(tabs);
@@ -11615,31 +11799,68 @@ function renderLegacyRecords() {
   const rows = m.rows.map((x, i) => `<tr class="${x.real ? '' : 'me tap'}" ${x.id ? `onclick="showPlayer('${x.id}')"` : ''}><td class="n2">${i + 1}</td><td class="l"><b>${legacyRecordFlag(x, set)}${esc(x.n)}</b> <span class="dim xs">${esc(x.t || '')}</span>${x.real ? '' : ' ' + chip('good', 'This save')}${x.real && m.beaten && x === m.top ? ' ' + chip('', 'Previous record') : ''}<div class="xs dim">${esc(legacyRecordNote(x, set))}</div></td><td class="b big">${x.d}</td></tr>`).join('');
   const best = m.best && !m.rows.includes(m.rows.find(r => !r.real)) ? `<div class="note" style="margin-top:8px">Best in this save: <b>${esc(m.best.n)}</b> ${m.best.d}${m.best.note ? ' · ' + esc(m.best.note) : ''}, which would rank ${ordinal(m.best.rank)}.</div>` : !m.best ? '<div class="note" style="margin-top:8px">No one in this save has an entry here yet.</div>' : '';
   const broken = (game.legacyLog || []).slice(0, 8);
-  const brokenP = broken.length ? panel(`Records broken · ${broken.length}`, `<div class="rows">${broken.map(e => `<div class="row"><div class="stack"><div class="main-t" style="white-space:normal">${esc(e.text)}</div><div class="sub-t">${e.year}</div></div></div>`).join('')}</div>`, { flush: true }) : '';
   return `${top}<div style="height:8px"></div>
     <div class="tool-row">${seg(Object.keys(REAL_RECORDS).map(k => [k, RR_LABEL[k]]), set, '(v=>{ui.rrSet=v;render();})')}${set === 'SHIELD' ? '' : seg([['world','World'],['aus','Australia']], aus ? 'aus' : 'world', '(v=>{ui.rrScope=v;render();})')}</div>
     <div style="height:8px"></div>${sel(cats.map(c => [c, RR_CATS[c]]), cat, 'ui.rrCat=this.value;render()', 'full')}<div style="height:8px"></div>
-    ${panel(`${aus ? 'Australia · ' : ''}${RR_LABEL[set]} · ${RR_CATS[cat]}`, `<table class="tbl rec"><tbody>${rows}</tbody></table>`, { flush: true, end: `<span class="xs dim">as of ${m.tab.asOf}</span>` })}
+    ${panel(`${aus ? 'Australia · ' : ''}${RR_LABEL[set]} · ${RR_CATS[cat]}`, `<table class="tbl rec"><tbody>${rows}</tbody></table>`, { flush: true, end: `<span class="xs dim">${/^rechecked/.test(m.tab.asOf) ? m.tab.asOf : 'as of ' + m.tab.asOf}</span>` })}
     ${best}${m.tab.note ? `<div class="xs dim" style="margin-top:6px">${esc(m.tab.note)}</div>` : ''}
     <div class="xs dim" style="margin-top:6px">Real figures: ${RR_SRC}.</div>
-    ${brokenP ? `<div style="height:8px"></div>${brokenP}` : ''}`;
+    ${broken.length ? `<div class="xs dim" style="margin-top:6px">${broken.length === 1 ? 'One real record has' : `${(game.legacyLog || []).length} real records have`} been broken in this save. See Milestones.</div>` : ''}`;
+}
+function renderMilestones() {
+  const recs = (game.legacyLog || []).map(e => Object.assign({ kind: 'record' }, e));
+  const miles = (game.milestones || []).map(e => Object.assign({ kind: 'mile' }, e));
+  const filter = ui.msFilter || 'all';
+  const all = (filter === 'record' ? recs : filter === 'mile' ? miles : recs.concat(miles)).sort((a, b) => (b.year - a.year) || ((b.day || 0) - (a.day || 0)));
+  const row = e => { const pl = e.id && P(e.id); return `<div class="row${pl ? ' tap' : ''}"${pl ? ` onclick="showPlayer('${e.id}')"` : ''}><div class="stack"><div class="main-t" style="white-space:normal">${e.nat && NATIONS[e.nat] ? nationTag(e.nat) + ' ' : ''}${esc(e.text)}</div><div class="sub-t">${e.kind === 'record' ? 'Real record broken' : 'Career milestone'} · ${e.year ? seasonSpan(e.year) : ''}${e.day != null ? ' · ' + dateStr(e.day, null, e.year) : ''}</div></div></div>`; };
+  return `${seg([['all','All'],['record','Records broken'],['mile','Career milestones']], filter, '(v=>{ui.msFilter=v;render();})')}<div style="height:8px"></div>
+    ${panel('Milestones', all.length ? `<div class="rows">${all.map(row).join('')}</div>` : '<div class="empty">Landmarks reached in this save appear here, such as 10,000 Test runs or a real record broken.</div>', { flush: true })}
+    <div class="xs dim" style="margin-top:6px">Career milestones count from Build 162. Landmarks passed before that, including real careers before the save began, are not listed.</div>`;
 }
 function renderRecords() {
   const scope = ui.recScope || 'dom', f = ui.recFmt || 'FC', cat = ui.recCat || 'hs';
+  const aus = scope === 'intl' && ui.recAus;
   const k = scope + '_' + f, R = game.records || { hs:{}, bb:{}, th:{}, tl:{}, pt:{} };
   const fname = scope === 'intl' ? { FC:'Tests', OD:'ODIs', T20:'T20Is' }[f] : compName(f);
-  const cats = [['hs','Highest scores'],['bb','Best bowling'],['th','Highest totals'],['tl','Lowest totals'],['pt','Partnerships'],['cr','Career runs'],['cw','Career wickets'],['ch','Career hundreds'],['cm','Most matches']];
+  const cats = [['hs','Highest scores'],['fh','Fastest hundreds'],['bb','Best bowling'],['th','Highest totals'],['tl','Lowest totals'],['pt','Partnerships'],
+    ['cr','Career runs'],['ca','Best batting average'],['ch','Career hundreds'],['c6','Most sixes'],['cw','Career wickets'],['cb','Best bowling average'],['c5','Five-wicket hauls'],['cd','Catches and stumpings'],['cm','Most matches']];
   let rows = '';
-  const yr = y => `<span class="dim xs">${y}</span>`;
-  if (cat === 'hs') rows = (R.hs[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${countNum(x.r)}${x.no ? '*' : ''}</td><td class="dim">${x.b}b</td></tr>`).join('');
-  if (cat === 'bb') rows = (R.bb[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.n)}</b> <span class="dim xs">${x.t}</span><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${x.w}/${x.r}</td><td></td></tr>`).join('');
-  if (cat === 'th' || cat === 'tl') rows = (R[cat][k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${x.t}</b><div class="xs dim">v ${x.opp} · ${x.y}</div></td><td class="b big">${countNum(x.r)}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
-  if (cat === 'pt') rows = (R.pt[k] || []).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> & <b>${esc(x.b)}</b><div class="xs dim">${x.t} v ${x.opp} · ${ordinal(x.w)} wicket · ${x.y}</div></td><td class="b big">${countNum(x.r)}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
-  if (cat[0] === 'c') { const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m' }[cat]; rows = careerLeaders(f, scope, stat, 15).map((x, i) => { const s = x.s, v = { cr: s.r, cw: s.w, ch: s.c100, cm: s.m }[cat]; const sub = cat === 'cr' || cat === 'ch' ? `${countNum(s.m)} matches · avg ${fmtNum(batAvgOf(s))}` : cat === 'cw' ? `${countNum(s.m)} matches · avg ${fmtNum(bowlAvgOf(s))}` : `${countNum(s.r)} runs · bat avg ${s.inn > s.no ? fmtNum(batAvgOf(s)) : '–'} · ${countNum(s.w)} wkts${s.w ? ` · bowl avg ${fmtNum(bowlAvgOf(s))}` : ''}`; return `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${esc(pname(x.p))}</b> <span class="dim xs">${scope === 'intl' ? nationTag(x.p.nat) + ' ' + esc(x.p.nat) : (x.p.retired ? 'retired' : tdot(x.p.teamId))}</span><div class="xs dim">${sub}</div></td><td class="b big">${countNum(v)}</td><td></td></tr>`; }).join(''); }
-  return `<div class="tool-row">${seg([['dom','Domestic'],['intl','Intl']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>
+  // Build 162: a stored fixture keeps its scorecard for the current season only.
+  const card = x => x.fx && game.scorecards && game.scorecards[x.fx] ? ` <button class="link xs" onclick="event.stopPropagation();showScorecard('${x.fx}',0)">Scorecard</button>` : '';
+  // Build 161: season labels, full team names, flags for internationals, tappable player rows, Australia filter.
+  const when = x => `v ${esc(recordTeamName(x.opp, scope))} · ${x.y ? seasonSpan(x.y) : ''}`;
+  const flag = t => scope === 'intl' && NATIONS[t] ? nationTag(t) + ' ' : '';
+  const team = t => `<span class="dim xs">${esc(t || '')}</span>`;
+  const sorter = { fh: (a, b) => a.b - b.b || b.r - a.r, hs: (a, b) => b.r - a.r, bb: (a, b) => b.w - a.w || a.r - b.r, th: (a, b) => b.r - a.r, tl: (a, b) => a.r - b.r, pt: (a, b) => b.r - a.r };
+  const list = key => {
+    const RK = R[key] || {};
+    if (!aus) return RK[k] || [];
+    const seen = new Set(), rows = [];
+    (RK[k + '_aus'] || []).concat((RK[k] || []).filter(x => x.t === 'AUS')).forEach(x => { const sig = JSON.stringify(x); if (!seen.has(sig)) { seen.add(sig); rows.push(x); } });
+    return rows.sort(sorter[key]).slice(0, 10);
+  };
+  const tap = id => id && P(id) ? ` class="tap" onclick="showPlayer('${id}')"` : '';
+  if (cat === 'hs') rows = list('hs').map((x, i) => `<tr${tap(x.id)}><td class="n2">${i + 1}</td><td class="l"><b>${flag(x.t)}${esc(x.n)}</b> ${team(x.t)}<div class="xs dim">${when(x)}${card(x)}</div></td><td class="b big">${countNum(x.r)}${x.no ? '*' : ''}</td><td class="dim">${x.b}b</td></tr>`).join('');
+  if (cat === 'fh') rows = list('fh').map((x, i) => `<tr${tap(x.id)}><td class="n2">${i + 1}</td><td class="l"><b>${flag(x.t)}${esc(x.n)}</b> ${team(x.t)}<div class="xs dim">${when(x)} · made ${x.r}${x.no ? '*' : ''}${card(x)}</div></td><td class="b big">${x.b}</td><td class="dim">balls</td></tr>`).join('');
+  if (cat === 'bb') rows = list('bb').map((x, i) => `<tr${tap(x.id)}><td class="n2">${i + 1}</td><td class="l"><b>${flag(x.t)}${esc(x.n)}</b> ${team(x.t)}<div class="xs dim">${when(x)}${card(x)}</div></td><td class="b big">${x.w}/${x.r}</td><td></td></tr>`).join('');
+  if (cat === 'th' || cat === 'tl') rows = list(cat).map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${flag(x.t)}${esc(recordTeamName(x.t, scope))}</b><div class="xs dim">${when(x)}${card(x)}</div></td><td class="b big">${countNum(x.r)}${cat === 'th' && x.w < 10 ? '/' + x.w : ''}</td><td></td></tr>`).join('');
+  if (cat === 'pt') rows = list('pt').map((x, i) => `<tr><td class="n2">${i + 1}</td><td class="l"><b>${esc(x.a)}</b> &amp; <b>${esc(x.b)}</b><div class="xs dim">${flag(x.t)}${esc(recordTeamName(x.t, scope))} · ${ordinal(x.w)} wicket · ${when(x)}${card(x)}</div></td><td class="b big">${countNum(x.r)}${x.unb ? '*' : ''}</td><td></td></tr>`).join('');
+  if (cat[0] === 'c') {
+    const stat = { cr:'runs', cw:'wkts', ch:'c100', cm:'m', ca:'avg', cb:'bavg', c5:'w5', cd:'dis', c6:'f6' }[cat];
+    const val = x => { const s2 = x.s; return { cr: countNum(s2.r), cw: countNum(s2.w), ch: countNum(s2.c100), cm: countNum(s2.m), ca: fmtNum(batAvgOf(s2)), cb: fmtNum(bowlAvgOf(s2)), c5: countNum(s2.w5 || 0), cd: countNum((s2.ct || 0) + (s2.st || 0)), c6: countNum(s2.f6 || 0) }[cat]; };
+    const sub = x => { const s2 = x.s, m = `${countNum(s2.m)} matches`;
+      if (cat === 'cr' || cat === 'ch' || cat === 'c6') return `${m} · avg ${s2.inn > s2.no ? fmtNum(batAvgOf(s2)) : '–'}`;
+      if (cat === 'ca') return `${countNum(s2.inn)} innings · ${countNum(s2.r)} runs`;
+      if (cat === 'cw' || cat === 'c5') return `${m} · avg ${s2.w ? fmtNum(bowlAvgOf(s2)) : '–'}`;
+      if (cat === 'cb') return `${countNum(s2.w)} wickets · ${m}`;
+      if (cat === 'cd') return `${countNum(s2.ct || 0)} catches${s2.st ? ` · ${countNum(s2.st)} stumpings` : ''} · ${m}`;
+      return `${countNum(s2.r)} runs · ${countNum(s2.w)} wkts`; };
+    rows = careerLeaders(f, scope, stat, aus ? 5000 : 15).filter(x => !aus || x.p.nat === 'AUS').slice(0, 15).map((x, i) => `<tr class="tap" onclick="showPlayer('${x.p.id}')"><td class="n2">${i + 1}</td><td class="l"><b>${scope === 'intl' && NATIONS[x.p.nat] ? nationTag(x.p.nat) + ' ' : ''}${esc(pname(x.p))}</b>${x.p.retired ? ' <span class="dim xs">retired</span>' : ''}<div class="xs dim">${sub(x)}</div></td><td class="b big">${val(x)}</td><td></td></tr>`).join('');
+  }
+  return `<div class="tool-row">${seg([['dom','Domestic'],['intl','Intl']], scope, 'setRecScope')}${seg(FMT_LIST.map(x => [x, scope === 'intl' ? { FC:'Test', OD:'ODI', T20:'T20I' }[x] : compName(x)]), f, 'setRecFmt')}</div>${scope === 'intl' ? `<div style="height:8px"></div>${seg([['all','World'],['aus','Australia']], aus ? 'aus' : 'all', '(v=>{ui.recAus=v===\'aus\';render();})')}` : ''}
     <div style="height:8px"></div>${sel(cats, cat, "ui.recCat=this.value;render()", 'full')}<div style="height:8px"></div>
-    ${panel(`${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
-    <div class="xs dim" style="margin-top:6px">${cat[0] === 'c' ? (scope === 'intl' ? 'International career totals accumulate as matches are simulated.' : 'Domestic career totals may include seeded history.') : 'Match records count from the start of your career.'}</div>`;
+    ${panel(`${aus ? 'Australia · ' : ''}${fname} · ${cats.find(c => c[0] === cat)[1]}`, rows ? `<table class="tbl rec"><tbody>${rows}</tbody></table>` : '<div class="empty">No records yet. They build up as matches are played.</div>', { flush: true })}
+    <div class="xs dim" style="margin-top:6px">${cat === 'ca' ? 'Minimum 20 innings. ' : cat === 'cb' ? 'Minimum 30 wickets. ' : cat === 'fh' ? 'Balls taken to reach 100. Counted from Build 162. ' : ''}${cat[0] === 'c' ? 'Career totals include each player\'s record from before this save began, where known.' : `Match records count from the start of your career (${seasonSpan(Math.min(...((game.history || []).map(h => h.year)).concat([game.year])))}).`}</div>`;
 }
 
 // Small SVG charts for profiles.
