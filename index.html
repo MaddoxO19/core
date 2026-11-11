@@ -1330,7 +1330,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.82 Build 159', title: 'Live Match Scoreboard', engine: 'C3.1E Ball-by-Ball with Elite Ramp' };
+const BUILD = { version: 'v0.9.83 Build 160', title: 'Legacy Records Presentation Consistency', engine: 'C3.1E Ball-by-Ball with Elite Ramp' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -5972,7 +5972,7 @@ function saveRows(set, cat, aus) {
     careerLeaders(fmt, scope, stat, 40).filter(x => !aus || x.p.nat === 'AUS').slice(0, 10).forEach(x => {
       const s = x.s, v = { run: s.r, wkt: s.w, c100: s.c100, avg: batAvgOf(s) }[cat];
       const t = x.p.teamId && teamDef(x.p.teamId) ? (teamDef(x.p.teamId).short || x.p.teamId) : (x.p.retired ? 'retired' : '');
-      out.push({ v, d: cat === 'avg' ? fmtNum(v) : v.toLocaleString('en-AU'), n: pname(x.p), t: scope === 'intl' ? (x.p.nat || t) : t, note: cat === 'avg' ? `${countNum(s.inn || 0)} innings` : `${countNum(s.m)} matches`, id: x.p.id });
+      out.push({ v, d: cat === 'avg' ? fmtNum(v) : v.toLocaleString('en-AU'), n: pname(x.p), t: scope === 'intl' ? (x.p.nat || t) : t, note: cat === 'avg' ? `${countNum(s.inn || 0)} innings` : `${countNum(s.m)} ${({ TEST:'Tests', ODI:'ODIs', T20I:'T20Is', SHIELD:'Shield matches' })[set] || 'matches'}`, id: x.p.id });
     });
   }
   return out.filter(x => x.v != null && isFinite(x.v)).sort((a, b) => b.v - a.v);
@@ -11588,6 +11588,20 @@ function showTeam(id) {
 // Records book.
 function setRecScope(v) { ui.recScope = v; render(); }
 function setRecFmt(v) { ui.recFmt = v; render(); }
+// Build 160: Legacy records always show a national flag for international player rows.
+// The ordinary natTag() helper is page-sensitive and deliberately hides home-nation
+// flags elsewhere, so it must not control identities in an international record book.
+function legacyRecordFlag(row, set) {
+  if (set === 'SHIELD' || !row || !row.t) return '';
+  const nat = String(row.t).replace(/^X_/, '');
+  return NATIONS[nat] && LEGACY_FLAG_ASSETS[nat] ? nationTag(nat) + ' ' : '';
+}
+function legacyRecordNote(row, set) {
+  const raw = String(row.note || '');
+  if (set === 'SHIELD') return raw;
+  const label = { TEST:'Tests', ODI:'ODIs', T20I:'T20Is' }[set];
+  return label ? raw.replace(/^(\d[\d,]*)\s+matches$/i, '$1 ' + label) : raw;
+}
 // Legacy > Records: real all-time tables with this save's players ranked among them, or this save's own book.
 function renderLegacyRecords() {
   const mode = ui.rrMode || 'all';
@@ -11598,7 +11612,7 @@ function renderLegacyRecords() {
   const cats = Object.keys(tabs);
   const cat = cats.includes(ui.rrCat) ? ui.rrCat : cats[0];
   const m = mergedTable(set, cat, aus);
-  const rows = m.rows.map((x, i) => `<tr class="${x.real ? '' : 'me tap'}" ${x.id ? `onclick="showPlayer('${x.id}')"` : ''}><td class="n2">${i + 1}</td><td class="l"><b>${x.id && P(x.id) ? natTag(P(x.id)) + ' ' : ''}${esc(x.n)}</b> <span class="dim xs">${esc(x.t || '')}</span>${x.real ? '' : ' ' + chip('good', 'This save')}${x.real && m.beaten && x === m.top ? ' ' + chip('', 'Previous record') : ''}<div class="xs dim">${esc(x.note || '')}</div></td><td class="b big">${x.d}</td></tr>`).join('');
+  const rows = m.rows.map((x, i) => `<tr class="${x.real ? '' : 'me tap'}" ${x.id ? `onclick="showPlayer('${x.id}')"` : ''}><td class="n2">${i + 1}</td><td class="l"><b>${legacyRecordFlag(x, set)}${esc(x.n)}</b> <span class="dim xs">${esc(x.t || '')}</span>${x.real ? '' : ' ' + chip('good', 'This save')}${x.real && m.beaten && x === m.top ? ' ' + chip('', 'Previous record') : ''}<div class="xs dim">${esc(legacyRecordNote(x, set))}</div></td><td class="b big">${x.d}</td></tr>`).join('');
   const best = m.best && !m.rows.includes(m.rows.find(r => !r.real)) ? `<div class="note" style="margin-top:8px">Best in this save: <b>${esc(m.best.n)}</b> ${m.best.d}${m.best.note ? ' · ' + esc(m.best.note) : ''}, which would rank ${ordinal(m.best.rank)}.</div>` : !m.best ? '<div class="note" style="margin-top:8px">No one in this save has an entry here yet.</div>' : '';
   const broken = (game.legacyLog || []).slice(0, 8);
   const brokenP = broken.length ? panel(`Records broken · ${broken.length}`, `<div class="rows">${broken.map(e => `<div class="row"><div class="stack"><div class="main-t" style="white-space:normal">${esc(e.text)}</div><div class="sub-t">${e.year}</div></div></div>`).join('')}</div>`, { flush: true }) : '';
