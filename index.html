@@ -1347,7 +1347,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.86 Build 163', title: 'Simple Save and Gear Sheet', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
+const BUILD = { version: 'v0.9.87 Build 164', title: 'Save Reliability', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -7869,23 +7869,47 @@ const Store = {
   db: null, idbOk: false, lsOk: false, status: 'unknown', lastSaved: null, lastError: null,
   async init() {
     try { localStorage.setItem('__mmc_test', '1'); this.lsOk = localStorage.getItem('__mmc_test') === '1'; localStorage.removeItem('__mmc_test'); } catch (e) { this.lsOk = false; }
-    try {
-      this.db = await new Promise((res, rej) => {
-        if (!window.indexedDB) return rej(new Error('no idb'));
-        const r = indexedDB.open('minime_cricket', 1);
-        r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves'); };
-        r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
-        setTimeout(() => rej(new Error('IndexedDB open timed out')), 8000);
-      });
-      this.idbOk = true;
-    } catch (e) { this.idbOk = false; }
+    await this.reopen(true);
     this.status = this.idbOk || this.lsOk ? 'ok' : 'none';
     if (navigator.storage && navigator.storage.persist) { try { await navigator.storage.persist(); } catch (e) {} }
     return this.status;
   },
-  // Build 121: Safari may suspend an IndexedDB transaction without firing its
-  // completion/error events. Never leave save buttons waiting indefinitely.
-  _tx(mode, fn) { return new Promise((res, rej) => {
+  // Build 164: the database connection is opened here and can be reopened at any time.
+  // Safari drops or stalls the connection after the page has been in the background;
+  // earlier builds then gave up on the database until the page was reloaded, which made
+  // every later save fail for careers too large for localStorage.
+  _openDb() { return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('no idb'));
+    let done = false; const fin = (err, db) => { if (done) { if (db) { try { db.close(); } catch (e) {} } return; } done = true; clearTimeout(t); err ? rej(err) : res(db); };
+    const t = setTimeout(() => fin(new Error('IndexedDB open timed out')), 8000);
+    let r; try { r = indexedDB.open('minime_cricket', 1); } catch (e) { return fin(e); }
+    r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains('saves')) db.createObjectStore('saves'); };
+    r.onsuccess = () => fin(null, r.result); r.onerror = () => fin(r.error || new Error('IndexedDB open failed')); r.onblocked = () => {};
+  }); },
+  _reopening: null, _lastReopen: 0,
+  reopen(force) {
+    if (this._reopening) return this._reopening;
+    if (!force && Date.now() - this._lastReopen < 3000) return Promise.resolve(!!(this.db && this.idbOk));
+    this._lastReopen = Date.now();
+    const old = this.db; this.db = null;
+    if (old) { try { old.onclose = null; old.close(); } catch (e) {} }
+    this._reopening = this._openDb().then(db => {
+      this.db = db; this.idbOk = true;
+      db.onclose = () => { if (this.db === db) this.db = null; };
+      db.onversionchange = () => { try { db.close(); } catch (e) {} if (this.db === db) this.db = null; };
+      return true;
+    }, () => { this.idbOk = false; return false; }).finally(() => { this._reopening = null; });
+    return this._reopening;
+  },
+  // True when the database can be used, reconnecting first if the connection was lost.
+  async dbReady() {
+    if (this.db && this.idbOk) return true;
+    if (!window.indexedDB) return false;
+    return this.reopen(false);
+  },
+  // One bounded transaction. Safari may suspend a transaction without firing its
+  // completion or error events, so it is never awaited indefinitely.
+  _txOnce(mode, fn) { return new Promise((res, rej) => {
     let tx, timer, finished=false;
     const settle=(err,value) => {
       if(finished) return;
@@ -7901,13 +7925,21 @@ const Store = {
       tx.onabort=()=>settle(tx.error || new Error('IndexedDB transaction aborted'));
       timer=setTimeout(()=>{
         try { tx.abort(); } catch(e) {}
-        // Database may remain unusable for the remainder of this Safari session.
-        this.lastError='Browser database stalled. Using recovery storage where available.';
-        this.idbOk=false;
         settle(new Error('IndexedDB transaction timed out'));
       },8000);
     } catch(e) { settle(e); }
   }); },
+  // A failed or stalled transaction reconnects and runs once more. Every write here is
+  // conditional on what is stored, so running it again is safe.
+  async _tx(mode, fn) {
+    if (!this.db && !(await this.reopen(true))) throw new Error('Browser database unavailable');
+    try { return await this._txOnce(mode, fn); }
+    catch (first) {
+      if (first && first.name === 'QuotaExceededError') throw first;
+      if (!(await this.reopen(true))) { this.lastError='Browser database unavailable.'; throw first; }
+      return this._txOnce(mode, fn);
+    }
+  },
   // B135: localStorage is an independently verified recovery copy. A stalled
   // Safari IndexedDB must not prevent a healthy local save from completing.
   localCandidates(slot) {
@@ -7925,7 +7957,7 @@ const Store = {
   // transactions. If Safari stalls once, disable this session's database path.
   async candidates(slot, includeDb=true) {
     const rows=this.localCandidates(slot);
-    if (includeDb && this.idbOk && this.db) {
+    if (includeDb && await this.dbReady()) {
       try {
         const saved=await this._tx('readonly', st=>{
           const found={};
@@ -7967,7 +7999,7 @@ const Store = {
   // forbidden from overwriting a later local save or a newer database record.
   _idbChain: Promise.resolve(),
   async _writeIdb(slot,str,meta,incoming) {
-    if (!this.idbOk || !this.db) return false;
+    if (!(await this.dbReady())) return false;
     try {
       const latest=this.localCandidates(slot)[0]?.info;
       if (latest && latest.created===incoming.created && compareSaveSnapshots(latest,incoming)>0) return false;
@@ -8005,17 +8037,24 @@ const Store = {
       this.lastError='A copy with more progress exists. Download a backup file and check the slot.';
       return false;
     }
-    const mirrorOk=this.lsOk && writeLocalSaveMirror(slot,str,meta);
-    const verified=mirrorOk && this.localCandidates(slot).some(c=>
-      c.info.created===incoming.created && c.info.revision===incoming.revision && c.raw===str);
+    // Build 164: saveGame has normally written the mirror already; do not write it twice.
+    let verified=existing.some(c=>c.raw===str);
+    if (!verified) {
+      const mirrorOk=this.lsOk && writeLocalSaveMirror(slot,str,meta);
+      verified=mirrorOk && this.localCandidates(slot).some(c=>
+        c.info.created===incoming.created && c.info.revision===incoming.revision && c.raw===str);
+    }
     if (verified) {
-      this.lastSaved=new Date(incoming.saved || Date.now()); this.status='ok';
+      this.lastSaved=new Date(incoming.saved || Date.now()); this.status='ok'; this.lastError=null;
       // Do not wait on IndexedDB to acknowledge a successfully verified mirror.
       this._idbChain=this._idbChain.catch(()=>false).then(()=>this._writeIdb(slot,str,meta,incoming));
       return true;
     }
     // localStorage may be full. Then a confirmed IndexedDB transaction is required.
-    if (this.idbOk) {
+    // The database is tried twice: a first failure reconnects (see _tx) and the whole
+    // write-and-check runs again before the save is reported as failed.
+    for (let attempt=0; attempt<2; attempt++) {
+      if (!(await this.dbReady())) break;
       await this._idbChain.catch(()=>false);
       const dbOk=await this._writeIdb(slot,str,meta,incoming);
       if (dbOk) {
@@ -8023,7 +8062,13 @@ const Store = {
           const raw=await this._tx('readonly',st=>st.get('slot'+slot));
           const check=saveSnapshotInfo(raw);
           if (check && check.created===incoming.created && check.revision===incoming.revision) {
-            this.lastSaved=new Date(incoming.saved||Date.now()); this.status='ok'; return true;
+            this.lastSaved=new Date(incoming.saved||Date.now()); this.status='ok'; this.lastError=null;
+            // The career no longer fits in localStorage. Drop the stale local copy so it
+            // cannot be mistaken for the current save; the database holds this save and
+            // the previous one.
+            if (this.lsOk) { const stale=this.localCandidates(slot).filter(c=>c.info.created===incoming.created && compareSaveSnapshots(incoming,c.info)>0);
+              if (stale.length) { clearLocalSaveMirror(slot); try { localStorage.setItem(localMetaKey(slot),JSON.stringify(meta)); } catch(e) {} } }
+            return true;
           }
         } catch(e) { this.lastError=String(e); }
       }
@@ -8035,13 +8080,13 @@ const Store = {
   async del(slot) {
     // Do not allow an earlier background replica to recreate a deleted slot.
     await this._idbChain.catch(()=>false);
-    if (this.idbOk) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); st.delete('recovery' + slot); st.delete('seasonA' + slot); st.delete('seasonB' + slot); st.delete('undo' + slot); }); } catch (e) {} }
+    if (await this.dbReady()) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); st.delete('recovery' + slot); st.delete('seasonA' + slot); st.delete('seasonB' + slot); st.delete('undo' + slot); }); } catch (e) {} }
     clearLocalSaveMirror(slot);
   },
   // Build 158: start-of-season saves. Two kept per slot in the browser database only
   // (never localStorage). A newer season moves A to B; the same season replaces A.
   async putSeasonSnapshot(slot, str) {
-    if (!this.idbOk || !this.db) return false;
+    if (!(await this.dbReady())) return false;
     const incoming = saveSnapshotInfo(str); if (!incoming) return false;
     try {
       await this._tx('readwrite', st => {
@@ -8060,7 +8105,7 @@ const Store = {
   },
   // Earlier saves on this device: the previous save and up to two start-of-season saves.
   async earlierSaves(slot) {
-    if (!this.idbOk || !this.db) return [];
+    if (!(await this.dbReady())) return [];
     try {
       const found = await this._tx('readonly', st => {
         const out = {};
@@ -8206,8 +8251,11 @@ function writeLocalSaveMirror(slot, str, meta) {
   // potentially exhausting Safari's quota and blocking the actual current save.
   // localStorage.setItem is atomic; a quota error preserves the old primary.
   let ok=false;
-  try { localStorage.setItem(localRawKey(slot),str); ok=localStorage.getItem(localRawKey(slot))===str; } catch(e) {
+  // Build 164: a career too large for localStorage is not retried on every save.
+  if (Store.mirrorTooBig && str.length >= Store.mirrorTooBig * 0.97) return false;
+  try { localStorage.setItem(localRawKey(slot),str); ok=localStorage.getItem(localRawKey(slot))===str; if (ok) Store.mirrorTooBig=0; } catch(e) {
     Store.lastError=String(e);
+    if (e?.name==='QuotaExceededError' || /quota|storage full/i.test(String(e))) Store.mirrorTooBig=str.length;
     // An older recovery copy can consume the quota needed for the current save.
     // Only remove a same-slot recovery when a separately readable PRIMARY exists
     // and is at least as recent. Never discard the sole remaining career copy.
@@ -8272,6 +8320,7 @@ function saveKey(slot) { return SAVE_PREFIX + slot; }
 let _saving = Promise.resolve(true);
 let _saveBusy = false;
 let _pendingSave = null;
+let _saveRetries = 0, _saveRetryTimer = null;
 let _seasonSnapshotDue = 0; // slot number awaiting a start-of-season save
 let _autosaveTicker = null;
 let _saveFailureNotified = false;
@@ -8339,13 +8388,15 @@ async function drainSaveQueue() {
       if (!ok) {
         overall = false;
         Store.status='error';
-        if (!_saveFailureNotified) { flash('Save failed. Download a backup file from Saves.'); _saveFailureNotified=true; }
+        // Build 164: try again quietly before telling the player anything.
+        if (_saveRetries < 3) { _saveRetries++; clearTimeout(_saveRetryTimer); _saveRetryTimer = setTimeout(() => { if (game && game.meta && Store.status === 'error') saveGame(game.meta.slot, false); }, 4000 * _saveRetries); }
+        else if (!_saveFailureNotified) { flash('Save not confirmed. Open the gear menu and tap Save.'); _saveFailureNotified=true; }
       } else {
-        _saveFailureNotified=false; _lastSaveAt=Date.now();
+        _saveFailureNotified=false; _saveRetries=0; clearTimeout(_saveRetryTimer); _lastSaveAt=Date.now();
         if (_seasonSnapshotDue && _seasonSnapshotDue===job.slot) { _seasonSnapshotDue=0; Store.putSeasonSnapshot(job.slot, job.str); }
       }
       if (job.notify) {
-        flash(ok ? `Saved to slot ${job.slot}.` : 'Save failed. Export your career JSON.');
+        flash(ok ? `Saved to slot ${job.slot}.` : 'Save failed. Download a backup file.');
         saveStatusUpdate(ok ? `Saved at ${new Date().toLocaleTimeString('en-AU')}.` : 'Save failed. Download a backup file.', !ok);
       }
     }
@@ -8513,7 +8564,13 @@ async function restoreCareerFile(raw) {
 window.addEventListener('pagehide', saveOnHide);
 window.addEventListener('beforeunload', saveOnHide);
 window.addEventListener('freeze', saveOnHide);
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveOnHide(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { saveOnHide(); return; }
+  // Build 164: Safari may have dropped the database while the page was in the background.
+  if (!game || !game.meta) return;
+  Store.dbReady().then(() => { if (game && game.meta && (Store.status === 'error' || _saveBusy)) { _saveRetries = 0; setTimeout(() => { if (game && game.meta && Store.status === 'error') saveGame(game.meta.slot, false); }, 600); } });
+});
+window.addEventListener('pageshow', e => { if (e.persisted) Store.reopen(true); });
 // §15 UI CORE + COMPONENTS ----------------------------------------------------------
 // Pages are compact single screens. Detail lives in sheets (bottom sheets on mobile,
 // centred dialogs on PC). Every page render returns an HTML string.
@@ -9742,7 +9799,7 @@ async function saveAndConfirm() {
     let completed=false;
     await Promise.race([
       Promise.resolve(pending).then(()=>{completed=true;},()=>{completed=true;}),
-      new Promise(resolve=>setTimeout(resolve,7000))
+      new Promise(resolve=>setTimeout(resolve,20000))
     ]);
     // Both local and database recovery candidates use the same ordering policy.
     // A stalled database is skipped by the bounded transaction helper.
