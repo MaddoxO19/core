@@ -1357,7 +1357,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.88 Build 165', title: 'Interface Fixes', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
+const BUILD = { version: 'v0.9.89 Build 166', title: 'Backup Restore', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -8491,30 +8491,122 @@ function exportSave() {
 // solely because Safari refuses persistent browser storage. The original file
 // remains untouched and the user can explicitly open it in memory as a fallback.
 let _pendingImportedBackup = null;
+// Build 166: restore from a backup file.
+// The file picker is attached to the page (iOS Safari can ignore a picker that is not in
+// the document) and accepts any file, because iOS greys out .json files for some type filters.
 function importSave() {
+  const old=document.getElementById('careerFileInput'); if(old) old.remove();
   const inp=document.createElement('input');
-  inp.type='file'; inp.accept='.json,application/json';
-  inp.onchange=()=>{
-    const f=inp.files?.[0]; if(!f)return;
-    const rd=new FileReader();
-    rd.onerror=()=>flash('Could not read that file. Try selecting it again.');
-    rd.onload=async()=>{
-      let source;
-      try { source=saveSnapshotInfo(rd.result); }
-      catch(e) { source=null; }
-      if(!source) { flash('This file is not a valid Legacy Cricket career.'); return; }
-      _pendingImportedBackup=rd.result;
-      try { await restoreCareerFile(rd.result); }
-      catch(e) { Store.lastError=String(e); showRestoreStorageProblem(String(e)); }
-    };
-    rd.readAsText(f);
-  };
+  inp.type='file'; inp.id='careerFileInput'; inp.setAttribute('aria-hidden','true'); inp.tabIndex=-1;
+  inp.style.cssText='position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+  inp.addEventListener('change', async ()=>{
+    const f=inp.files && inp.files[0];
+    inp.remove();
+    if(!f) return;
+    flash('Reading backup file…');
+    let text;
+    try {
+      text = f.text ? await f.text() : await new Promise((res,rej)=>{ const rd=new FileReader(); rd.onload=()=>res(rd.result); rd.onerror=()=>rej(rd.error); rd.readAsText(f); });
+    } catch(e) { flash('Could not read that file. Try selecting it again.'); return; }
+    try { await handleBackupText(text); }
+    catch(e) { Store.lastError=String(e); showRestoreStorageProblem(String(e)); }
+  });
+  document.body.appendChild(inp);
   inp.click();
+}
+function backupDescription(info) {
+  const m = info.meta || (info.data ? metaOf(info.data) : null);
+  if (!m) return 'career';
+  return `${esc(m.name || 'GM')} · ${esc(teamName(m.team) || '')} · ${esc(m.label || '')}${m.day != null && m.phase === 'season' ? ' · ' + esc(dateStr(m.day, null, m.year)) : ''}`;
+}
+// Decide where a backup goes: back over the career it belongs to (after asking), into an
+// empty slot, or into a slot the player picks when all are in use.
+async function handleBackupText(text) {
+  text = String(text || '').replace(/^﻿/, '').trim();
+  let source = null;
+  try { source = saveSnapshotInfo(text); } catch (e) { source = null; }
+  if (!source || !source.data) { flash('That file is not a Legacy Cricket backup.'); return; }
+  _pendingImportedBackup = text;
+  try { await _saving; } catch (e) {}
+  const slots = [];
+  for (let i = 1; i <= SAVE_SLOTS; i++) { const rows = await Store.candidates(i); slots.push(rows[0] || null); }
+  const same = source.created ? slots.findIndex(r => r && r.info.created === source.created) : -1;
+  const empty = slots.findIndex(r => !r);
+  const desc = backupDescription(source);
+  if (same >= 0) {
+    const cur = backupDescription(slots[same].info);
+    sheet('Restore backup', 'Replace this career?',
+      `<p class="s">This backup belongs to the career in slot ${same + 1}.</p>
+       <div class="rows"><div class="kv"><span>Backup file</span><span>${desc}</span></div><div class="kv"><span>Slot ${same + 1} now</span><span>${cur}</span></div></div>
+       <p class="xs muted" style="margin-top:10px">Replacing keeps the current save under Backup and restore › Earlier saves, so you can switch back.</p>`,
+      { key: 'restore-choice', foot: `<button class="btn pri" onclick="installBackup(${same + 1})">Replace slot ${same + 1}</button>${empty >= 0 ? `<button class="btn" onclick="installBackup(${empty + 1})">Keep both</button>` : ''}<button class="btn ghost" onclick="_pendingImportedBackup=null;closeModal()">Cancel</button>` });
+    return;
+  }
+  if (empty >= 0) { await installBackup(empty + 1); return; }
+  sheet('Restore backup', 'All save slots are in use',
+    `<p class="s" style="padding:12px 14px 4px;margin:0">Choose a career to replace with <b>${desc}</b>. The replaced career is deleted, so download its backup file first if you want to keep it.</p>
+     <div class="rows">${slots.map((r, n) => `<div class="row"><div class="stack"><div class="main-t">Slot ${n + 1}</div><div class="sub-t wrap2">${backupDescription(r.info)}</div></div><button class="btn sm" onclick="if(confirm('Replace the career in slot ${n + 1}? This cannot be undone.'))installBackup(${n + 1})">Replace</button></div>`).join('')}</div>`,
+    { key: 'restore-choice', flush: true, foot: `<button class="btn ghost block" onclick="_pendingImportedBackup=null;closeModal()">Cancel</button>` });
+}
+// Write the backup into a slot and open it. The database write is one transaction, so the
+// slot holds either its old contents or the complete backup, never a mixture.
+async function installBackup(slot) {
+  const raw = _pendingImportedBackup; if (!raw) return;
+  const source = saveSnapshotInfo(raw); if (!source || !source.data) { flash('That file is not a Legacy Cricket backup.'); return; }
+  closeModal();
+  // Save the career that is open, so nothing in progress is lost.
+  const open = !!game && !$('app').classList.contains('hidden');
+  if (open) { cancelAutosave(); try { await saveGame(game.meta.slot, false); } catch (e) {} }
+  try { await _saving; await Store._idbChain.catch(() => false); } catch (e) {}
+  const openRaw = open ? serialiseGame() : null, openSlot = open ? game.meta.slot : 0;
+  const before = await Store.candidates(slot);
+  const prev = before[0] || null;
+  const sameCareer = !!(prev && source.created && prev.info.created === source.created);
+  const topRev = Math.max(Number(source.revision) || 0, ...before.map(c => Number(c.info.revision) || 0));
+  let localBefore = null;
+  try { localBefore = Store.lsOk ? localStorage.getItem(localRawKey(slot)) : null; } catch (e) {}
+  try {
+    loadFromString(raw, slot);
+    game.meta.slot = slot;
+    game.meta.saveRevision = topRev + 1;
+    game.meta.saved = new Date().toISOString();
+    const str = serialiseGame(), meta = metaOf(game);
+    let stored = false;
+    if (await Store.dbReady()) {
+      try {
+        await Store._tx('readwrite', st => {
+          if (sameCareer) { st.put(prev.raw, 'undo' + slot); }
+          else { st.delete('undo' + slot); st.delete('recovery' + slot); st.delete('seasonA' + slot); st.delete('seasonB' + slot); }
+          st.put(str, 'slot' + slot); st.put(meta, 'meta' + slot);
+          return null;
+        });
+        stored = true;
+      } catch (e) { Store.lastError = String(e); }
+    }
+    clearLocalSaveMirror(slot);
+    Store.mirrorTooBig = 0;
+    const mirrored = writeLocalSaveMirror(slot, str, meta);
+    if (!stored && !mirrored) {
+      if (localBefore) { try { localStorage.setItem(localRawKey(slot), localBefore); } catch (e) {} }
+      throw new Error(Store.lastError || 'This browser could not store the career.');
+    }
+    const check = await verifiedCareerSnapshot(slot, game.meta.saveRevision, String(game.meta.created || ''));
+    if (!check) throw new Error('The restored career could not be read back from this browser.');
+    Store.status = 'ok'; Store.lastError = null; Store.lastSaved = new Date(game.meta.saved); _lastSaveAt = Date.now();
+    _pendingImportedBackup = null; _savesEarlier = null;
+    flash(`Backup restored to slot ${slot} · ${game.season.label}`);
+  } catch (err) {
+    Store.lastError = String(err && err.message || err);
+    // Put the screen back as it was, then offer to open the backup without storing it.
+    if (openRaw) { try { loadFromString(openRaw, openSlot); } catch (e2) {} }
+    else { game = null; try { finishCareerExit(); } catch (e2) {} }
+    showRestoreStorageProblem(Store.lastError);
+  }
 }
 function showRestoreStorageProblem(reason) {
   const msg=reason ? `<p class="xs" style="color:var(--bad);overflow-wrap:anywhere">${esc(reason)}</p>` : '';
   sheet('Restore backup','Career file is valid',
-    `<p class="s">Your career backup has been read successfully, but Safari could not store it in a save slot.</p>${msg}<p class="s muted">You can still open the career now. If browser storage remains unavailable, download a backup file before leaving the game.</p>`,
+    `<p class="s">Your backup file was read, but this browser could not store it in a save slot.</p>${msg}<p class="s muted">You can still open the career now. If browser storage remains unavailable, download a backup file before leaving the game.</p>`,
     {foot:`<button class="btn pri" onclick="openImportedCareerWithoutStorage()">Open this career</button><button class="btn ghost" onclick="closeModal()">Cancel</button>`});
 }
 function openImportedCareerWithoutStorage() {
@@ -8530,44 +8622,6 @@ function openImportedCareerWithoutStorage() {
     Store.lastError='This imported career is open, but has NOT been verified in browser storage. Download a backup file before leaving.';
     flash('Career opened. Save not confirmed; keep your backup file.');
   } catch(e) { Store.lastError=String(e); flash('Could not open the imported career.'); }
-}
-async function restoreCareerFile(raw) {
-  const source=saveSnapshotInfo(raw);
-  if(!source) throw new Error('Invalid career backup.');
-  // Always select an empty slot; never overwrite a different career implicitly.
-  // Prefer local metadata, avoiding an IndexedDB timeout for each empty slot.
-  let slot=0;
-  const occupied=[];
-  for(let i=1;i<=SAVE_SLOTS;i++) {
-    const local=Store.localCandidates(i);
-    if(local.length) { occupied.push(i);continue; }
-    // If IndexedDB is working, check it too. Its first timeout disables subsequent queries.
-    const dbRows=Store.idbOk?await Store.candidates(i,true):[];
-    if(dbRows.length) { occupied.push(i);continue; }
-    slot=i; break;
-  }
-  if(!slot) {
-    throw new Error('All save slots are occupied. Export or remove an existing career first.');
-  }
-  const imported=source.data;
-  if(!imported) throw new Error('Invalid career backup.');
-  delete imported._h;
-  imported.meta.slot=slot;
-  const payload=JSON.stringify(imported);
-  const ok=await Store.put(slot,payload,metaOf(imported));
-  // Verify the local copy first. The IndexedDB fallback is only needed when
-  // localStorage cannot hold this (potentially very large) career file.
-  let checked=Store.localCandidates(slot).find(c=>c.info.created===source.created && c.info.revision===source.revision && c.raw===payload);
-  if(!checked && Store.idbOk) {
-    const rows=await Store.candidates(slot,true);
-    checked=rows.find(c=>c.info.created===source.created && c.info.revision===source.revision && c.raw===payload);
-  }
-  if(!ok || !checked) {
-    throw new Error(Store.lastError || 'Browser storage could not verify the imported career.');
-  }
-  _pendingImportedBackup=null;
-  loadFromString(payload,slot);
-  flash(`Career restored to slot ${slot}.`);
 }
 // B153: one save per hide/close event sequence. saveGame writes the local mirror
 // synchronously (the old emergency snapshot) and queues the database copy.
@@ -9890,7 +9944,7 @@ function savesSheetBody(earlier) {
   return `<div class="pb">${status}</div>
     <div class="save-sec"><div class="save-sec-h">Backup file</div><p class="xs ${behind ? 'warn-t' : 'muted'}">${backupReminderText()}</p>
     <div class="save-btns"><button class="btn" onclick="exportSave()">Download backup file</button><button class="btn ghost" onclick="importSave()">Restore from backup file</button></div>
-    <p class="xs muted">Your career saves in this browser automatically, so a backup file is optional. It is useful for moving to another device or keeping a copy. Restoring one opens it in an empty slot.</p></div>
+    <p class="xs muted">Your career saves in this browser automatically, so a backup file is optional. It is useful for moving to another device or keeping a copy. Restoring a backup of a career that is already here asks before replacing it.</p></div>
     <div class="save-sec"><div class="save-sec-h">Earlier saves on this device</div><div class="rows">${earlierHtml}</div>
     <p class="xs muted">Restoring an earlier save replaces your current save. The save you replace is kept, so you can switch back.</p></div>`;
 }
