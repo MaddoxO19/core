@@ -312,7 +312,7 @@ label.lbl{display:block;font-size:var(--fs-xs);color:var(--muted);margin:0 0 4px
 button{touch-action:manipulation}
 
 /* v0.7.8 navigation (Legacy series layout), brackets, World Cup */
-.top .brandblock .studio{font-size:9.5px;font-weight:900;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+.top .brandblock .studio{font-size:11px;font-weight:900;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
 .top .brand{font-size:19px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;line-height:1.1}
 .top .gear svg{width:20px;height:20px}.top .exitbtn{font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;padding:0 12px;height:36px;margin-left:6px}
 .top .cont{margin-left:auto;margin-right:6px}.top .cont.hidden + .gear{margin-left:auto}
@@ -1276,6 +1276,16 @@ body.live-mode .actbar{display:none}
 @media(max-width:380px){.wc-v2-awards{gap:6px;padding:0 8px 10px}.wc-v2-award{padding:9px 7px}.wc-v2-leaders .wc-review-player{font-size:10px}}
 
 
+/* Build 165: text floor of 11px, wrapped descriptions, one-row squad filters */
+.rtag,.tbl th,table th,.kpi .l,.pstat .l,.ratings3 .l,.bk-r,.squad-rating-head span,.mhead,.status-strip button span,.chip,.sheet-h .e,.tbl td .q,.top .studio{font-size:11px}
+.sub-t.wrap2{white-space:normal;overflow:visible;text-overflow:clip}
+.tool-grid3{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);gap:6px}.tool-grid3 select{width:100%;min-width:0;font-size:13px;padding-left:8px;padding-right:22px}.squad-rating-head span{white-space:nowrap;letter-spacing:0}
+/* Build 165: tap areas reach about 44px without changing the layout */
+@media (pointer:coarse){
+  .btn.sm{min-height:34px;position:relative}.btn.sm::after{content:'';position:absolute;inset:-5px -4px}
+  .btn:not(.sm):not(.icon){min-height:40px}
+  span.link,.switch{position:relative}span.link::after,.switch::after{content:'';position:absolute;inset:-12px -4px}
+}
 /* B153: larger touch targets on phones. Segmented tabs were about 30 px tall. */
 @media (pointer:coarse){
   .seg button{min-height:38px}
@@ -1347,7 +1357,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.87 Build 164', title: 'Save Reliability', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
+const BUILD = { version: 'v0.9.88 Build 165', title: 'Interface Fixes', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -7662,12 +7672,12 @@ function setContractManagerMode(mode){
   contractManagerState().mode=mode;
   if(game.phase==='contracts')runContractManagerRenewals();
   autosave();render();
-  if(!staffIn(U(),'contract')&&mode!=='manual')flash('Hire a Contract Manager under Office → Staff to activate delegation.');
+  if(!staffIn(U(),'contract')&&mode!=='manual')flash('Hire a Contract Manager under Club › Staff to activate delegation.');
 }
 function contractManagerSettingsPanel(){
   const mode=contractManagerMode(),manager=staffIn(U(),'contract');
   const choices=[['manual','Manual'],['assisted','Assisted'],['automatic','Automatic']];
-  return panel('Contract Manager',`<div class="flex wrap" style="gap:7px">${choices.map(([id,label])=>`<button class="btn sm ${mode===id?'pri':''}" onclick="setContractManagerMode('${id}')">${label}</button>`).join('')}</div><div class="xs muted" style="margin-top:8px">${manager?`${esc(manager.first+' '+manager.last)} · rated ${manager.rating}. `:'No manager appointed. Hire one under Office → Staff. '}${mode==='manual'?'You control all negotiations.':mode==='assisted'?'Your manager recommends renewal terms; you approve each agreement.':'Your manager completes affordable renewals; exceptions remain for your decision.'} Existing contracts are not reset.</div>${!manager&&mode!=='manual'?'<button class="btn sm" style="margin-top:9px" onclick="staffMarketSheet(&quot;contract&quot;)">Hire Contract Manager</button>':''}`);
+  return panel('Contract Manager',`<div class="flex wrap" style="gap:7px">${choices.map(([id,label])=>`<button class="btn sm ${mode===id?'pri':''}" onclick="setContractManagerMode('${id}')">${label}</button>`).join('')}</div><div class="xs muted" style="margin-top:8px">${manager?`${esc(manager.first+' '+manager.last)} · rated ${manager.rating}. `:'No manager appointed. Hire one under Club › Staff. '}${mode==='manual'?'You control all negotiations.':mode==='assisted'?'Your manager recommends renewal terms; you approve each agreement.':'Your manager completes affordable renewals; exceptions remain for your decision.'} Existing contracts are not reset.</div>${!manager&&mode!=='manual'?'<button class="btn sm" style="margin-top:9px" onclick="staffMarketSheet(&quot;contract&quot;)">Hire Contract Manager</button>':''}`);
 }
 function contractManagerOffer(e){
   const p=P(e.id),manager=staffIn(U(),'contract');if(!p||!manager||isDoNotRenew(p.id)||p.wantsOut||negotiationSuspension(p))return null;
@@ -8879,7 +8889,6 @@ function gearStatusHtml() {
 }
 function openMenu() {
   const g = game.gm;
-  const cm = contractManagerMode();
   const body = `<div class="gear">
     ${gearStatusHtml()}
     <div class="gear-actions">
@@ -8893,14 +8902,14 @@ function openMenu() {
       <div><b>${g.rep}</b><span>Reputation</span></div>
     </div>
     <div class="gear-sec">Settings</div>
-    <div class="gear-row"><div><b>Contract manager</b><span>Needs a Contract Manager on staff</span></div>
-      <select onchange="setContractManagerMode(this.value)">${[['manual','Manual'],['assisted','Assisted'],['automatic','Automatic']].map(([v,l]) => `<option value="${v}"${cm === v ? ' selected' : ''}>${l}</option>`).join('')}</select></div>
     <div class="gear-row"><div><b>Editor mode</b><span>Edit players and teams</span></div>
       <span class="switch ${game.editor ? 'on' : ''}" onclick="game.editor=!game.editor;if(game.editor)game.edited=true;autosave();openMenu()"><i></i>${game.editor ? 'On' : 'Off'}</span></div>
     ${game.editor ? `<div class="gear-row"><div><b>Teams</b><span>Rename teams and change colours</span></div><button class="btn sm" onclick="editTeamsSheet()">Edit teams</button></div>` : ''}
     <div class="gear-sec">More</div>
     <button class="gear-link" onclick="openSaves()"><span>Backup and restore</span><i>›</i></button>
     <button class="gear-link" onclick="closeModal();showHelp()"><span>How to play</span><i>›</i></button>
+    <button class="gear-link" onclick="closeModal();ui.officeTab='log';go('office')"><span>Activity log</span><i>›</i></button>
+    <button class="gear-link" onclick="closeModal();ui.officeTab='diagnostics';go('office')"><span>Diagnostics</span><i>›</i></button>
     <div class="gear-foot">Slot ${game.meta.slot} · ${esc(BUILD.version)}</div>
   </div>`;
   if (!sheetSwap('gear', body, '')) sheet('Career', `${esc(g.name)} · ${esc(teamName(g.teamId))}`, body, { flush: true, key: 'gear' });
@@ -9300,7 +9309,7 @@ function playerRow(p, o) {
   const f = o.fmt || ui.listFmt;
   const sub = o.sub || identityLine(p);
   return `<div class="row tap ${p.teamId === U() && o.markMine ? 'me' : ''}" onclick="${o.click || `showPlayer('${p.id}')`}">${o.n != null ? `<span class="n">${o.n}</span>` : ''}
-    <div class="stack"><div class="main-t ell">${natTag(p)} ${esc(pname(p))} ${cricketRoleIcon(p)}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + (p.teamId === 'X_' + p.nat || p.teamId === 'AUS' && p.nat === 'AUS' ? esc(p.nat) : tdot(p.teamId)) + '</span>' : ''}</div><div class="sub-t ell">${sub}</div></div>
+    <div class="stack"><div class="main-t ell">${natTag(p)} ${esc(pname(p))} ${cricketRoleIcon(p)}${p.id === game.captain && p.teamId === U() ? ' <span class="dim xs">(c)</span>' : ''}${o.team ? ' <span class="dim xs">' + (p.teamId === 'X_' + p.nat || p.teamId === 'AUS' && p.nat === 'AUS' ? esc(p.nat) : tdot(p.teamId)) + '</span>' : ''}</div><div class="sub-t ${o.wrap ? 'wrap2' : 'ell'}">${sub}</div></div>
     <div class="end">${o.end != null ? o.end : `${p.teamId === U() && p.morale < 45 ? `<span class="tag bad">${p.wantsOut ? 'Wants out' : 'Unhappy'}</span>` : ''}${o.noStatus ? '' : statusChip(p)}${o.all ? `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(overall(p, f))}</span>` : pill(o.val != null ? o.val : overall(p, f))}`}</div></div>`;
 }
 
@@ -9434,7 +9443,7 @@ function renderPlayerList() {
   } else sq = sortPlayers(sq, ui.squadSort, sortFmt === 'BEST' ? 'FC' : sortFmt);
   const ratingHead = `<div class="squad-rating-head"><span>Player</span><span>Shield</span><span>One-Day</span><span>T20</span></div>`;
   const ratingCells = p => FMT_LIST.map(f => `<span class="squad-rating-number ${overall(p,f)>=90?'elite':''}" title="${compName(f)} ${overall(p,f)}">${overall(p,f)}</span>`).join('');
-  const tools = `<div class="flex wrap" style="gap:6px">${sel([['BEST','Best format'],['FC','Shield'],['OD','One-Day'],['T20','T20']],sortFmt,"ui.squadRatingSort=this.value;render()")}${sel(GROUP_OPTS,ui.squadGroup,"ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']],ui.squadSort,"ui.squadSort=this.value;render()")}</div>`;
+  const tools = `<div class="tool-grid3">${sel([['BEST','Best format'],['FC','Shield'],['OD','One-Day'],['T20','T20']],sortFmt,"ui.squadRatingSort=this.value;render()")}${sel(GROUP_OPTS,ui.squadGroup,"ui.squadGroup=this.value;render()")}${sel([['ovr','Rating'],['form','Form'],['fit','Fitness'],['age','Age'],['pot','Potential'],['role','Role'],['sal','Salary']],ui.squadSort,"ui.squadSort=this.value;render()")}</div>`;
   const rows = sq.map(p => `<div class="squad-rating-row tap" onclick="showPlayer('${p.id}')"><div class="squad-rating-player"><div class="main-t">${esc(pname(p))}${p.id===game.captain?' <span class="dim xs">(c)</span>':''}</div><div class="sub-t">${ROLES[p.role].short} · ${p.age}${p.natDuty?' · National duty':''}${p.injury?' · Injured':''}</div></div>${ratingCells(p)}</div>`).join('');
   const count90 = FMT_LIST.map(f=>sq.filter(p=>overall(p,f)>=90).length);
   return `${tools}<div style="height:8px"></div>${panel(`Squad ratings · ${sq.length}`,`${ratingHead}<div class="squad-ratings-table">${rows}</div>`,{flush:true})}<div class="xs dim" style="margin-top:8px">90+ ratings: Shield ${count90[0]} · One-Day ${count90[1]} · T20 ${count90[2]}. Gold indicates 90+. Tap a player for their profile.</div><div class="xs dim role-legend" style="margin-top:6px">${Object.values(ROLES).map(r => `<b>${r.short}</b> ${esc(r.label)}`).join(' · ')}</div>`;
@@ -9572,7 +9581,7 @@ function fixtureRow(f, isNext) {
   const sub = f.result ? esc(displayInternationalSummary(f.result.summary)) : f.home ? teamDef(f.venue || f.home).ground : '';
   const card = f.result && game.scorecards[f.id];
   return `<div class="row ${card ? 'tap' : ''}" ${card ? `onclick="showScorecard('${f.id}')"` : ''}><div class="center" style="width:34px;flex:none"><div class="b" style="line-height:1">${d.getUTCDate()}</div><div class="xs dim">${d.toLocaleDateString('en-AU', { month:'short', timeZone:'UTC' })}</div></div>
-    <div class="stack"><div class="main-t ell">${teams}</div><div class="sub-t ell">${fixtureCompetitionMarkup(f)}${sub ? ` · ${sub}` : ''}</div></div><div class="end">${end}</div></div>`;
+    <div class="stack"><div class="main-t ell">${teams}</div><div class="sub-t ell">${fixtureCompetitionMarkup(f)}</div>${sub ? `<div class="sub-t ell">${sub}</div>` : ''}</div><div class="end">${end}</div></div>`;
 }
 function wormSvg(innings, fmt) {
   if (fmt === 'FC') return '';
@@ -9934,7 +9943,7 @@ function renderOffice() {
   const t = ui.officeTab;
   const body = t === 'trades' ? renderTrades() : t === 'fa' ? renderFA() : t === 'log' ? renderLog() : t === 'diagnostics' ? renderDiagnostics() : t === 'inbox' ? renderInbox() : renderBoard();
   const open = openInbox().length;
-  return `${pageTitle('Office', `GM's desk · ${teamName(U())}`)}<div class="office-navigation">${seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents'],['diagnostics','Diagnostics'],['log','Log']], t, 'setOfficeTab')}</div><div style="height:10px"></div>${body}`;
+  return `${pageTitle('Office', `GM's desk · ${teamName(U())}`)}${t === 'diagnostics' || t === 'log' ? `<button class="btn sm ghost" onclick="setOfficeTab('inbox')">‹ Back to Office</button>` : seg([['inbox',`Inbox${open ? ' · ' + open : ''}`],['board','Board'],['trades',`Trades${game.offers.length ? ' · ' + game.offers.length : ''}`],['fa','Free agents']], t, 'setOfficeTab')}<div style="height:10px"></div>${body}`;
 }
 // ---- Club, Intl and Legacy pages ----
 function renderClubPage() {
@@ -10208,7 +10217,7 @@ function renderFA() {
   fas = keyed.slice(0, limit).map(x => x.p);
   const more = total > fas.length ? `<div style="padding:10px 12px"><button class="btn block" onclick="ui.faLimit=${limit + 60};render()">Show more (${total - fas.length} more)</button></div>` : '';
   return `<div class="flex wrap"><span class="s muted">Cap space <b>${money(capSpace(U()))}</b> · squad ${squadOf(U()).length}/${SQUAD_MAX}</span><span class="grow"></span>${sel(GROUP_OPTS, ui.faGroup, "ui.faGroup=this.value;render()")}${sel([['value','Best'],['ask','Cheapest'],['age','Youngest']], key, "ui.faSort=this.value;render()")}</div><div style="height:8px"></div>
-    ${panel(`${total} free agents`, `<div class="rows">${fas.map(p => playerRow(p, { all: true, sub: `${fitTag(p)}${ROLES[p.role].short} · ${p.age} · pot ${potGrade(p)} · asks ${money(askingSalary(p))}`, end: `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(peakOvr(p))}</span><button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','sign')">Offer</button>` })).join('') || '<div class="empty">No free agents.</div>'}</div>${more}`, { flush: true })}`;
+    ${panel(`${total} free agents`, `<div class="rows">${fas.map(p => playerRow(p, { all: true, wrap: true, sub: `${fitTag(p)}${ROLES[p.role].short} · ${p.age} · pot ${potGrade(p)} · asks ${money(askingSalary(p))}`, end: `<span class="hide-m flex" style="gap:4px">${pill(overall(p, 'FC'))}${pill(overall(p, 'OD'))}${pill(overall(p, 'T20'))}</span><span class="hide-d">${pill(peakOvr(p))}</span><button class="btn sm" onclick="event.stopPropagation();openContract('${p.id}','sign')">Offer</button>` })).join('') || '<div class="empty">No free agents.</div>'}</div>${more}`, { flush: true })}`;
 }
 function intlYearSelect(field, years) {
   const opts=[['ALL','All years'],...years.map(y=>[String(y),String(y)])];
@@ -11333,9 +11342,10 @@ function renderStaff() {
   if (!staffMarket().some(s=>s.role==='contract')) refreshStaffMarket();
   const pay = staffPayroll(U());
   const rows = STAFF_ORDER.map(r => { const s = staffIn(U(), r);
-    return `<div class="row tap" onclick="staffMarketSheet('${r}')"><div class="stack"><div class="main-t">${STAFF_ROLES[r].label}${s && s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t ell">${s ? `${esc(s.first + ' ' + s.last)} · ${s.age} · ${money(s.salary)} × ${s.years} yr` : '<span class="loss">Vacant</span>'} · ${STAFF_ROLES[r].desc}</div></div><div class="end">${s ? pill(s.rating)+(s.lastRatingChange?`<span class="xs ${s.lastRatingChange>0?'win':'loss'}">${s.lastRatingChange>0?'+':''}${s.lastRatingChange}</span>`:'') : chip('bad', 'Hire')}</div></div>`; }).join('');
+    return `<div class="row tap" onclick="staffMarketSheet('${r}')"><div class="stack"><div class="main-t">${STAFF_ROLES[r].label}${s && s.style ? ' ' + chip('', COACH_STYLES[s.style]) : ''}</div><div class="sub-t wrap2">${s ? `${esc(s.first + ' ' + s.last)} · ${s.age} · ${money(s.salary)} × ${s.years} yr` : '<span class="loss">Vacant</span>'} · ${STAFF_ROLES[r].desc}</div></div><div class="end">${s ? pill(s.rating)+(s.lastRatingChange?`<span class="xs ${s.lastRatingChange>0?'win':'loss'}">${s.lastRatingChange>0?'+':''}${s.lastRatingChange}</span>`:'') : chip('bad', 'Hire')}</div></div>`; }).join('');
   return `<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><div class="v">${money(pay)}</div><div class="l">Staff spend</div></div><div class="kpi"><div class="v">${money(STAFF_BUDGET - pay)}</div><div class="l">Budget left</div></div><div class="kpi"><div class="v">${Math.round(mean(STAFF_ORDER.filter(r=>r!=='contract').map(r => staffRating(U(), r))))}</div><div class="l">Avg rating</div></div></div><div style="height:8px"></div>
-    ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}${contractManagerSettingsPanel()}
+    ${panel('Coaching and support staff', `<div class="rows">${rows}</div>`, { flush: true })}
+    <div class="xs dim" style="margin-top:6px">How much the Contract Manager handles is set in <button class="link" onclick="ui.squadTab='contracts';go('squad')">Squad › Contracts</button>.</div>
     <div class="xs dim" style="margin-top:6px">Staff budget ${money(STAFF_BUDGET)}, separate from the salary cap.</div>`;
 }
 function coachFitLabel(s) {
@@ -11434,6 +11444,8 @@ function setWorldNat(n) { ui.worldNat = n; render(); }
 function setIntlRecFmt(f) { ui.intlRecFmt = f; render(); }
 // ---- World Cup hub ----
 function wcName(id) { return internationalTeamName(id); }
+// Build 165: a nation is shown as flag and full name; the short code is not repeated beside it.
+function natFull(id) { const t = teamDef(id); if (!t || !t.intl) return tdot(id); return `<span class="identity-inline">${nationTag(id === 'AUS' ? 'AUS' : id.slice(2))}<span>${esc(wcName(id))}</span></span>`; }
 // The number of teams progressing is a property of the tournament stage,
 // not the table renderer. These cutoffs must match updateGlobalTournament()
 // and updateWorldCup(), including legacy eight-team World Cup careers.
@@ -11449,7 +11461,7 @@ function wcGroupTable(rows, qualification) {
   const final = opts.final === true;
   // Q is a position-based current/provisional qualifier until the round finishes.
   const note = cutoff ? `<div class="wc-qual-note xs dim">${final ? 'Qualified' : 'Qualification places (provisional until stage completed)'}: top ${cutoff} ${cutoff === 1 ? 'team' : 'teams'} ${esc(opts.destination || 'advance')}</div>` : '';
-  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.t === 'AUS' ? 'me' : ''} ${cutoff > 0 && i === cutoff - 1 ? 'cut' : ''}"><td>${i < cutoff ? '<span class="q">Q</span>' : '<span class="q"></span>'}${tdot(r.t)} ${wcName(r.t)}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>${note}`;
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th>P</th><th>W</th><th>L</th><th>Pts</th><th>NRR</th></tr></thead><tbody>${rows.map((r, i) => `<tr class="${r.t === 'AUS' ? 'me' : ''} ${cutoff > 0 && i === cutoff - 1 ? 'cut' : ''}"><td>${i < cutoff ? '<span class="q">Q</span>' : '<span class="q"></span>'}${natFull(r.t)}</td><td>${r.P}</td><td>${r.W}</td><td>${r.L}</td><td class="b">${r.Pts}</td><td class="dim">${(nrr(r) >= 0 ? '+' : '') + nrr(r).toFixed(2)}</td></tr>`).join('')}</tbody></table></div>${note}`;
 }
 // B153: domestic finals must not resolve state codes through the nation table
 // ('SA' is both South Australia and South Africa). Domestic teams show their
@@ -11457,7 +11469,7 @@ function wcGroupTable(rows, qualification) {
 function bracketTeamLabel(t) {
   const d = teamDef(t);
   if (d && !d.intl) return tdot(t);
-  return `${tdot(t)} ${wcName(t)}`;
+  return natFull(t);
 }
 function bracketBox(round, home, away, res, fxId) {
   const win = res && res.winner;
@@ -11574,7 +11586,7 @@ function globalTournamentPanel() {
  if(!fxs.length && !hist.length)return '';
  let sections='';
  if(fxs.length){const ev=fxs[0].event, title=ev==='ODIWC'?'ODI World Cup':'Champions Trophy';
-  const table=g=>globalTournamentTable(ev,g).map(r=>`<div class="row" style="padding:7px 10px"><div class="grow s">${tdot(r.t)} ${esc(internationalTeamName(r.t))}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('');
+  const table=g=>globalTournamentTable(ev,g).map(r=>`<div class="row" style="padding:7px 10px"><div class="grow s">${natFull(r.t)}</div><span class="xs dim">${r.P} played</span><span class="b s">${r.Pts} pts</span></div>`).join('');
   const knock=fxs.filter(f=>f.stage==='globalsuper'||f.stage.startsWith('globalsemi')||f.stage==='globalfinal');
   sections=currentWorldCupPreviewButton(ev)+panel(title,`<div class="note">${ev==='ODIWC'?'14 teams · Super Six · Knockouts':'8 teams · Knockouts'}</div><div class="grid g2"><div><div class="lbl">Group A</div>${table('A')}</div><div><div class="lbl">Group B</div>${table('B')}</div></div><div class="lbl" style="padding-top:10px">Knockouts</div>${knock.map(f=>`<div class="kv"><span>${esc(f.round)}: ${f.home?esc(internationalTeamName(f.home)):'TBC'} v ${f.away?esc(internationalTeamName(f.away)):'TBC'}</span><span>${f.result?esc(displayInternationalSummary(f.result.text)):'–'}</span></div>`).join('')}`,{flush:true});
  }
