@@ -1222,6 +1222,20 @@ body.live-mode .actbar{display:none}
 .talent-mark{display:block;color:var(--accent);margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.01em}
 .sheet-f .exit-recovery-action{flex:1 1 100%;white-space:normal;min-height:40px}
 
+/* Build 174: iPhone-friendly sortable season batting and bowling tables. */
+.squad-season-scroll{max-width:100%;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y}
+.squad-season-table{width:max-content;min-width:100%;border-collapse:separate;border-spacing:0;font-variant-numeric:tabular-nums}
+.squad-season-table th,.squad-season-table td{min-width:56px;padding:10px 9px;white-space:nowrap;text-align:right;border-bottom:1px solid var(--line2)}
+.squad-season-table th.season-name{position:sticky;left:0;z-index:2;text-align:left;min-width:145px;max-width:190px;background:var(--s1);box-shadow:1px 0 0 var(--line)}
+.squad-season-table thead th.season-name{z-index:3}
+.squad-season-table tbody tr:nth-child(odd) th.season-name{background:#102330}
+.squad-season-table tbody tr:nth-child(odd) td{background:rgba(255,255,255,.018)}
+.squad-season-table th button{display:inline-block;border:0;padding:7px 0;background:none;color:inherit;font-weight:800;cursor:pointer;text-align:inherit;white-space:nowrap;min-height:34px}
+.squad-season-table tbody th button{font-weight:750;font-size:12.5px;color:var(--text)}
+.squad-season-table .season-sorted button{color:var(--accent)}
+.squad-season-table tbody tr{cursor:pointer}
+@media(max-width:390px){.squad-season-table th.season-name{min-width:130px;max-width:155px}.squad-season-table th,.squad-season-table td{padding:9px 7px}}
+
 /* Build 149: single compact three-format squad ratings table */
 .squad-rating-head,.squad-rating-row{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,minmax(48px,61px));gap:5px;align-items:center;padding:10px 12px}
 .squad-rating-head{color:var(--muted);font-size:10px;font-weight:800;letter-spacing:.01em;border-bottom:1px solid var(--line2);padding-top:12px;padding-bottom:9px;text-align:center}
@@ -1357,7 +1371,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.96 Build 173', title: 'Staff Longevity and Succession', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
+const BUILD = { version: 'v0.9.97 Build 174', title: 'Squad Season Statistics', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -9789,8 +9803,75 @@ function renderOffseason() {
 function setSquadTab(t) { ui.squadTab = t; render(); }
 function renderSquad() {
   const t = ui.squadTab;
-  const body = t === 'xi' ? renderXIEditor() : t === 'tactics' ? renderTactics() : t === 'contracts' ? renderContracts() : (t === 'training' || t === 'dev') ? renderDevelopment() : t === 'room' ? renderDressingRoom() : renderSquadList();
-  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['xi','XI'],['dev','Training'],['room','Locker'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
+  const body = t === 'seasonstats' ? renderSquadSeasonStats() : t === 'xi' ? renderXIEditor() : t === 'tactics' ? renderTactics() : t === 'contracts' ? renderContracts() : (t === 'training' || t === 'dev') ? renderDevelopment() : t === 'room' ? renderDressingRoom() : renderSquadList();
+  return `${pageTitle('Squad', `${teamName(U())} · ${squadOf(U()).length} players · ${money(capSpace(U()))} cap space`)}${seg([['list','Players'],['seasonstats','Stats'],['xi','XI'],['dev','Training'],['room','Locker'],['contracts','Contracts']], t === 'training' ? 'dev' : t, 'setSquadTab')}<div style="height:10px"></div>${body}`;
+}
+// Build 174: consolidated season-only squad statistics, computed from existing
+// player.stats.season. No duplicated state, no change to career or save format.
+function squadSeasonLine(p, fmt) {
+  const src = p.stats && p.stats.season || {};
+  if (fmt !== 'ALL') return src[fmt] || blankStats();
+  const out = blankStats();
+  for (const f of FMT_LIST) {
+    const a = src[f];
+    if (!a) continue;
+    for (const k of ['m','inn','no','r','b','f4','f6','c50','c100','bb','rc','w','w5','ct','st']) out[k] += Number(a[k]) || 0;
+    if ((a.hs || 0) > out.hs) {out.hs=a.hs;out.hsNo=!!a.hsNo;}
+    if ((a.bbw || 0)>out.bbw || ((a.bbw || 0)===out.bbw && (a.bbw || 0)>0 && (a.bbr || 0)<out.bbr)) {out.bbw=a.bbw;out.bbr=a.bbr;}
+  }
+  return out;
+}
+function setSquadSeasonFmt(f) {ui.seasonStatsFmt=f;render();}
+function setSquadSeasonKind(k) {ui.seasonStatsKind=k;ui.seasonStatsSort=k==='bowl'?'w':'r';ui.seasonStatsAsc=false;render();}
+function setSquadSeasonSort(k) {
+  if (ui.seasonStatsSort===k) ui.seasonStatsAsc=!ui.seasonStatsAsc;
+  else {ui.seasonStatsSort=k;ui.seasonStatsAsc=k==='name'||k==='avg'||k==='econ'||k==='ba'||k==='bsr';}
+  render();
+}
+function renderSquadSeasonStats() {
+  const fmt=ui.seasonStatsFmt||'T20', kind=ui.seasonStatsKind||'bat';
+  const isBat=kind==='bat';
+  const cols=isBat ? [
+    ['name','Player'],['m','M'],['inn','Inn'],['r','Runs'],['avg','Avg'],['bsr','SR'],['c50','50'],['c100','100'],['hs','HS'],['f4','4s'],['f6','6s']
+  ] : [
+    ['name','Player'],['m','M'],['bb','Overs'],['w','W'],['ba','Avg'],['econ','Econ'],['bsrBowl','SR'],['bbw','Best'],['w5','5WI'],['rc','Runs']
+  ];
+  const sort=ui.seasonStatsSort || (isBat?'r':'w'), asc=!!ui.seasonStatsAsc;
+  const rows=squadOf(U()).map(p=>({p,s:squadSeasonLine(p,fmt)}));
+  function val(x,k){const s=x.s;switch(k){
+    case 'name': return pname(x.p).toLowerCase();
+    case 'avg':return s.inn-s.no>0?s.r/(s.inn-s.no):-1;
+    case 'bsr':return s.b?s.r*100/s.b:-1;
+    case 'ba':return s.w?s.rc/s.w:-1;
+    case 'econ':return s.bb?s.rc*6/s.bb:-1;
+    case 'bsrBowl':return s.w?s.bb/s.w:-1;
+    case 'bbw':return (s.bbw||0)*1000-(s.bbr||0);
+    default:return Number(s[k])||0;
+  }}
+  rows.sort((a,b)=>{
+    const va=val(a,sort),vb=val(b,sort);
+    return (typeof va==='string' ? (asc ? va.localeCompare(vb) : vb.localeCompare(va)) : (asc ? va-vb : vb-va)) || pname(a.p).localeCompare(pname(b.p));
+  });
+  const nf=(n,d=2)=>Number.isFinite(n)?n.toFixed(d):'–';
+  function display(s,k){switch(k){
+    case 'm': case 'inn': case 'r':case 'c50':case 'c100':case 'f4':case 'f6':case 'w':case 'w5':case 'rc':return String(s[k]||0);
+    case 'avg':return s.inn-s.no>0?nf(s.r/(s.inn-s.no)):'–';
+    case 'bsr':return s.b?nf(s.r*100/s.b,1):'–';
+    case 'hs':return s.inn?hsStr(s):'–';
+    case 'bb':return s.bb?Math.floor(s.bb/6)+'.'+(s.bb%6):'–';
+    case 'ba':return s.w?nf(s.rc/s.w):'–';
+    case 'econ':return s.bb?nf(s.rc*6/s.bb):'–';
+    case 'bsrBowl':return s.w?nf(s.bb/s.w,1):'–';
+    case 'bbw':return bbStr(s);
+    default:return '–';
+  }}
+  const head=`<thead><tr>${cols.map(([k,l])=>`<th scope="col" class="${k==='name'?'season-name':''} ${sort===k?'season-sorted':''}"><button type="button" onclick="setSquadSeasonSort('${k}')" aria-label="Sort by ${l}" aria-sort="${sort===k?(asc?'ascending':'descending'):'none'}">${l}${sort===k?` <span aria-hidden="true">${asc?'▲':'▼'}</span>`:''}</button></th>`).join('')}</tr></thead>`;
+  const body=`<tbody>${rows.map(({p,s})=>`<tr class="tap" onclick="showPlayer('${p.id}','stats')"><th scope="row" class="season-name"><button type="button" onclick="event.stopPropagation();showPlayer('${p.id}','stats')">${esc(pname(p))}</button></th>${cols.slice(1).map(([k])=>`<td>${display(s,k)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+  const played=rows.filter(x=>x.s.m>0).length;
+  return `<div class="flex wrap" style="gap:8px;margin-bottom:9px">${seg([['FC','Shield'],['OD','One-Day'],['T20','T20'],['ALL','All']],fmt,'setSquadSeasonFmt')}</div>
+    ${seg([['bat','Batting'],['bowl','Bowling']],kind,'setSquadSeasonKind')}
+    <div style="height:10px"></div>${panel(`${fmt==='ALL'?'All formats':compName(fmt)} · ${isBat?'Batting':'Bowling'}`,`<div class="xs muted" style="padding:10px 12px 6px">${game.season.label} · ${played} of ${rows.length} squad players appeared. Tap a heading to sort, or a player to open their statistics.</div><div class="squad-season-scroll" role="region" aria-label="Squad season ${isBat?'batting':'bowling'} statistics" tabindex="0"><table class="tbl squad-season-table">${head}${body}</table></div>`,{flush:true})}
+    <div class="xs dim" style="margin-top:8px">Statistics are for this season only. All formats combines domestic Shield, One-Day and T20 performances; international matches are not included. Swipe sideways for more columns.</div>`;
 }
 const GROUP_OPTS = [['ALL','All roles'],['BAT','Batters'],['WK','Keepers'],['AR','All-rounders'],['PACE','Pace'],['SPIN','Spin']];
 function sortPlayers(arr, key, fmt) {
