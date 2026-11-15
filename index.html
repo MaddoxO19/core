@@ -1357,7 +1357,7 @@ body.live-mode .actbar{display:none}
    ========================================================================= */
 
 // §1 BUILD + CONFIGURATION ------------------------------------------------
-const BUILD = { version: 'v0.9.89 Build 166', title: 'Backup Restore', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
+const BUILD = { version: 'v0.9.95 Build 172', title: 'Match and AI Calibration Audit', engine: 'C3.1F Ball-by-Ball with Elite Ramp and Collapse Brake' };
 const SAVE_PREFIX = 'minime_cricket_v01_slot_'; // legacy key name: keep it so existing saves still load
 const SAVE_BACKUP_PREFIX = SAVE_PREFIX + 'backup_';
 // v0.7 lifted the whole rating scale. Player skills sit RATING_SHIFT higher than before and staff
@@ -2028,6 +2028,70 @@ COUNTRY_NAME_PROFILES.SL[0].last = ['Bandara','Rathnayake','Gunawardena','Wickra
 COUNTRY_NAME_PROFILES.NAM[0].last = ['Erasmus','Frylinck','Trumpelmann','Wiese','Smit','Scholtz','van Lingen','Green','Davids','Loftie-Eaton'];
 COUNTRY_NAME_PROFILES.BAN[0].last = ['Al Hasan','Hasan','Das','Hossain','Ahmed','Rahman','Hridoy','Sarkar','Islam','Miraz','Mahmud','Shanto'];
 COUNTRY_NAME_PROFILES.WI[1].last = ['Roach','Carty','Rutherford','Chanderpaul','Seales','Motie','Cornwall','Da Silva'];
+// Build 171: additional fictional-generation names. These are illustrative community
+// pools, not assertions about nationality or heritage. Existing saved players retain
+// their names and identifiers. Keep compound surnames as single entries.
+const WORLD_NAME_EXPANSION = {
+  AUS: [
+    {weight:14,first:['Ayaan','Bilal','Hamza','Kabir','Ibrahim','Zayd','Rizwan','Aarav','Krish','Arnav','Sahil','Vihaan'],last:['Rahman','Hussain','Malik','Qureshi','Shah','Desai','Mehta','Kapoor','Reddy','Iyer']},
+    {weight:10,first:['Kai','Jai','Noel','Eli','Leo','Taj','Ari','Dylan','Jayden','Koa'],last:['Nguyen','Tran','Le','Phan','Wong','Chen','Li','Kim','Park','Tan']}
+  ],
+  ENG: [
+    {weight:14,first:['Sonny','George','Theo','Sebastian','Ralph','Finley','Cameron','Isaac','Arthur','Bobby'],last:['Hughes','Barker','Dawson','Wright','Hargreaves','Baxter','Foster','Simpson','Harrison','Walsh']},
+    {weight:9,first:['Imran','Ayaan','Zubair','Saif','Ravi','Aarav','Samar','Bilal'],last:['Khan','Hussain','Shah','Malik','Ahmed','Patel','Mehta','Singh']}
+  ],
+  IND: [
+    {weight:14,first:['Anirudh','Harish','Srinivas','Vignesh','Bharath','Madhav','Ganesh','Naveen','Ajith','Kavin'],last:['Sundaram','Narayanan','Rajagopal','Krishnamurthy','Venkat','Subramaniam','Raman','Iyer','Pillai']},
+    {weight:12,first:['Aritra','Soham','Debjit','Aniket','Soumyajit','Ritwik','Saptarshi','Abhishek'],last:['Chakraborty','Majumdar','Bose','Sengupta','Bhattacharya','Ganguly','Pal','Mitra']},
+    {weight:10,first:['Amandeep','Harman','Jaskaran','Hardeep','Sukhdeep','Gurkirat','Prabhjot'],last:['Dhillon','Sidhu','Sandhu','Gill','Brar','Saini','Bedi']}
+  ],
+  PAK: [{weight:20,first:['Hassan','Shahzad','Arsalan','Talha','Ahsan','Sufyan','Muneeb','Huzaifa','Noman','Danish','Waqas','Faizan'],last:['Sheikh','Khalid','Rana','Awan','Sohail','Bhatti','Nawaz','Jamal','Lodhi','Farooqi','Sarfraz','Azhar']}],
+  SL: [{weight:18,first:['Thisara','Kavindu','Nishan','Malith','Dinuka','Isuru','Nimesh','Ramesh','Chanuka','Dilshan'],last:['Jayawardena','Samarawickrama','Weerasinghe','Abeysekera','Karunathilaka','Gamage','Jayasuriya','Rajapaksha','Wijesinghe']}],
+  SA: [
+    {weight:17,first:['Lutho','Nqobile','Siyabonga','Siyanda','Tshepo','Sanele','Khaya','Sifiso','Thulani','Siyabulela'],last:['Mahlangu','Mabaso','Zuma','Nkomo','Mthethwa','Sithole','Mkhize','Moyo','Cele','Mabena']},
+    {weight:12,first:['Christiaan','Francois','Stefan','Jacques','Hendrik','Danie','Lourens','Ruan'],last:['Pretorius','van Heerden','de Klerk','du Plessis','van Zyl','van Rensburg','Steyn']}
+  ],
+  NZ: [
+    {weight:18,first:['Kauri','Hone','Manaia','Wiremu','Te Aroha','Rawiri','Hemi','Nikau','Tama','Rangi'],last:['Williams','Tawhai','Ropata','Pere','Kereama','Te Rangi','Tui','Rangi']},
+    {weight:12,first:['Elliot','Lachie','Caleb','Mason','Isaac','Aiden','Jesse','Toby'],last:['McLeod','McMillan','Bennett','Fletcher','Patel','Singh','Sodhi','Taylor']}
+  ],
+  WI: [{weight:22,first:['Javaughn','Jermaine','Kadeem','Mikhail','Shamar','Keemo','Roshon','Trevon','Akeal','Kevin','Jaden'],last:['Campbell','Hinds','Narine','Roach','Simmons','Lewis','Charles','Gayle','Bravo','Ramdin','Joseph','Sinclair']}],
+  AFG: [{weight:22,first:['Nangeyalai','Samiullah','Javed','Feroz','Nasrat','Ahmad','Shirzad','Sohail','Matiullah','Hamidullah'],last:['Safi','Shinwari','Ahmadzai','Suleimankhel','Shirzad','Mohmand','Safdar','Mangal','Amin']}],
+  BAN: [{weight:20,first:['Shahriar','Mahfuz','Tanvir','Rafiul','Mohammad','Rakibul','Ashraful','Zakir','Yasir','Rishad'],last:['Chowdhury','Haque','Sarker','Uddin','Talukder','Mahmud','Mollah','Miah','Kabir','Islam']}],
+  IRE: [{weight:20,first:['Darragh','Fionn','Cillian','Aidan','Eoin','Colm','Donnacha','Oisin','Cian','Paddy'],last:['O Brien','O Neill','O Connor','Kavanagh','Doherty','Byrne','Doyle','McGrath','McCarthy','Fitzgerald']}],
+  ZIM: [{weight:22,first:['Tinashe','Tendekai','Farai','Tawanda','Kudakwashe','Tatenda','Munyaradzi','Tapiwanashe','Munashe'],last:['Chigumbura','Masakadza','Chibhabha','Chirwa','Chigora','Chikore','Mushangwe','Mupfudza']}],
+  SCO: [{weight:22,first:['Euan','Ross','Alasdair','Cameron','Murray','Gregor','Iain','Alec','Finlay','Blair'],last:['MacDonald','MacKenzie','McDougall','Ferguson','Robertson','Campbell','Murray','Fraser','MacLeod']}],
+  NED: [
+    {weight:18,first:['Daan','Jasper','Milan','Thijs','Lars','Bram','Joris','Ruben','Sven','Koen'],last:['van Dijk','de Jong','van Leeuwen','de Bruijn','van den Berg','Bakker','Vermeer','van Vliet']},
+    {weight:12,first:['Ayaan','Rohan','Arnav','Sahil','Dev','Ishaan','Rishi'],last:['Singh','Kumar','Sharma','Reddy','Patel','Choudhary']}
+  ],
+  NEP: [{weight:23,first:['Sujan','Niraj','Prakash','Rajan','Bikash','Bibek','Bipin','Abinash','Suraj','Kiran'],last:['Adhikari','Bista','Basnet','Gurung','Thapa','Shrestha','Tamang','Karki','Rai']}],
+  USA: [
+    {weight:18,first:['Ethan','Liam','Caleb','Noah','Mason','Carter','Jordan','Wyatt','Jackson'],last:['Johnson','Brown','Davis','Wilson','Garcia','Martinez','Robinson','Lee','Morris']},
+    {weight:15,first:['Arjun','Rohan','Sai','Dev','Krish','Ayaan','Jaspreet','Harsh'],last:['Reddy','Nair','Desai','Mehta','Chaudhary','Iyer','Singh','Patel']}
+  ],
+  CAN: [
+    {weight:20,first:['Aman','Gurkirat','Arshdeep','Jaspreet','Navdeep','Harpreet','Sahil','Yuvraj'],last:['Gill','Sandhu','Brar','Dhillon','Sidhu','Pannu','Bains','Saini']},
+    {weight:13,first:['Aiden','Liam','Noah','Ethan','Owen','Leo','Max','Caleb'],last:['Martin','Smith','Wilson','Campbell','Anderson','Gagnon','Tremblay']}
+  ],
+  NAM: [{weight:22,first:['Tangeni','Tuhafeni','Petrus','Ndapanda','Nambala','Tobias','Justus','Simon','Elago'],last:['Shikongo','Amutenya','Kambonde','Nashandi','Nghipandulwa','Nekwaya','Hamutenya']}],
+  OMA: [{weight:20,first:['Said','Salim','Harith','Nasser','Yaqoob','Fahad','Badr','Mazin','Hamdan'],last:['Al Rawahi','Al Hashmi','Al Jabri','Al Yahmadi','Al Abri','Al Sinani','Al Hinai','Al Shukaili']}],
+  UAE: [
+    {weight:15,first:['Omar','Khalid','Sultan','Rashed','Saeed','Majid','Hamdan','Fahad'],last:['Al Falasi','Al Qasimi','Al Mazrouei','Al Kaabi','Al Mansoori','Al Ketbi']},
+    {weight:16,first:['Viraj','Ansh','Ritesh','Sahil','Aryan','Yash','Rohan','Dev'],last:['Shah','Bhatia','Desai','Chaudhary','Kumar','Jain','Mehta']}
+  ]
+};
+for (const [nat, extra] of Object.entries(WORLD_NAME_EXPANSION)) {
+  if (!COUNTRY_NAME_PROFILES[nat]) COUNTRY_NAME_PROFILES[nat] = [];
+  COUNTRY_NAME_PROFILES[nat].push(...extra);
+}
+// Repair split surname particles only for future players. This avoids generating
+// standalone family names such as "van", "de" and "Al" in older profiles.
+const NAME_PARTICLES = new Set(['van','de','der','du','Da','Al','Leede','Beek','Dussen','Toit','Wyk','Silva','Hasan','Balushi','Harthi','Habsi','Riyami','Mukhaini','Maawali','Busaidi','Lawati']);
+for (const profiles of Object.values(COUNTRY_NAME_PROFILES)) for (const profile of profiles) {
+  if (profile.last.length > 1) profile.last = profile.last.filter(s => !NAME_PARTICLES.has(s));
+}
+
 // Verified player names. Ratings and roles are provisional game models, not official ratings.
 const AUTHENTIC_ROSTERS = {"domestic":{"NSW":[{"name":"Sean Abbott","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Pat Cummins","role":"PACE","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Joel Davies","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Oliver Davies","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Ben Dwarshuis","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jack Edwards","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Ryan Hadley","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Liam Hatcher","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Josh Hazlewood","role":"PACE","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Ryan Hicks","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Bryce Jackson","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Riley Kingsell","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Sam Konstas","role":"OPEN","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Nathan Lyon","role":"LEG","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Nic Maddinson","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jack Nisbet","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Kurtis Patterson","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Josh Philippe","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Will Salzmann","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tanveer Sangha","role":"LEG","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Lachlan Shaw","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Steve Smith","role":"OPEN","q":83,"roster":"CA 2026-27","contracted":false},{"name":"Mitchell Starc","role":"PACE","q":83,"roster":"CA 2026-27","contracted":false},{"name":"Charlie Stobo","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Charlie Anderson","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Jake Scott","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Harjas Singh","role":"MID","q":70,"roster":"CA 2026-27","contracted":false}],"QLD":[{"name":"Tom Balkin","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Xavier Bartlett","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Hugo Burdon","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jack Clayton","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Cameron Gannon","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Lachlan Hearne","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Hayden Kerr","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Marnus Labuschagne","role":"MID","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Angus Lovell","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Dylan McLachlan","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Michael Neser","role":"BAR","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jimmy Peirson","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Matthew Renshaw","role":"OPEN","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jem Ryan","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jack Sinfield","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Mark Steketee","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tom Straker","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Mitchell Swepson","role":"LEG","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Callum Vidler","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Hugh Weibgen","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tom Whitney","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Jack Wildermuth","role":"BAR","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Adam Zampa","role":"LEG","q":78,"roster":"CA 2026-27","contracted":false},{"name":"Tom Campbell","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Steven Hogan","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Charlie Lachmund","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Oli Patterson","role":"MID","q":70,"roster":"CA 2026-27","contracted":false}],"SA":[{"name":"Wes Agar","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jordan Buckingham","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Alex Carey","role":"WK","q":78,"roster":"CA 2026-27","contracted":true},{"name":"Brendan Doggett","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jake Fraser-McGurk","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Matthew Gilkes","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Travis Head","role":"OPEN","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Henry Hunt","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Hanno Jacobs","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Spencer Johnson","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jake Lehmann","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Ben Manenti","role":"BAR","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Nathan McAndrew","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Noah McFadyen","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Nathan McSweeney","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Harry Nielsen","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Lloyd Pope","role":"LEG","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Henry Thornton","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Campbell Thompson","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jason Sangha","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Liam Scott","role":"BAR","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Mackenzie Harvey","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Jerrssis Wadia","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Jake Weatherald","role":"OPEN","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Thomas Brown","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Kane Halfpenny","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Douwtjie Hoogenboezem","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Hayden Schiller","role":"MID","q":70,"roster":"CA 2026-27","contracted":false}],"TAS":[{"name":"Marcus Bean","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Gabe Bell","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jackson Bird","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Iain Carlisle","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Nikhil Chaudhary","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jake Doran","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Nathan Ellis","role":"PACE","q":78,"roster":"CA 2026-27","contracted":true},{"name":"Brad Hope","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Caleb Jewell","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Matthew Kuhnemann","role":"LEG","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Raf MacMillian","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Caelan Maladay","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Ben McDermott","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Riley Meredith","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Lawrence Neil-Smith","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Mitch Owen","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Will Prestwidge","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Nivethan Radhakrishnan","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jordan Silk","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Billy Stanlake","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tim Ward","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Beau Webster","role":"BAR","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Teague Wyllie","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Kasey Barton","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Zac Curtain","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Aidan O'Connor","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Nitesh Samuel","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"William Taylor","role":"MID","q":70,"roster":"CA 2026-27","contracted":false}],"VIC":[{"name":"Austin Anlezark","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Liam Blackford","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Scott Boland","role":"PACE","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Dylan Brasher","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Ashley Chandrasinghe","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Harry Dixon","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Sam Elliott","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Peter Handscomb","role":"MID","q":78,"roster":"CA 2026-27","contracted":true},{"name":"Sam Harper","role":"WK","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Marcus Harris","role":"OPEN","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Campbell Kellaway","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Blake Macdonald","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Cam McClure","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"David Moody","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Todd Murphy","role":"LEG","q":78,"roster":"CA 2026-27","contracted":true},{"name":"Fergus O'Neill","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Oliver Peake","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Mitch Perry","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tyler Pearson","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tom Rogers","role":"BAR","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Will Sutherland","role":"PACE","q":78,"roster":"CA 2026-27","contracted":false},{"name":"Doug Warren","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Harry Hoekstra","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Tom Paddington","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Aryan Sharma","role":"MID","q":70,"roster":"CA 2026-27","contracted":false}],"WA":[{"name":"Cameron Bancroft","role":"OPEN","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Mahli Beardman","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Hilton Cartwright","role":"BAR","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Cooper Connolly","role":"BAR","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Brody Couch","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Joel Curtis","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Kieran Elliott","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Sam Fanning","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jayden Goodwin","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Cameron Green","role":"BAR","q":83,"roster":"CA 2026-27","contracted":true},{"name":"Aaron Hardie","role":"BAR","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Liam Haskett","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Josh Inglis","role":"WK","q":78,"roster":"CA 2026-27","contracted":true},{"name":"Will Malajczuk","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Mitch Marsh","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Tom Murray","role":"MID","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Lance Morris","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Joel Paris","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Jhye Richardson","role":"PACE","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Corey Rocchiccioli","role":"LEG","q":70,"roster":"CA 2026-27","contracted":true},{"name":"Ashton Turner","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Sam Whiteman","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Simon Budge","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Albert Esterhuysen","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Jordan Quiggin","role":"MID","q":70,"roster":"CA 2026-27","contracted":false},{"name":"Corey Wasley","role":"MID","q":70,"roster":"CA 2026-27","contracted":false}]},"international":{"IND":[{"name":"Suryakumar Yadav","role":"MID","q":83,"roster":"ICC T20 WC 2026"},{"name":"Abhishek Sharma","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tilak Varma","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sanju Samson","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shivam Dube","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ishan Kishan","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Hardik Pandya","role":"BAR","q":83,"roster":"ICC T20 WC 2026"},{"name":"Arshdeep Singh","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jasprit Bumrah","role":"PACE","q":83,"roster":"ICC T20 WC 2026"},{"name":"Harshit Rana","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Varun Chakaravarthy","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kuldeep Yadav","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Axar Patel","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Washington Sundar","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Rinku Singh","role":"MID","q":69,"roster":"ICC T20 WC 2026"}],"USA":[{"name":"Monank Patel","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ehsan Adil","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Andries Gous","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shehan Jayasuriya","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Milind Kumar","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shayan Jahangir","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Saiteja Mukkamala","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sanjay Krishnamurthi","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Harmeet Singh","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Nosthush Kenjige","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shadley Van Schalkwyk","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Saurabh Netravalkar","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ali Khan","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mohammad Mohsin","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shubham Ranjane","role":"WK","q":69,"roster":"ICC T20 WC 2026"}],"NAM":[{"name":"Gerhard Erasmus","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Zane Green","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Bernard Scholtz","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ruben Trumpelmann","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"JJ Smit","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jan Frylinck","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Louren Steenkamp","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Malan Kruger","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Nicol Loftie-Eaton","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jack Brassell","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Alex Volschenk","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"JC Balt","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dylan Leicher","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"WP Myburgh","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Max Heingo","role":"PACE","q":69,"roster":"ICC T20 WC 2026"}],"NED":[{"name":"Scott Edwards","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Colin Ackermann","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Noah Croes","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Bas de Leede","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Aryan Dutt","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Fred Klaassen","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kyle Klein","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Michael Levitt","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Zach Lion-Cachet","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Max O'Dowd","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Logan van Beek","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Timm van der Gugten","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Roelof van der Merwe","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Paul van Meekeren","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Saqib Zulfiqar","role":"LEG","q":69,"roster":"ICC T20 WC 2026"}],"PAK":[{"name":"Salman Agha","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Abrar Ahmed","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Babar Azam","role":"MID","q":83,"roster":"ICC T20 WC 2026"},{"name":"Faheem Ashraf","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Fakhar Zaman","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Khawaja Nafay","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mohammad Nawaz","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Salman Mirza","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Naseem Shah","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sahibzada Farhan","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Saim Ayub","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shaheen Afridi","role":"PACE","q":83,"roster":"ICC T20 WC 2026"},{"name":"Shadab Khan","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Usman Khan","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Usman Tariq","role":"LEG","q":69,"roster":"ICC T20 WC 2026"}],"SL":[{"name":"Dasun Shanaka","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Pathum Nissanka","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kamil Mishara","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kusal Mendis","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kamindu Mendis","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kusal Janith Perera","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Charith Asalanka","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Janith Liyanage","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Pavan Rathnayake","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dushan Hemantha","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dunith Wellalage","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Maheesh Theekshana","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dushmantha Chameera","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Matheesha Pathirana","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Eshan Malinga","role":"PACE","q":69,"roster":"ICC T20 WC 2026"}],"ZIM":[{"name":"Sikandar Raza","role":"BAR","q":78,"roster":"ICC T20 WC 2026"},{"name":"Brian Bennett","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ryan Burl","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Graeme Cremer","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ben Curran","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Bradley Evans","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Clive Madande","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tinotenda Maposa","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tadiwanashe Marumani","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Wellington Masakadza","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tony Munyonga","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tashinga Musekiwa","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Blessing Muzarabani","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dion Myers","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Richard Ngarava","role":"PACE","q":69,"roster":"ICC T20 WC 2026"}],"IRE":[{"name":"Mark Adair","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ross Adair","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ben Calitz","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Curtis Campher","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Gareth Delany","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"George Dockrell","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Matthew Humphreys","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Josh Little","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Barry McCarthy","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Harry Tector","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tim Tector","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Lorcan Tucker","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sam Topping","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ben White","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Craig Young","role":"PACE","q":69,"roster":"ICC T20 WC 2026"}],"OMA":[{"name":"Jatinder Singh","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Vinayak Shukla","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mohammad Nadeem","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shakeel Ahmad","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Hammad Mirza","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Wasim Ali","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Karan Sonavale","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shah Faisal","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Nadeem Khan","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sufyan Mehmood","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jay Odedra","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shafiq Jan","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ashish Odedara","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jiten Ramanandi","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Aamir Kaleem","role":"BAR","q":69,"roster":"ICC T20 WC 2026"}],"ENG":[{"name":"Harry Brook","role":"MID","q":83,"roster":"ICC T20 WC 2026"},{"name":"Rehan Ahmed","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jofra Archer","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tom Banton","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jacob Bethell","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jos Buttler","role":"WK","q":83,"roster":"ICC T20 WC 2026"},{"name":"Sam Curran","role":"BAR","q":78,"roster":"ICC T20 WC 2026"},{"name":"Liam Dawson","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ben Duckett","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Will Jacks","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jamie Overton","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Adil Rashid","role":"LEG","q":78,"roster":"ICC T20 WC 2026"},{"name":"Phil Salt","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Josh Tongue","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Luke Wood","role":"PACE","q":69,"roster":"ICC T20 WC 2026"}],"WI":[{"name":"Shai Hope","role":"WK","q":78,"roster":"ICC T20 WC 2026"},{"name":"Shimron Hetmyer","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Johnson Charles","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Roston Chase","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Matthew Forde","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jason Holder","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Akeal Hosein","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shamar Joseph","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Brandon King","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Gudakesh Motie","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Rovman Powell","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sherfane Rutherford","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Quentin Sampson","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jayden Seales","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Romario Shepherd","role":"BAR","q":69,"roster":"ICC T20 WC 2026"}],"NEP":[{"name":"Rohit Paudel","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dipendra Singh Airee","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sandeep Lamichhane","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kushal Bhurtel","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Aasif Sheikh","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sundeep Jora","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Aarif Sheikh","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Basir Ahamad","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sompal Kami","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Karan KC","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Nandan Yadav","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Gulshan Jha","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Lalit Rajbanshi","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sher Malla","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Lokesh Bam","role":"MID","q":69,"roster":"ICC T20 WC 2026"}],"SCO":[{"name":"Richie Berrington","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tom Bruce","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Matthew Cross","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Bradley Currie","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Oliver Davidson","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Chris Greaves","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Zainullah Ihsan","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Michael Jones","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Michael Leask","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Finlay McCreath","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Brandon McMullen","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"George Munsey","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jack Jarvis","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mark Watt","role":"LEG","q":78,"roster":"ICC T20 WC 2026"},{"name":"Bradley Wheal","role":"MID","q":69,"roster":"ICC T20 WC 2026"}],"SA":[{"name":"Aiden Markram","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Corbin Bosch","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dewald Brevis","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Quinton de Kock","role":"WK","q":83,"roster":"ICC T20 WC 2026"},{"name":"Marco Jansen","role":"BAR","q":78,"roster":"ICC T20 WC 2026"},{"name":"George Linde","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Keshav Maharaj","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kwena Maphaka","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"David Miller","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Lungi Ngidi","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Anrich Nortje","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kagiso Rabada","role":"PACE","q":83,"roster":"ICC T20 WC 2026"},{"name":"Ryan Rickelton","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jason Smith","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tristan Stubbs","role":"MID","q":69,"roster":"ICC T20 WC 2026"}],"NZ":[{"name":"Mitchell Santner","role":"BAR","q":78,"roster":"ICC T20 WC 2026"},{"name":"Finn Allen","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mark Chapman","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Devon Conway","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jacob Duffy","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Lockie Ferguson","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Matt Henry","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kyle Jamieson","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Daryl Mitchell","role":"BAR","q":78,"roster":"ICC T20 WC 2026"},{"name":"James Neesham","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Glenn Phillips","role":"MID","q":78,"roster":"ICC T20 WC 2026"},{"name":"Rachin Ravindra","role":"BAR","q":83,"roster":"ICC T20 WC 2026"},{"name":"Tim Seifert","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ish Sodhi","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Cole McConchie","role":"MID","q":69,"roster":"ICC T20 WC 2026"}],"AFG":[{"name":"Rashid Khan","role":"LEG","q":83,"roster":"ICC T20 WC 2026"},{"name":"Noor Ahmad","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Abdullah Ahmadzai","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sediqullah Atal","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Fazalhaq Farooqi","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Rahmanullah Gurbaz","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mohammad Ishaq Rahimi","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shahidullah Kamal","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mohammad Nabi","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Gulbadin Naib","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Azmatullah Omarzai","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mujeeb Ur Rahman","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Darwish Rasooli","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ibrahim Zadran","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Zia Ur Rahman Sharifi","role":"MID","q":69,"roster":"ICC T20 WC 2026"}],"CAN":[{"name":"Dilpreet Bajwa","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ajayveer Hundal","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ansh Patel","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dilon Heyliger","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Harsh Thaker","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Jaskarandeep Singh","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kaleem Sana","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Kanwarpal Tathgur","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Navneet Dhaliwal","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Nicholas Kirton","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ravinderpal Singh","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Saad Bin Zafar","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shivam Sharma","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Shreyas Movva","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Yuvraj Samra","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"}],"UAE":[{"name":"Muhammad Waseem","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Alishan Sharafu","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Aryansh Sharma","role":"WK","q":69,"roster":"ICC T20 WC 2026"},{"name":"Dhruv Parashar","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Haider Ali","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Harshit Kaushik","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Junaid Siddique","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Mayank Kumar","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Muhammad Arfan","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Muhammad Farooq","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Muhammad Jawadullah","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Muhammad Zohaib","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Rohid Khan","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Sohaib Khan","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Simranjeet Singh","role":"LEG","q":69,"roster":"ICC T20 WC 2026"}],"AUS":[{"name":"Mitchell Marsh","role":"BAR","q":78,"roster":"ICC T20 WC 2026"},{"name":"Xavier Bartlett","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Cooper Connolly","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Tim David","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Ben Dwarshuis","role":"PACE","q":69,"roster":"ICC T20 WC 2026"},{"name":"Cameron Green","role":"BAR","q":83,"roster":"ICC T20 WC 2026"},{"name":"Nathan Ellis","role":"PACE","q":78,"roster":"ICC T20 WC 2026"},{"name":"Travis Head","role":"OPEN","q":83,"roster":"ICC T20 WC 2026"},{"name":"Josh Inglis","role":"WK","q":78,"roster":"ICC T20 WC 2026"},{"name":"Matthew Kuhnemann","role":"LEG","q":69,"roster":"ICC T20 WC 2026"},{"name":"Glenn Maxwell","role":"BAR","q":69,"roster":"ICC T20 WC 2026"},{"name":"Matthew Renshaw","role":"OPEN","q":69,"roster":"ICC T20 WC 2026"},{"name":"Marcus Stoinis","role":"MID","q":69,"roster":"ICC T20 WC 2026"},{"name":"Adam Zampa","role":"LEG","q":78,"roster":"ICC T20 WC 2026"},{"name":"Steve Smith","role":"OPEN","q":83,"roster":"ICC T20 WC 2026"}]},"notes":{"BAN":"Not present in the ICC 2026 T20 WC squad source; generated fictional players until a verified Bangladesh selection is imported.","AUS":"Domestic players are shared with the Australian national pool; freelance T20 squad players are imported only once."},"sources":["https://www.cricket.com.au/news/4500268","https://www.icc-cricket.com/tournaments/mens-t20-world-cup-2026/news/final-squads-for-icc-men-s-t20-world-cup-2026-confirmed?appview=true"]};
 // §7 TEAM SELECTION ----------------------------------------------------------
@@ -2739,10 +2803,10 @@ function noteBallChance(M,inn,ev,batter,bowler) {
  if(!ev.legal || ev.wkt || ev.runs>0 || !M.live)return;
  const n=(M.balls*37 + inn.wkts*19 + String(batter.id).length*13 + String(bowler.id).length*7)%211;
  let label='';
- if(n===0)label=`Dropped catch! ${batter.last} survives a chance off ${bowler.last}.`;
- else if(n===1)label=`LBW appeal turned down. ${bowler.last} cannot convince the umpire against ${batter.last}.`;
- else if(n===2)label=`Missed run-out chance. ${batter.last} survives.`;
- else if(n===3)label=`Stumping chance missed. ${batter.last} remains not out.`;
+ if(n===0)label=`Dropped catch! ${commentaryPlayerName(batter)} survives a chance off ${commentaryPlayerName(bowler)}.`;
+ else if(n===1)label=`LBW appeal turned down. ${commentaryPlayerName(bowler)} cannot convince the umpire against ${commentaryPlayerName(batter)}.`;
+ else if(n===2)label=`Missed run-out chance. ${commentaryPlayerName(batter)} survives.`;
+ else if(n===3)label=`Stumping chance missed. ${commentaryPlayerName(batter)} remains not out.`;
  if(label){ev.chance=label; (M.matchEvents||(M.matchEvents=[])).push({type:'chance',innings:M.innings.length,over:ev.o,ball:ev.b,text:label}); if(M.matchEvents.length>120)M.matchEvents.shift();}
 }
 function checkCareerRunMilestones(M,inn,sc) {
@@ -2955,7 +3019,7 @@ function simBall(M) {
     const breakNotes = M.log.splice(0, M.log.length - logBefore);
     ev.text = commentary(M, inn, ev, bowler, batter, sc);
     ev.short = ev.chance || shortComm(M, inn, ev, bowler, batter, sc);
-    ev.inn = M.innings.length; ev.score = `${inn.runs}/${inn.wkts}`; ev.bn = bowler.last;
+    ev.inn = M.innings.length; ev.score = `${inn.runs}/${inn.wkts}`; ev.bn = commentaryPlayerName(bowler);
     ev.cls = ev.chance ? 'chance' : ev.wkt ? 'w' : (ev.bat === 4 || ev.bat === 6) ? 'b' : '';
     M.log.unshift(ev);
     if (overEnded && !inn.closed) M.log.unshift({ cls:'sys', text: overSummary(M, inn) });
@@ -3072,9 +3136,11 @@ const ZONES = {
 };
 function pickZone(runs) { const k = runs >= 6 ? 1 : 0; return weightedPick(Object.keys(ZONES), z => ZONES[z].w[k]); }
 function zoneAngle(z, batter) { const a = ZONES[z].a + (rand() * 22 - 11); return Math.round(batter.hand === 'L' ? (360 - a) % 360 : (a + 360) % 360); }
-function ambiguousSurname(inn,p) {
- const same=inn.card.filter(c=>P(c.id) && P(c.id).last===p.last);
- return same.length>1 ? `${p.first} ${p.last}` : p.last;
+// Match commentary always identifies players by full name, including in saved ball logs.
+// This avoids a mix of surnames and full names when teammates share a surname.
+function commentaryPlayerName(p) {
+  if (!p) return 'Unknown player';
+  return [p.first, p.last].filter(Boolean).join(' ') || p.name || 'Unknown player';
 }
 // Shot description, shared by the Key moments line (shortComm) and the Every ball line (commentary),
 // so both always match the wagon wheel zone. Present tense, batter as subject. Phrases are picked by
@@ -3110,34 +3176,34 @@ function shotPhrase(inn, ev, bowler, r) {
   return text;
 }
 function shortComm(M, inn, ev, bowler, batter, sc) {
-  if (ev.wkt) return `${ambiguousSurname(inn,batter)} ${dismissText(sc.out)} ${sc.r} (${sc.b})`;
+  if (ev.wkt) return `${commentaryPlayerName(batter)} ${dismissText(sc.out)} ${sc.r} (${sc.b})`;
   if (ev.extra === 'wd') return ev.runs > 1 ? 'Wide, runs away for five' : 'Wide';
   if (ev.extra === 'nb') return 'No-ball' + (ev.bat ? `, ${ev.bat} off the bat` : '');
   if (ev.extra === 'b' || ev.extra === 'lb') return `${ev.runs} ${ev.extra === 'b' ? 'bye' : 'leg-bye'}${ev.runs > 1 ? 's' : ''}`;
   rand();   // keeps the random sequence the same as before; the phrase is shared with the long line
-  let t = `${ambiguousSurname(inn,batter)} ${ev.phrase || shotPhrase(inn, ev, bowler, 0)}`;
-  if (sc.r >= 100 && sc.r - ev.bat < 100) t += `. Hundred for ${batter.last}`;
-  else if (sc.r >= 50 && sc.r - ev.bat < 50) t += `. Fifty for ${batter.last}`;
+  let t = `${commentaryPlayerName(batter)} ${ev.phrase || shotPhrase(inn, ev, bowler, 0)}`;
+  if (sc.r >= 100 && sc.r - ev.bat < 100) t += `. Hundred for ${commentaryPlayerName(batter)}`;
+  else if (sc.r >= 50 && sc.r - ev.bat < 50) t += `. Fifty for ${commentaryPlayerName(batter)}`;
   return t;
 }
 function commentary(M, inn, ev, bowler, batter, sc) {
-  const head = `${ev.o}.${Math.min(6, ev.b)} ${bowler.last} to ${ambiguousSurname(inn,batter)}, `;
-  if (ev.wkt) return head + `OUT! ${ambiguousSurname(inn,batter)} ${dismissText(sc.out)} for ${sc.r} (${sc.b}). ${inn.runs}/${inn.wkts}.`;
+  const head = `${ev.o}.${Math.min(6, ev.b)} ${commentaryPlayerName(bowler)} to ${commentaryPlayerName(batter)}, `;
+  if (ev.wkt) return head + `OUT! ${commentaryPlayerName(batter)} ${dismissText(sc.out)} for ${sc.r} (${sc.b}). ${inn.runs}/${inn.wkts}.`;
   if (ev.extra === 'wd') return head + (ev.runs > 1 ? 'wide and it races away for five wides.' : 'wide, drifting down leg.');
   if (ev.extra === 'nb') return head + 'no-ball, overstepped' + (ev.bat ? `, and ${ev.bat} off the bat.` : '.');
   if (ev.extra === 'b' || ev.extra === 'lb') return head + `${ev.runs} ${ev.extra === 'b' ? 'bye' : 'leg-bye'}${ev.runs > 1 ? 's' : ''}.`;
   ev.phrase = shotPhrase(inn, ev, bowler, rand());
   let t = ev.bat === 4 ? `FOUR, ${ev.phrase.replace(/ for four$/, '')}.` : ev.bat === 6 ? `SIX, ${ev.phrase.replace(/ for six$/, '')}.` : `${ev.phrase}.`;
-  if (ev.bat < 4 && sc.r >= 50 && sc.r - ev.bat < 50) t += ` That brings up a fifty for ${batter.last}.`;
-  if (sc.r >= 100 && sc.r - ev.bat < 100) t += ` HUNDRED for ${batter.last}! A superb innings.`;
-  else if (sc.r >= 50 && sc.r - ev.bat < 50 && ev.bat >= 4) t += ` Fifty up for ${batter.last}.`;
+  if (ev.bat < 4 && sc.r >= 50 && sc.r - ev.bat < 50) t += ` That brings up a fifty for ${commentaryPlayerName(batter)}.`;
+  if (sc.r >= 100 && sc.r - ev.bat < 100) t += ` HUNDRED for ${commentaryPlayerName(batter)}! A superb innings.`;
+  else if (sc.r >= 50 && sc.r - ev.bat < 50 && ev.bat >= 4) t += ` Fifty up for ${commentaryPlayerName(batter)}.`;
   return head + t;
 }
 function overSummary(M, inn) {
   const last = inn.overRuns[inn.overRuns.length - 1] || 0;
   const bw = P(inn.lastBowler), f = inn.bw[inn.lastBowler];
   let t = `End of over ${inn.overNo}: ${last} run${last === 1 ? '' : 's'}. ${teamDef(inn.bat).short || teamDef(inn.bat).id} ${inn.runs}/${inn.wkts}.`;
-  if (f) t += ` ${bw.last} ${oversStr(f.balls)}-${f.m}-${f.r}-${f.w}.`;
+  if (f) t += ` ${commentaryPlayerName(bw)} ${oversStr(f.balls)}-${f.m}-${f.r}-${f.w}.`;
   if (inn.target && M.fmt !== 'FC') { const need = inn.target - inn.runs, bl = mOvers(M) * 6 - inn.balls; if (need > 0) t += ` Need ${need} from ${bl}.`; }
 
   return t;
@@ -4221,7 +4287,14 @@ function addWorldFixtures(year, fixtures, windows, nextId) {
   const starts = [7, 77, 147];
   starts.forEach((base, block) => worldTourPairs(year, block).forEach(([home, away], idx) => {
     const tourId = `${year}-tour-${block}-${idx}`;
-    const formats = block === 1 ? [['ODI',3],['T20I',3]] : [['TEST',2],['ODI',3],['T20I',3]];
+    // New-season tour lengths vary by rivalry and participating nations. Existing
+    // fixtures in loaded careers are never regenerated or modified.
+    const marquee = ['ENG','IND','SA','NZ','PAK'].includes(home) && ['ENG','IND','SA','NZ','PAK'].includes(away);
+    const established = WTC_TEAMS.includes(home) && WTC_TEAMS.includes(away);
+    const testCount = block === 1 ? 0 : (marquee && block === 0 && (year + idx) % 3 === 0 ? 4 : established ? (year + block + idx) % 3 === 0 ? 3 : 2 : 1);
+    const odiCount = (year + block + idx) % 5 === 0 ? 2 : 3;
+    const t20Count = (year + block * 2 + idx) % 4 === 0 ? 2 : 3;
+    const formats = [...(testCount ? [['TEST',testCount]] : []), ['ODI',odiCount], ['T20I',t20Count]];
     let offset = 0;
     const schedule = [];
     formats.forEach(([comp, count]) => {
@@ -5719,7 +5792,11 @@ function recordNegotiationBreakdown(p,n) {
   p.noTalksUntil=game.day+cooldown;
 }
 function startNegotiation(id, mode) {
-  const p = P(id), ag = agentOf(p), per = ensurePersona(p);
+  const p = P(id);
+  if(!p||p.retired)return {ok:false,reason:'Player is retired.'};
+  const retirementRefusal=retirementContractBlock(p);
+  if(retirementRefusal)return {ok:false,reason:retirementRefusal};
+  const ag = agentOf(p), per = ensurePersona(p);
   if (negotiationSuspension(p)) return { ok: false, suspended:true, reason: `${p.last}'s camp is not taking calls right now.` };
   if (mode === 'extend' && p.wantsOut) return { ok: false, reason: `${p.last} has asked for a trade and will not discuss a new deal.` };
   const own = p.teamId === U();
@@ -5757,6 +5834,7 @@ function closeNegotiation() {
   const n = game.neg; if (!n) return null;
   const p = P(n.id);
   let msg = null;
+  if (n.done === 'agreed' && retirementContractBlock(p)) { game.neg=null; return retirementContractBlock(p); }
   if (n.done === 'agreed') {
     const { salary, years } = n.final;
     if (salary > capSpace(U())+(n.mode==='sign'?0:p.contract?.salary||0)) { msg='Insufficient salary cap space.'; }
@@ -7374,6 +7452,144 @@ function aiMinimumSquadRepair() {
   });
   return results;
 }
+// Build 168: read-only, whole-world rating distribution audit. Ratings are derived
+// from existing skills; snapshots hold aggregates only, not player identities.
+// Never alter ratings, development, RNG or career results from this diagnostic.
+function eliteRatingAudit() {
+  if (!game || !game.players) return null;
+  const bands = [90, 95, 97];
+  const empty = () => ({players:0, at90:0, at95:0, at97:0});
+  const aggregate = (dst, n) => {dst.players++; for(const x of bands) if(n>=x) dst['at'+x]++;};
+  const formats=Object.fromEntries(FMT_LIST.map(f=>[f,empty()]));
+  const club=Object.fromEntries(TEAM_DEFS.map(t=>[t.id,{name:t.name,...empty()}]));
+  const ages=Object.fromEntries(['Under 23','23–27','28–32','33–37','38+'].map(a=>[a,empty()]));
+  const populations={domestic:empty(),international:empty(),freeAgents:empty()};
+  const peak=empty();
+  const talent={current97:0,potential97:0};
+  const roster=Object.fromEntries(TEAM_DEFS.map(t=>[t.id,{FC:empty(),OD:empty(),T20:empty()}]));
+  for(const p of Object.values(game.players)) {
+    if (!p || p.retired || p.prospect || p.academy || !p.sk) continue;
+    const a=Number(p.age)||0;
+    const ageKey=a<23?'Under 23':a<=27?'23–27':a<=32?'28–32':a<=37?'33–37':'38+';
+    const scores=FMT_LIST.map(f=>overall(p,f));
+    const max=Math.max(...scores);
+    const groupKey=p.teamId && club[p.teamId]?'domestic':p.teamId && teamDef(p.teamId)?.intl?'international':'freeAgents';
+    aggregate(populations[groupKey],max);aggregate(peak,max);aggregate(ages[ageKey],max);
+    if(max>=97) talent.current97++;
+    if(p.pot>=97) talent.potential97++;
+    if(p.teamId && club[p.teamId]) aggregate(club[p.teamId],max);
+    FMT_LIST.forEach((f,i)=>{
+      aggregate(formats[f],scores[i]);
+      if(p.teamId && roster[p.teamId]) aggregate(roster[p.teamId][f],scores[i]);
+    });
+  }
+  return {year:game.year,season:game.season?.label||'',population:'Active, non-prospect players (domestic clubs, international teams and free agents). Thresholds use displayed overall ratings.',peak,formats,populations,ages,clubs:club,rosters:roster,talent};
+}
+function recordEliteRatingSnapshot() {
+  if(!game)return;
+  const current=eliteRatingAudit();if(!current)return;
+  const history=Array.isArray(game.eliteRatingHistory)?game.eliteRatingHistory:[];
+  if(history.some(x=>x.year===game.year))return;
+  // Preserve the first available baseline and subsequent new-season snapshots.
+  history.push(current);
+  game.eliteRatingHistory=history.slice(-30);
+}
+function downloadEliteRatingAudit() {
+  if(!game)return;
+  const data={report:'Legacy Cricket Elite Rating Audit',reportVersion:1,build:BUILD,
+    exportedAt:new Date().toISOString(),current:eliteRatingAudit(),
+    snapshots:Array.isArray(game.eliteRatingHistory)?game.eliteRatingHistory:[],
+    limitations:'Historical per-season snapshots begin only when Build 168 first records them. Active player totals exclude retired players and unsigned draft/academy prospects. No historic ratings are reconstructed.'};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`legacy-cricket-rating-audit-${game.year}-B168.json`;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  flash('Elite rating audit exported. No player ratings were changed.');
+}
+function eliteRatingAuditPanel() {
+  const a=eliteRatingAudit();if(!a)return '';
+  const v=r=>`${r.at90} / ${r.at95} / ${r.at97}`;
+  const formats=FMT_LIST.map(f=>`<div class="kv"><span>${f==='FC'?'Shield / Test':f==='OD'?'One-Day / ODI':'T20 / T20I'} · ${a.formats[f].players} players</span><b>${v(a.formats[f])}</b></div>`).join('');
+  const clubs=TEAM_DEFS.map(t=>`<div class="kv"><span>${esc(t.name)} · ${a.clubs[t.id].players} players</span><b>${v(a.clubs[t.id])}</b></div>`).join('');
+  const ages=Object.entries(a.ages).map(([k,r])=>`<div class="kv"><span>${esc(k)} · ${r.players} players</span><b>${v(r)}</b></div>`).join('');
+  const history=Array.isArray(game.eliteRatingHistory)?game.eliteRatingHistory:[];
+  const trends=history.slice(-10).map(h=>`<div class="kv"><span>${esc(h.season||String(h.year))} · ${h.peak.players} active</span><b>${v(h.peak)}</b></div>`).join('');
+  return panel('Elite rating distribution · Build 168',`<div class="pb"><p class="s muted" style="margin-top:0">Active players across the cricket world. Columns: <b>90+ / 95+ / 97+</b>. Each player is counted once in the peak column, and once per format in format columns.</p><div class="kv"><span>All active players · ${a.peak.players}</span><b>${v(a.peak)}</b></div><div class="kv"><span>Potential 97+ (not current rating)</span><b>${a.talent.potential97}</b></div><button class="btn pri block" onclick="downloadEliteRatingAudit()">Export full ratings audit (.json)</button></div><div class="mhead">By format</div>${formats}<div class="mhead">Domestic clubs · best format</div>${clubs}<div class="mhead">Age groups · best format</div>${ages}<div class="mhead">Season-start trend · best format</div>${trends||'<div class="pb s muted">No snapshots yet. The first snapshot is recorded at the next new season; export current ratings now for a baseline.</div>'}<div class="pb xs muted">Snapshots are compact, saved once per season and do not modify player skills. Older seasons without snapshots cannot be reconstructed.</div>`,{flush:true});
+}
+// Build 172: aggregate calibration audit. Derive only from actual fixture results,
+// recorded scorecards and current contract rosters. Never estimate unsaved seasons.
+const CALIBRATION_COMPS = ['SHIELD','ODC','T20C','TEST','ODI','T20I','WC','CWC'];
+function competitionCalibrationSnapshot() {
+  if (!game || !game.season) return null;
+  const result = { year:game.year, season:game.season.label, competitions:{},
+    clubs:[], champions:{}, source:'Completed fixtures in this season; no historical reconstruction.' };
+  const fixtures=game.season.fixtures||[];
+  for(const id of CALIBRATION_COMPS){
+    const all=fixtures.filter(f=>f.comp===id), done=all.filter(f=>!!f.result);
+    const win=done.filter(f=>!!f.result.winner), draws=done.filter(f=>f.result.draw&&!f.result.winner),
+      ties=done.filter(f=>f.result.tie&&!f.result.winner), noResults=done.filter(f=>f.result.noResult);
+    result.competitions[id]={scheduled:all.length,completed:done.length,decided:win.length,
+      draws:draws.length,ties:ties.length,noResults:noResults.length,
+      drawPercent:done.length?+(100*draws.length/done.length).toFixed(1):null};
+  }
+  result.champions={...game.season.champions};
+  // Depth diagnostics describe the current club composition; they are not an
+  // accusation that a particular roster is uncompetitive or an instruction to alter it.
+  for(const t of TEAM_DEFS){
+    const sq=squadOf(t.id), roles=startingComposition(t.id);
+    const deficiencies=Object.entries(START_ROLE_TARGETS).filter(([k,n])=>(roles[k]||0)<n)
+      .map(([k,n])=>`${k} ${roles[k]||0}/${n}`);
+    const veterans=sq.filter(p=>p.age>=34).length;
+    const expiring=sq.filter(p=>p.contract&&p.contract.years<=1).length;
+    result.clubs.push({id:t.id,name:t.name,managed:t.id===U(),size:sq.length,
+      payroll:payroll(t.id),capSpace:capSpace(t.id),roles,veterans34Plus:veterans,
+      contractsOneYear:expiring,shortages:deficiencies,
+      eligible:sq.length>=SQUAD_MIN&&sq.length<=SQUAD_MAX&&payroll(t.id)<=SALARY_CAP});
+  }
+  return result;
+}
+function recordCompetitionCalibrationSnapshot() {
+  if (!game) return;
+  const rec=competitionCalibrationSnapshot(); if(!rec)return;
+  const list=Array.isArray(game.calibrationHistory)?game.calibrationHistory:[];
+  const index=list.findIndex(x=>x.year===rec.year);
+  if(index>=0)list[index]=rec; else list.push(rec);
+  game.calibrationHistory=list.slice(-30);
+}
+function calibrationAuditPanel(){
+  const a=competitionCalibrationSnapshot();if(!a)return '';
+  const summary=CALIBRATION_COMPS.map(id=>{
+    const r=a.competitions[id];if(!r||!r.scheduled)return '';
+    return `<div class="kv"><span>${esc(COMPS[id]?.name||id)} · ${r.completed}/${r.scheduled} completed</span><span>${r.draws} draws · ${r.noResults} NR</span></div>`;
+  }).join('');
+  const rosters=a.clubs.map(t=>`<div class="kv"><span>${esc(t.name)} · ${t.size} players · ${t.veterans34Plus} aged 34+</span><span>${t.shortages.length?'<span class="warn-t">'+esc(t.shortages.join(', '))+'</span>':'Role cover OK'}</span></div>`).join('');
+  const history=(Array.isArray(game.calibrationHistory)?game.calibrationHistory:[]).slice(-10).reverse();
+  const trends=history.map(h=>{
+    const test=h.competitions?.TEST, shield=h.competitions?.SHIELD;
+    return `<div class="kv"><span>${esc(h.season||String(h.year))}</span><span>Tests ${test?.draws??0}/${test?.completed??0} drawn · Shield ${shield?.draws??0}/${shield?.completed??0} drawn</span></div>`;
+  }).join('');
+  return panel('Competition and AI calibration · Build 172',
+    `<div class="pb"><p class="s muted" style="margin-top:0">Read-only evidence from completed fixtures and current squads. Historical snapshots are recorded at season review, beginning with this build. No match probabilities or player ratings are changed.</p>
+    <button class="btn pri block" onclick="downloadCalibrationAudit()">Export calibration report (.json)</button></div>
+    <div class="mhead">Match outcomes this season</div>${summary||'<div class="pb s muted">No scheduled competition results yet.</div>'}
+    <div class="mhead">Domestic club succession and positional cover</div>${rosters}
+    <div class="mhead">Completed season history · draws</div>${trends||'<div class="pb s muted">No season-end calibration snapshot yet.</div>'}
+    <div class="pb xs muted">Incomplete seasons and historical results without retained fixtures cannot be included. A shortage is measured against new-career role targets and does not automatically trigger recruitment.</div>`,{flush:true});
+}
+function downloadCalibrationAudit(){
+  if(!game)return;
+  const report={report:'Legacy Cricket Competition and AI Calibration',reportVersion:1,build:BUILD,
+    exportedAt:new Date().toISOString(),current:competitionCalibrationSnapshot(),
+    history:Array.isArray(game.calibrationHistory)?game.calibrationHistory:[],
+    leagueHistory:(game.history||[]).map(x=>({year:x.year,champions:x.champions})),
+    matchEngine:matchEngineDiagnosticReport(),
+    limitations:'No synthetic matches, no invented results. Previous seasons without snapshots have only available league champions. Detailed batting data covers retained scorecards only.'};
+  const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`legacy-cricket-calibration-${game.year}-B172.json`;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  flash('Calibration report exported. No gameplay settings changed.');
+}
 function careerDiagnosticReport() {
   if(!game) return null;
   const market=recruitmentCoverage();
@@ -7512,6 +7728,7 @@ function balancedDraftRole() {
 // §13 OFF-SEASON ------------------------------------------------------------------
 function endSeason() {
   archiveAssociateQualification();
+  recordCompetitionCalibrationSnapshot();
   game.phase = 'review';
   settleSeasonFinances();
   const awards = computeAwards();
@@ -7616,21 +7833,63 @@ function developPlayer(p) {
   p.pot = Math.max(p.pot, peakOvr(p));
   return peakOvr(p) - cur;
 }
+// Build 167: retirement intentions are persistent, forward-looking and independent
+// of contract salary. All older saves gain these fields lazily without migration.
+function retirementRoleAge(p) {
+  // Fast bowlers face an earlier physical retirement curve; spin and batting
+  // specialists can sustain professional careers longer.
+  return isPace(p) ? -2 : isSpin(p) ? 2 : group(p)==='WK' ? 0 : 1;
+}
+function retirementChance(p) {
+  if(!p || p.retired || p.prospect) return 0;
+  const effectiveAge=p.age-retirementRoleAge(p);
+  if(effectiveAge<33)return 0;
+  let chance=effectiveAge<36 ? .018+(effectiveAge-33)*.022
+    : effectiveAge<39 ? .09+(effectiveAge-36)*.065
+    : effectiveAge<43 ? .30+(effectiveAge-39)*.10
+    : .76+(effectiveAge-43)*.08;
+  const skill=peakOvr(p);
+  if(skill>=90)chance*=.63;
+  else if(skill>=83)chance*=.78;
+  if(p.injury)chance*=1.25;
+  if(!p.teamId)chance*=1.18;
+  if(p.fitness!=null&&p.fitness<65)chance*=1.12;
+  return clamp(chance,0,.98);
+}
+function retirementStatus(p){
+  if(!p)return 'active';
+  if(p.retired)return 'retired';
+  return p.retirement?.status==='announced'?'announced':p.retirement?.status==='considering'?'considering':'active';
+}
+function retirementContractBlock(p){
+  return retirementStatus(p)==='announced' ? `${pname(p)} has announced retirement at the end of this season and will not sign another contract.` : '';
+}
+function assessRetirementIntentions(){
+  if(!game||!game.players)return;
+  for(const p of Object.values(game.players)){
+    if(p.retired||p.prospect)continue;
+    // One assessment per season, including careers imported from older builds.
+    if(p.retirement?.assessedYear===game.year)continue;
+    const previous=retirementStatus(p);
+    if(previous==='announced')continue;
+    const prob=retirementChance(p);
+    let next='active';
+    const roll=rand();
+    if(roll<prob*.66)next='announced';
+    else if(roll<Math.min(.99,prob*1.65))next='considering';
+    p.retirement={status:next,assessedYear:game.year,announcedYear:next==='announced'?game.year:null};
+    if(next==='announced'){
+      if(p.teamId===U() || (peakOvr(p)>=92 && p.nat!=='AUS')) addNews('Retirement',`${pname(p)} announces retirement`,`${pname(p)} will retire at the end of the ${game.year}–${String((game.year+1)%100).padStart(2,'0')} season. No further contract extensions will be accepted.`);
+      if(p.teamId===U())logTx(`${pname(p)} announced retirement at season's end.`);
+    }else if(next==='considering'&&p.teamId===U()&&previous!=='considering'){
+      addNews('Retirement',`${pname(p)} considering retirement`,`${pname(p)} is assessing whether to continue beyond this season. A short extension may still be possible.`);
+    }
+  }
+}
 function retires(p) {
-  // B110: Never retire a player merely for turning 30 or being unsigned.
-  // Late-career attrition responds to age, condition and performance.
-  const age=p.age, o=peakOvr(p), h=hash01('retire-b110:'+p.id);
-  let ch=0;
-  if(age>=34)ch=0.018+(age-34)*0.025;
-  if(age>=38)ch+=0.075+(age-38)*0.045;
-  if(age>=42)ch+=0.12+(age-42)*0.09;
-  if(age>=47)ch=Math.max(ch,.88);
-  if(!p.teamId && age>=35)ch+=0.035;
-  if(o<65+RATING_SHIFT && age>=35)ch+=0.055;
-  if(o>=83)ch*=0.55;
-  if(age<=32)ch=0;
-  ch*=0.8+h*0.4;
-  return rand()<Math.min(.96,ch);
+  // An announced retirement is honoured at season end; an unannounced player
+  // is not randomly retired after the GM has already planned a replacement.
+  return retirementStatus(p)==='announced';
 }
 function runDevelopment() {
   const rep = { up: [], down: [], retired: [] };
@@ -7643,7 +7902,7 @@ function runDevelopment() {
     if (retires(p)) {
       const wasMine = p.teamId === U();
       rep.retired.push({ id: p.id, team: p.teamId, mine: wasMine });
-      p.retired = true; p.teamId = null; p.contract = null; removeFromUserXI(p.id);
+      p.retired = true; p.retiredYear=game.year; p.retiredTeam= p.teamId; p.teamId = null; p.contract = null; removeFromUserXI(p.id);
       if (game.captain === p.id) game.captain = null;
     }
   });
@@ -7680,7 +7939,7 @@ function contractManagerSettingsPanel(){
   return panel('Contract Manager',`<div class="flex wrap" style="gap:7px">${choices.map(([id,label])=>`<button class="btn sm ${mode===id?'pri':''}" onclick="setContractManagerMode('${id}')">${label}</button>`).join('')}</div><div class="xs muted" style="margin-top:8px">${manager?`${esc(manager.first+' '+manager.last)} · rated ${manager.rating}. `:'No manager appointed. Hire one under Club › Staff. '}${mode==='manual'?'You control all negotiations.':mode==='assisted'?'Your manager recommends renewal terms; you approve each agreement.':'Your manager completes affordable renewals; exceptions remain for your decision.'} Existing contracts are not reset.</div>${!manager&&mode!=='manual'?'<button class="btn sm" style="margin-top:9px" onclick="staffMarketSheet(&quot;contract&quot;)">Hire Contract Manager</button>':''}`);
 }
 function contractManagerOffer(e){
-  const p=P(e.id),manager=staffIn(U(),'contract');if(!p||!manager||isDoNotRenew(p.id)||p.wantsOut||negotiationSuspension(p))return null;
+  const p=P(e.id),manager=staffIn(U(),'contract');if(!p||!manager||isDoNotRenew(p.id)||p.wantsOut||retirementContractBlock(p)||negotiationSuspension(p))return null;
   // A good negotiator narrows salary expectations, never promises a free or below-floor deal.
   const saving=Math.max(0,Math.min(0.035,(manager.rating-55)*0.00075));
   const salary=Math.max(MIN_SALARY,Math.round(e.ask*(1-saving)/5000)*5000);
@@ -7690,7 +7949,7 @@ function contractManagerOffer(e){
 function approveContractManagerOffer(id){
   const e=game.offseason?.expiring?.find(x=>x.id===id),p=P(id);
   if(!e||!p||e.status!=='pending'||!e.managerOffer)return;
-  if(isDoNotRenew(id)||p.wantsOut){flash('Player is excluded from delegated renewal.');return;}
+  if(isDoNotRenew(id)||p.wantsOut||retirementContractBlock(p)){flash(retirementContractBlock(p)||'Player is excluded from delegated renewal.');return;}
   const offer=e.managerOffer;
   const committed=payroll(U())-(p.contract?.salary||0);
   if(committed+offer.salary>SALARY_CAP){flash('Not enough salary cap space. Negotiate manually.');return;}
@@ -7707,7 +7966,7 @@ function runContractManagerRenewals(){
   });
   let signed=0,proposed=0;
   for(const e of candidates){
-    if(isDoNotRenew(e.id)||P(e.id)?.wantsOut)continue;
+    if(isDoNotRenew(e.id)||P(e.id)?.wantsOut||retirementContractBlock(P(e.id)))continue;
     const offer=e.managerOffer||contractManagerOffer(e);if(!offer)continue;
     const p=P(e.id);
     const other=payroll(U())-(p.contract?.salary||0);
@@ -7728,6 +7987,7 @@ function processContracts() {
   const expiring = [];
   Object.values(game.players).forEach(p => {
     if (p.retired || !p.teamId || !p.contract) return;
+    if(retirementStatus(p)==='announced')return;
     p.contract.years--;
     if (p.contract.years > 0) return;
     if (p.teamId === U()) { const per = ensurePersona(p); expiring.push({ id: p.id, ask: Math.round(askingSalary(p) * (p.morale < 50 ? 1.15 : 1) * (per === 'loyal' ? 0.9 : per === 'ambitious' ? 1.1 : 1) / 5000) * 5000, years: p.age >= 32 ? 1 : 2, status: 'pending' }); return; }
@@ -7760,6 +8020,7 @@ function resignExpiring(id) {
   const e = game.offseason.expiring.find(x => x.id === id);
   if (!e) return;
   const p = P(id);
+  if(retirementContractBlock(p)){flash(retirementContractBlock(p));return;}
   const others = payroll(U()) - p.contract.salary;
   if (others + e.ask > SALARY_CAP) { flash('Not enough cap space to re-sign him at that price.'); return; }
   p.contract = { salary: e.ask, years: e.years }; e.status = 'signed';
@@ -7839,6 +8100,8 @@ function startNewSeason() {
   game.phase = 'season'; game.offseason = null;
   _seasonSnapshotDue = game.meta.slot || 1;
   addNews('League', `${game.season.label} season begins`, 'New fixtures are out and the board has set fresh objectives.');
+  assessRetirementIntentions();
+  recordEliteRatingSnapshot();
 }
 
 function offseasonContinue() {
@@ -8088,10 +8351,38 @@ const Store = {
     return false;
   },
   async del(slot) {
-    // Do not allow an earlier background replica to recreate a deleted slot.
+    // B169: do not remove the only local copy if IndexedDB deletion fails.
+    // Otherwise the old database career reappears in the slot after a reload.
     await this._idbChain.catch(()=>false);
-    if (await this.dbReady()) { try { await this._tx('readwrite', st => { st.delete('slot' + slot); st.delete('meta' + slot); st.delete('recovery' + slot); st.delete('seasonA' + slot); st.delete('seasonB' + slot); st.delete('undo' + slot); }); } catch (e) {} }
+    const ready = await this.dbReady();
+    if (ready) {
+      try {
+        await this._tx('readwrite', st => {
+          for (const key of ['slot','meta','recovery','seasonA','seasonB','undo']) st.delete(key + slot);
+          return null;
+        });
+        // Confirm database deletion before discarding the independent local mirror.
+        const remaining = await this._tx('readonly', st => {
+          const out = {}; const keys = ['slot','recovery','seasonA','seasonB','undo'];
+          for (const key of keys) { const r=st.get(key+slot); r.onsuccess=()=>{ out[key]=r.result; }; }
+          return {get result(){return out;}};
+        });
+        if (remaining && Object.values(remaining).some(Boolean)) throw new Error('Database deletion could not be confirmed');
+      } catch (e) {
+        this.lastError = 'Career deletion was not confirmed. Your local career was preserved. ' + String(e);
+        return false;
+      }
+    } else if (this.idbOk || !!this.db) {
+      this.lastError = 'Browser database connection unavailable. Career deletion was cancelled to protect your save.';
+      return false;
+    } else if (window.indexedDB) {
+      // Safari may have temporarily suspended the database; do not silently
+      // delete only localStorage and leave a hidden database copy behind.
+      this.lastError = 'Browser database is unavailable. Reopen the game before deleting this career.';
+      return false;
+    }
     clearLocalSaveMirror(slot);
+    return true;
   },
   // Build 158: start-of-season saves. Two kept per slot in the browser database only
   // (never localStorage). A newer season moves A to B; the same season replaces A.
@@ -8375,10 +8666,21 @@ function emergencySaveSnapshot() {
 // B135: verification must not trigger an IndexedDB timeout if the newest
 // revision is already readable byte-for-byte from the local mirror.
 async function verifiedCareerSnapshot(slot,revision,created) {
-  const local=Store.localCandidates(slot).find(c=>c.info.created===created && c.info.revision>=revision);
+  // B169: a header alone does not establish that a career is restorable.
+  // Fully parse the candidate and cross-check its career identity and revision.
+  // This keeps the fast local-first path for healthy Safari saves.
+  const valid = c => {
+    if (!c || !c.info || c.info.created !== created || c.info.revision < revision) return false;
+    const g = c.info.data;
+    return !!(g && validCareerObject(g) && String(g.meta.created || '') === created &&
+      Number(g.meta.saveRevision || 0) >= revision &&
+      Number(g.meta.saveRevision || 0) === c.info.revision &&
+      Number(g.meta.slot || slot) === slot);
+  };
+  const local=Store.localCandidates(slot).find(valid);
   if(local) return local;
   const rows=await Store.candidates(slot);
-  return rows.find(c=>c.info.created===created && c.info.revision>=revision)||null;
+  return rows.find(valid)||null;
 }
 function saveStatusUpdate(message, bad=false) {
   const el = document.getElementById('save-centre-result');
@@ -8717,6 +9019,8 @@ function natTag(p) {
 // Status is plain coloured text, and nothing at all when the player is fit and available.
 function statusChip(p) {
   if (p.retired) return '<span class="tag">Retired</span>';
+  if (retirementStatus(p)==='announced')return '<span class="tag warn">Retiring at season end</span>';
+  if (retirementStatus(p)==='considering')return '<span class="tag info">Considering retirement</span>';
   if (p.injury) return `<span class="tag bad">Injured ${Math.max(1, Math.ceil((p.injury.until - game.day) / 7))}w</span>`;
   if (p.natDuty) return '<span class="tag info">Australia</span>';
   if (p.rest) return '<span class="tag info">Rested</span>';
@@ -8928,7 +9232,11 @@ function downloadCareerJson(str,filename) {
 }
 async function deleteSlot(i) {
   if(!confirm(`Delete the career in slot ${i}? This cannot be undone unless you have downloaded its backup file.`))return;
-  await Store.del(i);openLoadCareer();
+  if (!(await Store.del(i))) {
+    flash('Career deletion not confirmed. Your save has been preserved.');
+    return;
+  }
+  openLoadCareer();
 }
 // Build 163: the gear sheet. Save and Exit first; everything else is quiet and grouped.
 // Save writes to this browser and checks it. If the browser cannot keep saves, the same
@@ -10254,7 +10562,7 @@ function renderDiagnostics(){
   const e=matchEngineDiagnosticReport();
   const gaps=d.teams.filter(t=>t.underMinimum||t.overCap);
   const rows=d.teams.map(t=>`<div class="kv"><span>${esc(t.name)} · ${t.squad} players · WK ${t.roles.WK} · PACE ${t.roles.PACE} · SPIN ${t.roles.SPIN}</span><span>${money(t.capSpace)} cap ${t.underMinimum||t.overCap?'<b class="loss">CHECK</b>':''}</span></div>`).join('');
-  return `${panel('Match engine diagnostics',`<p class="s muted">Export retained batting scorecards by position (1–11), early dismissals, run shares and individual player performance. This report is read-only. Earlier seasons and background fixtures without scorecards cannot be reconstructed.</p><div class="pb"><button class="btn pri" onclick="downloadMatchEngineDiagnostic()">Export match engine report (.json)</button></div><p class="xs muted">${e.sample.analysedMatches} retained matches available · ${e.sample.retainedScorecards} stored scorecards. Share it for analysis. Career backup files are in Saves.</p>`,{flush:true})}${panel('Career diagnostic',`<p class="s muted">Export a read-only JSON snapshot of this career for engine and long-term recruitment analysis. It includes player ratings, club composition, contracts, cap positions, free agents and league history. It does not change the save.</p><div class="pb"><button class="btn pri" onclick="downloadCareerDiagnostic()">Export diagnostic report (.json)</button></div><p class="s">${gaps.length?gaps.length+' clubs require attention':'All domestic clubs meet the numerical squad and salary checks.'}</p>`,{flush:true})}${panel('Domestic free agents by role',`<div class="rows">${Object.entries(d.market.domesticAvailableByRole).map(([g,n])=>`<div class="kv"><span>${g}</span><b>${n}</b></div>`).join('')}</div>`,{flush:true})}${panel('Domestic squad health',`<div class="rows">${rows}</div>`,{flush:true})}`;
+  return `${calibrationAuditPanel()}${eliteRatingAuditPanel()}${panel('Match engine diagnostics',`<p class="s muted">Export retained batting scorecards by position (1–11), early dismissals, run shares and individual player performance. This report is read-only. Earlier seasons and background fixtures without scorecards cannot be reconstructed.</p><div class="pb"><button class="btn pri" onclick="downloadMatchEngineDiagnostic()">Export match engine report (.json)</button></div><p class="xs muted">${e.sample.analysedMatches} retained matches available · ${e.sample.retainedScorecards} stored scorecards. Share it for analysis. Career backup files are in Saves.</p>`,{flush:true})}${panel('Career diagnostic',`<p class="s muted">Export a read-only JSON snapshot of this career for engine and long-term recruitment analysis. It includes player ratings, club composition, contracts, cap positions, free agents and league history. It does not change the save.</p><div class="pb"><button class="btn pri" onclick="downloadCareerDiagnostic()">Export diagnostic report (.json)</button></div><p class="s">${gaps.length?gaps.length+' clubs require attention':'All domestic clubs meet the numerical squad and salary checks.'}</p>`,{flush:true})}${panel('Domestic free agents by role',`<div class="rows">${Object.entries(d.market.domesticAvailableByRole).map(([g,n])=>`<div class="kv"><span>${g}</span><b>${n}</b></div>`).join('')}</div>`,{flush:true})}${panel('Domestic squad health',`<div class="rows">${rows}</div>`,{flush:true})}`;
 }
 function renderFA() {
   // Upgrade an existing save already parked at the 2026-27 (or later) market.
@@ -10341,6 +10649,7 @@ function showPlayer(id, tab) {
   const tcol = teamDef(p.teamId) ? teamDef(p.teamId).color : '#3b5568';
   const head = `<div class="prof-band" style="--tc:${tcol}"></div><div class="flex" style="margin-bottom:10px">${av(p)}<div class="grow"><div class="s">${ROLES[p.role].label}${styleLabel(p) ? ' · <b>' + esc(styleLabel(p)) + '</b>' : ''} · ${p.age} · ${p.hand === 'L' ? 'LHB' : 'RHB'} · ${BOWL_TYPES[p.bowlType].label}</div><div class="xs muted">${p.retired ? 'Retired' : p.teamId ? teamName(p.teamId) : p.prospect ? 'Draft prospect' : 'Free agent'}${nationTag(p.nat)}</div></div>${statusChip(p)}</div>
     ${potentialGoat(p) ? `<div class="talent-mark">Generational Talent</div>` : ''}
+    ${retirementStatus(p)==='announced'?'<div class="note warn" style="margin-bottom:9px">Retiring at the end of this season. Contract extensions are unavailable.</div>':retirementStatus(p)==='considering'?'<div class="xs muted" style="margin-bottom:9px">Considering retirement at season end.</div>':''}
     <div class="ratings3">${(() => { const sp = specialistOf(p); return FMT_LIST.map(f => `<div class="${sp.label && sp.best === f ? 'best' : ''}"><div class="v">${overall(p, f)}</div><div class="l">${compName(f).toUpperCase()}</div></div>`).join(''); })()}</div>
     ${(() => { const sp = specialistOf(p), st = styleOf(p); return sp.label || st ? `<div class="xs muted" style="margin-top:6px">${st ? esc(st.desc) : ''}${sp.label ? `${st ? ' ' : ''}<b class="spec ${sp.best}">${sp.label}</b>.` : ''}</div>` : ''; })()}<div style="height:10px"></div>
     ${seg([['over','Overview'],['stats','Statistics'],['hist','Career'],['contract','Contract']], tab, `(t=>showPlayer('${id}',t))`)}<div style="height:10px"></div>`;
@@ -11646,10 +11955,33 @@ function globalTournamentPanel() {
  }
  return sections+panel('Global tournament winners',`<div class="rows">${hist.slice(0,8).map(h=>`<div class="kv"><span>${h.year} · ${h.event==='ODIWC'?'ODI World Cup':'Champions Trophy'}</span><span>${esc(internationalTeamName(h.winner))}</span></div>`).join('')||'<div class="empty">No completed tournaments.</div>'}</div>`,{flush:true});
 }
+// Build 171: World Cricket Roundup uses existing fixture results and series
+// archives. No parallel match ledger or additional save payload is required.
+function worldCricketRoundup() {
+  const fx = (game.season?.fixtures || []).filter(f =>
+    (f.stage === 'world' || f.stage === 'intl') && ['TEST','ODI','T20I'].includes(f.comp));
+  const completed = fx.filter(f => !!f.result).sort((a,b) => b.day-a.day || String(b.id).localeCompare(String(a.id)));
+  const up = fx.filter(f => !f.result && f.home && f.away && f.day >= game.day)
+    .sort((a,b) => a.day-b.day || String(a.id).localeCompare(String(b.id)));
+  const results = completed.slice(0,6).map(f => {
+    const winner = f.result.winner ? internationalTeamName(f.result.winner) : f.result.tie ? 'Tied' : f.result.noResult ? 'No result' : 'Drawn';
+    const star = f.result.potm && P(f.result.potm);
+    return `<div class="row" style="align-items:flex-start"><div class="stack"><span class="main-t">${esc(internationalTeamName(f.home))} v ${esc(internationalTeamName(f.away))}</span><span class="sub-t">${esc(f.comp==='TEST'?'Test':f.comp)} · ${esc(dateStr(f.day))} · ${esc(displayInternationalSummary(f.result.summary||f.result.text||''))}</span>${star?`<span class="sub-t">Player of the match: ${esc(pname(star))}</span>`:''}</div><span class="xs" style="text-align:right;max-width:90px">${esc(winner)}</span></div>`;
+  }).join('');
+  const recentSeries = (game.worldSeriesHistory || []).filter(s => s.year===game.year).slice(0,4).map(s => {
+    const result = s.winner ? `${internationalTeamName(s.winner)} won` : 'Series drawn';
+    const star = s.honours?.playerName;
+    return `<div class="row"><div class="stack"><span class="main-t">${esc(internationalTeamName(s.home))} v ${esc(internationalTeamName(s.away))}</span><span class="sub-t">${esc(s.comp)} · ${s.winsHome}–${s.winsAway}${s.draws?' · '+s.draws+' drawn':''}${star?' · Leading player: '+esc(star):''}</span></div><span class="xs muted">${esc(result)}</span></div>`;
+  }).join('');
+  const upcoming = up.slice(0,5).map(f => `<div class="row"><div class="stack"><span class="main-t">${esc(internationalTeamName(f.home))} v ${esc(internationalTeamName(f.away))}</span><span class="sub-t">${esc(f.comp==='TEST'?'Test':f.comp)} · ${esc(dateStr(f.day))}</span></div></div>`).join('');
+  return `${panel('World Cricket Roundup', `<div class="rows">${results || '<div class="empty">World match results will appear as the season progresses.</div>'}</div>`, {flush:true})}
+    <div style="height:9px"></div>${panel('International series completed', `<div class="rows">${recentSeries || '<div class="empty">No completed bilateral series recorded this season yet.</div>'}</div>`, {flush:true})}
+    <div style="height:9px"></div>${panel('Coming up around the world', `<div class="rows">${upcoming || '<div class="empty">No further bilateral fixtures currently scheduled.</div>'}</div>`, {flush:true})}`;
+}
 function renderWorld(){
   const mode=ui.worldView||'rankings';
   const tabs=seg([['rankings','Rankings'],['results','Results'],['qualification','Qualification']],mode,'(v=>{ui.worldView=v;render();})');
-  if(mode==='results')return `${tabs}<div style="height:10px"></div>${intlResultsPanel(false)}`;
+  if(mode==='results')return `${tabs}<div style="height:10px"></div>${worldCricketRoundup()}<div style="height:9px"></div>${intlResultsPanel(false)}`;
   if(mode==='qualification'){
    const events=[['CWCQ','ODI qualification'],['T20Q','T20I qualification']];
    const panels=events.map(([key,label])=>{const rows=associateQualificationTable(key);return panel(label,`<div class="rows">${rows.map((r,i)=>`<div class="row"><span class="n">${i+1}</span><div class="grow s">${esc(teamName(r.t))}</div><span class="xs dim">${r.P} P</span><b>${r.Pts} pts</b></div>`).join('')||'<div class="empty">No qualifying standings available.</div>'}</div>`,{flush:true});}).join('<div style="height:8px"></div>');
@@ -11810,7 +12142,8 @@ function doUpgrade(k) { const credit=facilityGrantCredit(k), total=upgradeCost(k
 
 // Contract talks with the player's agent.
 function negotiationReconciliationSheet(id, mode) {
-  const p=P(id);if(!p)return;
+  const p = P(id);if(!p)return;
+  if(retirementContractBlock(p)){flash(retirementContractBlock(p));return;}
   const b=negotiationSuspension(p);if(!b){negotiate(id,mode);return;}
   const ask=Math.max(MIN_SALARY,Math.round(Math.max(b.ask||0,contractNegotiationDemand(p,mode))/5000)*5000);
   const years=Math.max(1,Math.min(5,b.years||prefYears(p)));
@@ -11821,7 +12154,7 @@ function negotiationReconciliationSheet(id, mode) {
   sheet('Negotiations suspended',pname(p),body,{foot:`<button class="btn ghost" onclick="closeModal()">Wait</button><button class="btn pri" ${canAccept?'':'disabled'} onclick="acceptSuspendedAgentTerms('${id}','${mode}',${ask},${years})">Accept ${money(ask)} × ${years} yrs</button>`});
 }
 function acceptSuspendedAgentTerms(id,mode,salary,years){
-  const p=P(id);if(!p||!negotiationSuspension(p))return;
+  const p=P(id);if(!p||retirementContractBlock(p)||!negotiationSuspension(p))return;
   const fresh=contractNegotiationDemand(p,mode);
   const b=p.negBreakdown;
   if(salary<Math.max(b?.ask||0,fresh)||years!==(b?.years||prefYears(p))){negotiationReconciliationSheet(id,mode);return;}
